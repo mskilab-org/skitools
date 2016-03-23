@@ -1,3 +1,3 @@
 #!/bin/bash
 
-Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite("BiocInstaller"); biocLite("BSgenome.Hsapiens.UCSC.hg19"); biocLite("GenomicRanges")'
+Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite("BiocInstaller"); biocLite("BSgenome.Hsapiens.UCSC.hg19"); biocLite("GenomicRanges"); devtools::install_github("devtools/gUtils"); biocLite("Rcytoscape"); biocList("VariantAnnotation"); biocList("graph")'
