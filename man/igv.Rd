@@ -47,7 +47,7 @@ igv(gr = cool.gr) ## sends granges object to igv session, Note: currently requir
 igv(snapshot = fn) ## sends current screen to file
 igv(new = TRUE) ## refreshes current session
 igv(reset = TRUE) ## resets connections, sometimes useful if IGV not responding
- 
+
 If alternate file paths are present on server (where R is runinng) and computer running IGV, then can specify gsub.paths variable which is a list of length 2 vectors
 specifying how to convert file paths from arguments given to igv to ones that can be loaded locally.
 }

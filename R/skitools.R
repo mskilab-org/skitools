@@ -8,7 +8,7 @@
 ##
 ## New York Genome Center
 ## mimielinski@nygenome.org
-##
+##ski
 ## This program is free software: you can redistribute it and/or modify it
 ## under the terms of the GNU Lesser General Public License as published by
 ## the Free Software Foundation, either version 3 of the License, or
@@ -41,7 +41,7 @@
     obj.dim <- t(napply(names, function(x)
                         {
                           if (class(x) == 'Hits')
-                            c(queryLength(x), subjectLength(x))
+                            c(S4Vectors::queryLength(x), S4Vectors::subjectLength(x))
                           else
                             as.numeric(dim(x))[1:2]
                         }))
@@ -84,7 +84,6 @@ ldim = function(l)
 #' @description
 #' parses filenames from character vector of paths
 #'
-#' @import parallel
 #' @param paths character vector of full paths
 #' @return character vector of just file names
 #' @author Marcin Imielinski
@@ -184,92 +183,6 @@ fready = function(..., pattern = "\\W+", sub = "_")
       setnames(tab, dedup(gsub(pattern, sub, names(tab), perl = TRUE), suffix = '.'))
       return(tab)
   }
-
-#' rle.query
-#'
-#' Queries an \code{\link{RleList}} representing genomic data (ie a list whose names represent
-#' seqnames ie chromosomes, and lengths represent seqlengths)
-#' via \code{GRanges} object
-#'
-#' @return Rle representing the (concatenated) vector of data (reversing order in case of negative strand input)
-#' @note Throws warning if seqlengths(gr) do not correspond to the lengths of the \code{RleList} components
-#' @export
-####################
-rle.query = function(subject.rle, query.gr, verbose = F, mc.cores = 1, chunksize = 1e9) ## mc.cores only relevant if there are over 1e9 bases to be queried from subject.rle
-{
-  was.grl = F
-
-  if (is(query.gr, 'GRangesList'))
-  {
-    was.grl = T
-    query.gr = grl.unlist(query.gr)
-  }
-
-  ##     if (!identical(names(subject.rle), seqlevels(query.gr)))
-  ##       warning('seqlevels of subject and query are not the same')
-
-  ##     com.seq = intersect(seqlevels(query.gr), names(subject.rle))
-
-  ##     if (!identical(sapply(subject.rle[com.seq], length), seqlengths(query.gr)[com.seq]))
-  ##       warning('seqlengths of subject and query are not the same')
-
-  chunksize = pmin(1e9, chunksize)
-  if ((sum(as.numeric(width(query.gr))))>chunksize) ## otherwise integer overflow
-  {
-    tmp = rle(ceiling(cumsum(as.numeric(width(query.gr)))/chunksize))
-    chunks = cbind(cumsum(c(1, tmp$lengths[-length(tmp$lengths)])), cumsum(c(tmp$lengths)))
-    if (verbose)
-      cat(sprintf('chunking up into %s chunks \n', nrow(chunks)))
-    out = do.call('c', mclapply(1:nrow(chunks), function(x) rle.query(subject.rle, query.gr[chunks[x,1]:chunks[x,2]]), mc.cores = mc.cores))
-  }
-  else
-  {
-    out = Rle(NA, sum(as.numeric(width(query.gr))));
-
-    if (length(query.gr)>1)
-    {
-      st.ix = cumsum(c(1, width(query.gr)[1:(length(query.gr)-1)]))
-    }else
-    {
-      st.ix = 1
-    }
-    out.ix = IRanges(st.ix, st.ix + width(query.gr)-1) ## ranges in out corresponding to query
-
-    for (chr in intersect(names(subject.rle), unique(as.character(seqnames(query.gr)))))
-    {
-      ix = which(as.character(seqnames(query.gr)) == chr)
-      rix = ranges(query.gr)[ix]
-      m = max(end(rix))
-      if (length(subject.rle[[chr]]) < m) ## pad subject rle if not long enough
-      {
-        subject.rle[[chr]] = c(subject.rle[[chr]], Rle(NA, m - length(subject.rle[[chr]])))
-      }
-      out[unlist(as.integer(out.ix[ix]))] = subject.rle[[chr]][rix]
-    }
-
-    if("-" %in% as.character(strand(query.gr)))
-    {
-      require(data.table)
-      tmp = data.table(ix = 1:sum(width(out.ix)), id = rep(1:length(out.ix), width(out.ix)), strand = rep(as.character(strand(query.gr)), width(out.ix)), key = 'ix')
-      out = out[tmp[, rev(ix), by = id][, V1]]
-      ## strand.col = c(1, 2)
-      ## names(strand.col) = c("+", "-")
-      ## cumsums = cumsum(width(out.ix))
-      ## exon.max = rep(cumsums, times = width(out.ix))
-      ## exon.min = rep(c(0, cumsums[1:(length(cumsums) - 1)]), times = width(out.ix))
-      ## negs = exon.max - 0:(length(out)-1) + exon.min
-
-      ## pos.neg.mat = cbind(1:length(out), negs)
-      ## index = pos.neg.mat[cbind(1:length(out), strand.col[strand])]
-      ## out = out[index]
-    }
-  }
-
-  if (was.grl)
-    out = split(out, Rle(query.gr$grl.ix, width(query.gr)))
-
-  return(out)
-}
 
 #' @name qq_pval
 #' @title qq plot given input p values
@@ -412,12 +325,9 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
 }
 
 
-##############################
 #' @name wfplot
-#' @title wfplot
-#' @description
-#'
-#' Quick waterfall plot
+#' @title Quick waterfall plot
+#' @description Quick waterfall plot
 #'
 #' data is a numeric vector
 #' labels are text labels of the same length as data
@@ -430,11 +340,10 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
 #' @param las optional integer vector specifying orientation of labels on barplot
 #' @param cex numeric value specifying size of names.arg data labels
 #' @param ... additional arguments to barplot
-#' @param leg.pos
+#' @param leg.pos NULL
 #' @return plot
 #' @author Marcin Imielinski
 #' @export
-##############################
 wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, cex = 1, leg.pos = NULL, ...)
   {
     ix = order(data);
@@ -447,7 +356,7 @@ wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, ce
     if (is.null(col))
         {
             if (length(ulab)>2)
-                col = brewer.pal(length(ulab), 'Set3')
+                col = RColorBrewer::brewer.pal(length(ulab), 'Set3')
             else
                 col = c('gray', 'red')
         }
@@ -669,7 +578,7 @@ lsf_query = lsf_out_query = query_lsf_out = function(dir = NULL, jname = NULL, d
       if (!any(fn.ex))
         break
 
-      tmp = matrix(unlist(mclapply(fn[fn.ex],
+      tmp = matrix(unlist(parallel::mclapply(fn[fn.ex],
         function(x)
         {
           y = readLines(x);
@@ -852,12 +761,11 @@ func_code = function(func, sources = c(), ...)
 #' @title rrbind
 #'
 #' @description
-#'
 #' like rbind, but takes the intersecting columns of the dfs
 #'
 #' if union flag is used then will take union of columns (and put NA's for columns of df1 not in df2 and vice versa)
 #'
-#' @param ...
+#' @param ... TODO
 #' @export
 #' @author Marcin Imielinski
 ############################
@@ -887,7 +795,7 @@ rrbind = function(..., union = T)
 
     out = do.call('rbind', expanded.dfs);
 
-    if (any(uix <<- which(classes[unshared.u] != 'character')))
+    if (any(uix <- which(classes[unshared.u] != 'character'))) ## was <<-, don't know why
       {
           ix = match(unshared.u, names(out))
           for (j in uix) ### HACK to prevent stupid class mismatches leading to NA BS
@@ -947,7 +855,7 @@ read.delim.cat = function(paths, skip = NULL, cols = NULL, include.paths = T, in
 
     # scope out files to filter out those with 0 rows and find common columns
     if (!is.null(cores))
-      dfs = mclapply(1:length(paths),
+      dfs = parallel::mclapply(1:length(paths),
         function(x) {tmp.df = read.delim(paths[x], skip = skip[x], ...);
                      if (nrow(tmp.df) != 0) cbind(data.frame(source.path = paths[x]), source.id = names(paths)[x], tmp.df) else data.frame() }, mc.cores = cores)
     else
@@ -979,23 +887,20 @@ read.delim.cat = function(paths, skip = NULL, cols = NULL, include.paths = T, in
     return(out)
   }
 
-###############################
 #' @name fisher.plot
-#' @title fisher.plot
+#' @title Plots fisher contingency table with p value
 #'
 #' @description
 #' Plots fisher contingency table with p value
 #'
 #' @param O observed matrix of counts
 #' @export
-###############################
 fisher.plot = function(O)
   {
-    require(plotrix)
-    fish = fisher.test(O)
+    fish = stats::fisher.test(O)
     plot.new();
     par(usr = c(0, 1, 0, 1));
-    addtable2plot(0,0.5, O, display.colnames = T, display.rownames = T);
+    plotrix::addtable2plot(0,0.5, O, display.colnames = TRUE, display.rownames = TRUE);
     text(0.5, 0.44, sprintf(paste('P = %0.', floor(-log10(fish$p.value))+2, 'f\nOR = %0.2f [%0.2f-%0.2f]', sep  = ""), fish$p.value, fish$estimate, fish$conf.int[[1]], fish$conf.int[[2]]))
   }
 
@@ -1126,7 +1031,7 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
 
 
   if (!is(gr, 'GRanges'))
-    gr = seg2gr(gr)
+    gr = gUtils::seg2gr(gr)
 
   if (is.null(field))
     field = 'score'
@@ -1159,8 +1064,8 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
       else
       {
         ## only need to recompute peak in region containing any in.peak intervals
-        tmp = gr.peaks(gr[gr.in(gr, peak.hood), ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
-        last = c(last[!gr.in(last, peak.hood)], tmp)
+        tmp = gr.peaks(gr[gUtils::gr.in(gr, peak.hood), ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
+        last = c(last[!gUtils::gr.in(last, peak.hood)], tmp)
       }
 
       ## these are the regions with the maximum peak value
@@ -1178,10 +1083,10 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
 
       if (length(tmp.peak)>1)
       {
-        tmp.peak.gr = gr[gr.in(gr, tmp.peak)]
-        ov = gr.findoverlaps(tmp.peak, tmp.peak.gr)
+        tmp.peak.gr = gr[gUtils::gr.in(gr, tmp.peak)]
+        ov = gUtils::gr.findoverlaps(tmp.peak, tmp.peak.gr)
         ed = rbind(ov$query.id, ov$subject.id+length(tmp.peak))[1:(length(ov)*2)]
-        cl = clusters(graph(ed), 'weak')$membership
+        cl = igraph::clusters(igraph::graph(ed), 'weak')$membership
         tmp = tmp.peak[cl[1:length(tmp.peak)] %in% cl[1]]
         peak = GRanges(seqnames(tmp)[1], IRanges(min(start(tmp)), max(end(tmp))))
         values(peak)[, field] = values(tmp.peak)[, field][1]
@@ -1190,8 +1095,8 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
         peak = tmp.peak
       ## tmp.peak is the interval spanning all the top values in this region
 
-      in.peak1 =  gr.in(peel.gr, gr.start(peak))
-      in.peak2 = gr.in(peel.gr, gr.end(peak))
+      in.peak1 =  gUtils::gr.in(peel.gr, gUtils::gr.start(peak))
+      in.peak2 = gUtils::gr.in(peel.gr, gUtils::gr.end(peak))
       in.peak = in.peak1 | in.peak2
 
       ## peak.gr are the gr supporting the peak
@@ -1205,7 +1110,7 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
 
         if (!is.null(id.field))
         {
-          peak.gr = seg2gr(grdt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
+          peak.gr = gUtils::seg2gr(gUtils::gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
                                                 eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
                                          by = eval(id.field)])
           names(values(peak.gr))[3] = field ## not sure why I need to do this line, should be done above
@@ -1223,7 +1128,7 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
         ## and the right tail of the end position as the right peak boundary
         end(peak) = quantile(en, pbootstrap + (1-pbootstrap)/2)
 
-        in.peak =  gr.in(gr, peak)
+        in.peak =  gUtils::gr.in(gr, peak)
       }
       gr = gr[!in.peak]
       peak$peeled = TRUE
@@ -1243,7 +1148,7 @@ gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, 
     {
       agr = disjoin(gr)
       values(agr)[, field] = NA
-      tmp.mat = cbind(as.matrix(values(gr.val(agr[, c()], gr, field, weighted = FALSE, verbose = verbose, by = id.field, FUN = FUN, default.val = 0))))
+      tmp.mat = cbind(as.matrix(values(gUtils::gr.val(agr[, c()], gr, field, weighted = FALSE, verbose = verbose, by = id.field, FUN = FUN, default.val = 0))))
       values(agr)[, field] = apply(tmp.mat, 1, AGG.FUN)
       gr = agr
     }
@@ -1289,14 +1194,14 @@ parse.grl = function(x, seqlengths = hg_seqlengths())
   str = gsub('.*([\\+\\-])$','\\1', tmp.u)
   spl = strsplit(tmp.u, '[\\:\\-\\+]', perl = T)
   if (any(ix <- sapply(spl, length)!=3))
-    spl[ix] = strsplit(gr.string(seqinfo2gr(seqlengths)[sapply(spl[ix], function(x) x[[1]])], mb = F), '[\\:\\-\\+]', perl = T)
+    spl[ix] = strsplit(gUtils::gr.string(gUtils::si2gr(seqlengths)[sapply(spl[ix], function(x) x[[1]])], mb = F), '[\\:\\-\\+]', perl = T)
 
   if (any(ix <- !str %in% c('+', '-')))
     str[ix] = '*'
   df = cbind(as.data.frame(matrix(unlist(spl), ncol = 3, byrow = T), stringsAsFactors = F), str)
   names(df) = c('chr', 'start', 'end', 'strand')
   rownames(df) = NULL
-  gr = seg2gr(df, seqlengths = seqlengths)[, c()]
+  gr = gUtils::seg2gr(df, seqlengths = seqlengths)[, c()]
   grl = split(gr, tmp.id)
   names(grl) = nm
   return(grl)
@@ -1322,6 +1227,9 @@ gstring = parse.gr = function(...)
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
 #' @name ra_breaks
+#' @importFrom IRanges IRanges
+#' @importFrom GenomeInfoDb Seqinfo
+
 #' @export
 ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE,  breakpointer = FALSE, seqlevels = NULL,
                      get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
@@ -1331,9 +1239,9 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
   {
     if (grepl('(vcf$)|(vcf.gz$)', rafile))
     {
-      library(VariantAnnotation)
-      vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
-      if (!('SVTYPE' %in% names(info(vcf)))) {
+      # library(VariantAnnotation)
+      vcf = VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+      if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
         warning('Vcf not in proper format.  Is this a rearrangement vcf?')
         return(GRangesList());
       }
@@ -1355,11 +1263,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
       if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
         stop("MATEID or SVTYPE not included. Required")
-      vgr$mateid = info(vcf)$MATEID
-      vgr$svtype = info(vcf)$SVTYPE
+      vgr$mateid = VariantAnnotation::info(vcf)$MATEID
+      vgr$svtype = VariantAnnotation::info(vcf)$SVTYPE
 
-      if (!is.null(info(vcf)$SCTG))
-        vgr$SCTG = info(vcf)$SCTG
+      if (!is.null(VariantAnnotation::info(vcf)$SCTG))
+        vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
 
       if (sum(vgr$svtype == 'BND')==0)
         stop('Vcf not in proper format.  Will only process rearrangements in BND format')
@@ -1384,7 +1292,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
       else if (!is.null(vgr$SCTG))
       {
         warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-        require(igraph)
+        # require(igraph)
         ucoord = unique(c(vgr$coord, vgr$mcoord))
         vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
 
@@ -1458,9 +1366,9 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
         start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
         end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
       }
-      ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
+      ra = gUtils::grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
 
-      this.inf = info(vcf)[bix[pix[vix]], ]
+      this.inf = VariantAnnotation::info(vcf)[bix[pix[vix]], ]
 
       if (is.null(this.inf$POS))
         this.inf = cbind(data.frame(POS = ''), this.inf)
@@ -1476,7 +1384,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
       this.inf$MATEPOS = start(vgr.pair2)
       this.inf$MALT = vgr.pair2$ALT
 
-      values(ra) = cbind(fixed(vcf)[bix[pix[vix]],], this.inf)
+      values(ra) = cbind(VariantAnnotation::fixed(vcf)[bix[pix[vix]],], this.inf)
 
       if (is.null(values(ra)$TIER))
         values(ra)$tier = ifelse(values(ra)$FILTER == "PASS", 2, 3) ## baseline tiering of PASS vs non PASS variants
@@ -1489,7 +1397,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
       {
         npix = is.na(vgr$mix)
         vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
-        values(vgr.loose) = cbind(fixed(vcf)[bix[npix], ], info(vcf)[bix[npix], ])
+        values(vgr.loose) = cbind(VariantAnnotation::fixed(vcf)[bix[npix], ], VariantAnnotation::info(vcf)[bix[npix], ])
 
         return(list(junctions = ra, loose.ends = vgr.loose))
       }
@@ -1498,9 +1406,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
       rafile = read.delim(rafile)
   }
 
-  if (is.data.table(rafile))
+  if (data.table::is.data.table(rafile))
   {
-    require(data.table)
     rafile = as.data.frame(rafile)
   }
 
@@ -1575,14 +1482,14 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
     if (chr.convert)
       seg$chr = gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr)))
 
-    out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
+    out = gUtils::seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
     out = split(out, out$ra.index)
   }
   else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
   {
-    ra1 = gr.flip(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-    ra2 = gr.flip(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
-    out = grl.pivot(GRangesList(ra1, ra2))
+    ra1 = gUtils::gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+    ra2 = gUtils::gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+    out = gUtils::grl.pivot(GRangesList(ra1, ra2))
   }
 
 
@@ -1592,7 +1499,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
   return(out)
 }
 
-#################
 #' @name write.htab
 #' @title write.htab
 #'
@@ -1617,10 +1523,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 #' @param footer.size integer font size in px for footer (= 15)
 #' @param header.size integer font size in px for header (= 15)
 #' @author Marcin Imielinski
-#' @import gplots
-#' @import hwriter
 #' @export
-#################
 write.htab = function(tab, file = NULL,
     title = NULL, # text to be written in bold above the table
     footer = NULL, # text to be writen in bold below the table
@@ -1633,6 +1536,7 @@ write.htab = function(tab, file = NULL,
     data.size = 15, # font size in px for data, title, and footer
     title.size = 15, footer.size = 20, header.size = round(1.1*data.size))
   {
+
 
     # require(hwriter)
     # require(gplots)
@@ -1661,36 +1565,36 @@ write.htab = function(tab, file = NULL,
     tab[is.na(tab)] = '';
     tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
 
-    if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
+    if (any(lix <- sapply(names(tab), function(x) is.list(tab[, x]))))
       for (i in which(lix))
         tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
 
-    dir.create(dirname(normalizePath(file.dir(file))), recursive=T, showWarnings = F)
-    p = openPage(file, link.css = 'hwriter.css')
+    dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
+    p = hwriter::openPage(file, link.css = 'hwriter.css')
     if (!is.null(title))
-      hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
+      hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
 
-    row.bgcolor = as.list(as.character(col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
+    row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
     names(row.bgcolor) = rownames(tab)
     if (!is.null(highlight))
-      row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(col2hex(high.color));
+      row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
 
-    row.bgcolor = c(col2hex(header.colors[1]), row.bgcolor)
+    row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
 
 #    if (row.names)
-      col.bgcolor = col2hex(header.colors[1])
+      col.bgcolor = gplots::col2hex(header.colors[1])
 
-    col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, col2hex(header.colors[2]));
+    col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
 
     row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
     names(row.style) = rownames(tab)
-    row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, col2hex(header.colors[2]))), row.style)
+    row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
 
-    hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
+    hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
            row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
     if (!is.null(footer))
-      hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
-    closePage(p)
+      hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
+    hwriter::closePage(p)
   }
 
 ###############
@@ -1707,8 +1611,6 @@ writeCols = function(v, k = 3, sep = "\t", file = "")
     write.table(as.data.frame(out), file = file, sep = sep, quote = F, row.names = F, col.names = F)
   }
 
-
-##########################
 #' @name col.scale
 #' @title col.scale
 #'
@@ -1728,9 +1630,8 @@ writeCols = function(v, k = 3, sep = "\t", file = "")
 #' @author Marcin Imielinski
 #' @return length n vector of colors
 #' @export
-##########################
 col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
-  invert = F # if T flips rgb.min and rgb.max
+  invert = FALSE # if T flips rgb.min and rgb.max
   )
   {
     if (!is.numeric(col.min))
@@ -2080,7 +1981,7 @@ is.dup = function(x)
     if (is.matrix(x))
         x = as.data.frame(x)
 
-    if (is.data.frame(x) | is.data.table(x))
+    if (is.data.frame(x) | data.table::is.data.table(x))
         {
             tmp = x[[1]]
             if (ncol(x)>1)
@@ -2104,7 +2005,6 @@ is.dup = function(x)
 #' @param pkg character vector of package names to install
 #' @author Marcin Imielinski
 #' @export
-########################
 install.packages.bioc = function(pkg)
   {
     source('http://bioconductor.org/biocLite.R')
@@ -2118,15 +2018,13 @@ install.packages.bioc = function(pkg)
 #' @description
 #' shortcut to install github packages
 #'
-#' @import devtools
 #' @param pkg character vector of package names to install
 #' @author Marcin Imielinski
 #' @export
 ##########################
 install.packages.github = function(pkg, username, branch)
   {
-    library('devtools')
-    install_github(repo = pkg, username = username, branch = branch)
+    devtools::install_github(repo = pkg, username = username, branch = branch)
 }
 
 ####################
@@ -2159,8 +2057,8 @@ tabstring = function(tab, sep = ', ', sep2 = '_', dt = FALSE)
 
         else
             {
-                library(reshape)
-                mtab = melt(tab)
+                # library(reshape)
+                mtab = reshape2::melt(tab)
                 nm = apply(mtab, 1, function(x) paste(x[-length(x)], collapse = sep2))
                 if (dt)
                     {
@@ -2267,14 +2165,14 @@ levapply = function(x, by, FUN = 'order')
 #' @param ... additional arguments to new.CytoscapeWindow
 #' @export
 #' @author Marcin Imielinski
-####################
+#' @importFrom igraph V E E<- get.edgelist list.edge.attributes get.edge.attribute get.vertex.attribute
 cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOCAL.COMPUTER'), port = 9000, display = T, layout = 'degree-circle', verbose = T, ...)
   {
-    require(RCytoscape)
-    require(igraph)
+    # require(RCytoscape)
+    # require(igraph)
 
     if (is(graph, 'matrix'))
-      graph = graph.adjacency(graph, weighted = 'weight');
+      graph = igraph::graph.adjacency(graph, weighted = 'weight');
 
     if (is(graph, 'igraph'))
       {
@@ -2287,103 +2185,103 @@ cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOC
         graph.nel = igraph2graph(graph)
       }
 
-    cw = new.CytoscapeWindow(sessionName, host = host, rpcPort = port, graph = graph.nel,  ...)
+    cw = RCytoscape::new.CytoscapeWindow(sessionName, host = host, rpcPort = port, graph = graph.nel,  ...)
 
     if (display)
       {
-        displayGraph(cw)
-        setDefaultBackgroundColor(cw, col2hex('white'))
+      RCytoscape::displayGraph(cw)
+      RCytoscape::setDefaultBackgroundColor(cw, gplots::col2hex('white'))
 
-        eG = paste(get.edgelist(graph)[,1], get.edgelist(graph)[,2], sep = '~')
-        ceG = cy2.edge.names(cw@graph)
+        eG = paste(igraph::get.edgelist(graph)[,1], get.edgelist(graph)[,2], sep = '~')
+        ceG = RCytoscape::cy2.edge.names(cw@graph)
 
         if (verbose)
           cat('Setting line styles\n')
 
-        if ('line.style' %in% list.edge.attributes(graph))
+        if ('line.style' %in% igraph::list.edge.attributes(graph))
           {
             uls = setdiff(E(graph)$line.style, NA)
-            setEdgeLineStyleRule(cw, 'line.style', uls, uls)
+            RCytoscape::setEdgeLineStyleRule(cw, 'line.style', uls, uls)
           }
 
         if (verbose)
           cat('Setting arrow shape\n')
 
-        if (is.directed(graph))
-          if ('arrow.shape' %in% list.edge.attributes(graph))
-            setEdgeTargetArrowRule(cw, 'arrow.shape', unique(E(graph)$arrow.shape), unique(E(graph)$arrow.shape))
+        if (igraph::is.directed(graph))
+          if ('arrow.shape' %in% igraph::list.edge.attributes(graph))
+            RCytoscape::setEdgeTargetArrowRule(cw, 'arrow.shape', unique(E(graph)$arrow.shape), unique(E(graph)$arrow.shape))
 
         if (verbose)
           cat('Setting edge color\n')
 
-        if ('col' %in% list.edge.attributes(graph))
+        if ('col' %in% igraph::list.edge.attributes(graph))
           {
             uc = setdiff(unique(E(graph)$col), NA);
-            setEdgeColorRule(cw, 'col', uc, uc, mode = 'lookup')
+            RCytoscape::setEdgeColorRule(cw, 'col', uc, uc, mode = 'lookup')
           }
 
         if (verbose)
           cat('Setting edge width\n')
 
-        if ('width' %in% list.edge.attributes(graph))
+        if ('width' %in% igraph::list.edge.attributes(graph))
           {
-            uw = setdiff(E(graph)$width, NA)
-            setEdgeLineWidthRule(cw, 'width', as.character(uw), uw)
+            uw = setdiff(igraph::E(graph)$width, NA)
+            RCytoscape::setEdgeLineWidthRule(cw, 'width', as.character(uw), uw)
           }
 
         if (verbose)
           cat('Setting node size\n')
 
-        if ('size' %in% list.vertex.attributes(graph))
+        if ('size' %in% igraph::list.vertex.attributes(graph))
           {
-            us = setdiff(unique(V(graph)$size), NA)
-            setNodeSizeRule(cw, 'size', us, us, mode = 'lookup')
+            us = setdiff(unique(igraph::V(graph)$size), NA)
+            RCytoscape::setNodeSizeRule(cw, 'size', us, us, mode = 'lookup')
           }
 
         if (verbose)
           cat('Setting node color\n')
 
-        if ('col' %in% list.vertex.attributes(graph))
+        if ('col' %in% igraph::list.vertex.attributes(graph))
           {
-            uc = setdiff(unique(V(graph)$col), NA)
-            setNodeColorRule(cw, 'col', uc, uc, mode = 'lookup')
+            uc = setdiff(unique(igraph::V(graph)$col), NA)
+            RCytoscape::setNodeColorRule(cw, 'col', uc, uc, mode = 'lookup')
           }
 
         if (verbose)
           cat('Setting node labels\n')
 
-        if ('label' %in% list.vertex.attributes(graph))
-          setNodeLabelRule(cw, 'label')
+        if ('label' %in% igraph::list.vertex.attributes(graph))
+          RCytoscape::setNodeLabelRule(cw, 'label')
 
         if (verbose)
           cat('Setting node shapes\n')
 
-        if ('shape' %in% list.vertex.attributes(graph))
+        if ('shape' %in% igraph::list.vertex.attributes(graph))
           {
             us = setdiff(unique(V(graph)$shape), NA)
-            setNodeShapeRule(cw, 'shape', us, us, default = 'ELLIPSE')
+            RCytoscape::setNodeShapeRule(cw, 'shape', us, us, default = 'ELLIPSE')
           }
 
         if (verbose)
           cat('Setting node width\n')
 
-        if ('border.width' %in% list.vertex.attributes(graph))
+        if ('border.width' %in% igraph::list.vertex.attributes(graph))
           {
             ubw = setdiff(unique(V(graph)$border.width), NA)
-            setNodeBorderWidthRule(cw, 'border.width', ubw, ubw)
+            RCytoscape::setNodeBorderWidthRule(cw, 'border.width', ubw, ubw)
           }
 
-        if (all(c('x', 'y') %in% list.vertex.attributes(graph)))
+        if (all(c('x', 'y') %in% igraph::list.vertex.attributes(graph)))
           {
             good.ix = !is.na(V(graph)$x) & !is.na(V(graph)$y)
             if (any(good.ix))
-              setNodePosition(cw, V(graph)$name[good.ix], V(graph)$x[good.ix], V(graph)$y[good.ix])
+              RCytoscape::setNodePosition(cw, V(graph)$name[good.ix], V(graph)$x[good.ix], V(graph)$y[good.ix])
           }
         else
-          layoutNetwork(cw, layout)
+          RCytoscape::layoutNetwork(cw, layout)
 
 
-        redraw(cw)
+        RCytoscape::redraw(cw)
       }
 
     return(cw)
@@ -2399,16 +2297,16 @@ cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOC
 #' and populates all edge features both via the edgeL and as NodeAttributes for visualization
 #' in cytoscape
 #'
+#' @importFrom graph edgeData<- nodeData<-
 #' @param g igraph object
 #' @author Marcin Imielinski
 #' @export
 #' @return graph object
-####################
 igraph2graph = function(g)
   {
-    require(igraph)
-    require(graph)
-    require(RCytoscape)
+    # require(igraph)
+    # require(graph)
+    # require(RCytoscape)
 
     if (class(V) != 'function' | class(E) != 'function')
       stop('Namespace conflict - either V() or E() no longer mapping to igraph functions')
@@ -2419,10 +2317,10 @@ igraph2graph = function(g)
       node.labels = as.character(V(g));
 
     edge.df = structure(as.data.frame(get.edgelist(g), stringsAsFactors = F), names = c('vertices', 'edges'))
-    if (length(list.edge.attributes(g))>0)
+    if (length(igraph::list.edge.attributes(g))>0)
       {
-        tmp = do.call('cbind', lapply(list.edge.attributes(g), function(x) get.edge.attribute(g, x)))
-        colnames(tmp) = list.edge.attributes(g)
+        tmp = do.call('cbind', lapply(igraph::list.edge.attributes(g), function(x) get.edge.attribute(g, x)))
+        colnames(tmp) = igraph::list.edge.attributes(g)
         edge.df = cbind(edge.df, as.data.frame(tmp, stringsAsFactors = F))
       }
     if (!is.null(edge.df$weights))
@@ -2432,15 +2330,15 @@ igraph2graph = function(g)
     edge.df[,2] = as.character(edge.df[,2])
 
     vertex.df = data.frame(vertices = node.labels, stringsAsFactors = F)
-    if (length(list.vertex.attributes(g))>0)
+    if (length(igraph::list.vertex.attributes(g))>0)
       {
-        tmp = do.call('cbind', lapply(list.vertex.attributes(g), function(x) get.vertex.attribute(g, x)))
-        colnames(tmp) = list.vertex.attributes(g)
+        tmp = do.call('cbind', lapply(igraph::list.vertex.attributes(g), function(x) get.vertex.attribute(g, x)))
+        colnames(tmp) = igraph::list.vertex.attributes(g)
         vertex.df = cbind(vertex.df, as.data.frame(tmp, stringsAsFactors = F))
       }
 
     ## have to reciprocate edges in undirected otherwise graphNEL will barf
-    if (!is.directed(g))
+    if (!igraph::is.directed(g))
       {
         edge.df.rev = edge.df;
         tmp.col = edge.df[,2]
@@ -2454,9 +2352,9 @@ igraph2graph = function(g)
 
     ## retarded GraphNEL object format necessitates these gymnastics
     null.vert = sapply(edgeL, is.null)
-    blank.edge.item = list(structure(rep(list(c()), length(list.edge.attributes(g))+1), names = c('edges', list.edge.attributes(g))))
+    blank.edge.item = list(structure(rep(list(c()), length(igraph::list.edge.attributes(g))+1), names = c('edges', igraph::list.edge.attributes(g))))
     edgeL[null.vert] = blank.edge.item
-    edgemode = c('undirected', 'directed')[1 + is.directed(g)]
+    edgemode = c('undirected', 'directed')[1 + igraph::is.directed(g)]
 
     out.g = new('graphNEL', node.labels, edgeL, edgemode = edgemode)
 
@@ -2467,9 +2365,9 @@ igraph2graph = function(g)
         for (attr in attr.cols)
           {
             if (is.numeric(edge.df[, attr]))
-              out.g = initEdgeAttribute(out.g, attr, 'numeric', NA)
+              out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'numeric', NA)
             else if (is.integer(edge.df[, attr]))
-              out.g = initEdgeAttribute(out.g, attr, 'integer', NA)
+              out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'integer', NA)
             else
               {
                 cast.numeric = suppressWarnings(as.numeric(edge.df[, attr]))
@@ -2478,13 +2376,13 @@ igraph2graph = function(g)
                 if (any(is.na(cast.numeric) & cast.character != "NA"))
                   {
                     edge.df[, attr] = as.character(edge.df[, attr])
-                    out.g = initEdgeAttribute(out.g, attr, 'char', '')
+                    out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'char', '')
                   }
                 else
                   {
                     cast.numeric[is.na(cast.numeric)] = 0
                     edge.df[, attr] = cast.numeric
-                    out.g = initEdgeAttribute(out.g, attr, 'numeric', '')
+                    out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'numeric', '')
                   }
               }
             edgeData(out.g, edge.df[,1], edge.df[,2], attr) = edge.df[,attr]
@@ -2497,9 +2395,9 @@ igraph2graph = function(g)
         for (attr in attr.cols)
           {
             if (is.numeric(vertex.df[, attr]))
-              out.g = initNodeAttribute(out.g, attr, 'numeric', NA)
+              out.g = RCytoscape::initNodeAttribute(out.g, attr, 'numeric', NA)
             else if (is.integer(vertex.df[, attr]))
-              out.g = initNodeAttribute(out.g, attr, 'integer', NA)
+              out.g = RCytoscape::initNodeAttribute(out.g, attr, 'integer', NA)
             else
               {
                 cast.numeric = suppressWarnings(as.numeric(vertex.df[, attr]))
@@ -2507,13 +2405,13 @@ igraph2graph = function(g)
                 if (any(setdiff(is.na(cast.numeric) & cast.character != "NA", NA)))
                   {
                     vertex.df[, attr] = as.character(vertex.df[, attr])
-                    out.g = initNodeAttribute(out.g, attr, 'char', '')
+                    out.g = RCytoscape::initNodeAttribute(out.g, attr, 'char', '')
                   }
                 else
                   {
                     cast.numeric[is.na(cast.numeric)] = 0
                     vertex.df[, attr] = cast.numeric
-                    out.g = initNodeAttribute(out.g, attr, 'char', '')
+                    out.g = RCytoscape::initNodeAttribute(out.g, attr, 'char', '')
                   }
               }
             nodeData(out.g, vertex.df[,1], attr) = vertex.df[,attr]
@@ -2523,8 +2421,6 @@ igraph2graph = function(g)
     return(out.g)
   }
 
-
-################################
 #' @name cyto2igraph
 #' @title cyto2igraph
 #'
@@ -2535,12 +2431,11 @@ igraph2graph = function(g)
 #' @author Marcin Imielinski
 #' @return igraph object
 #' @export
-################################
 cyto2igraph = function(cw)
 {
-  node.attr = getAllNodeAttributes(cw)
-  edge.attr = getAllEdgeAttributes(cw)
-  directed = edgemode(cw@graph) == 'directed'
+  node.attr = RCytoscape::getAllNodeAttributes(cw)
+  edge.attr = RCytoscape::getAllEdgeAttributes(cw)
+  directed = graph::edgemode(cw@graph) == 'directed'
 
   edge.df = cbind(from = edge.attr$source, to = edge.attr$target,
     edge.attr[, setdiff(names(edge.attr), c('source', 'target'))])
@@ -2550,10 +2445,9 @@ cyto2igraph = function(cw)
   else
     node.df = cbind(name = rownames(node.attr), node.attr)
 
-  return(graph.data.frame(edge.df, directed = directed, vertices = node.df))
+  return(igraph::graph.data.frame(edge.df, directed = directed, vertices = node.df))
 }
 
-###############################
 #' @name brewer.master
 #' @title brewer.master
 #'
@@ -2562,16 +2456,14 @@ cyto2igraph = function(cw)
 #'
 #' Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
 #'
-#' @import RColorBrewer
-#' @param n
+#' @param n TODO
 #' @param palette character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)
 #' @return length(n) character vector of colors
 #' @author Marcin Imielinski
 #' @export
-###############################
 brewer.master = function(n, palette = 'Accent')
 {
-  library(RColorBrewer)
+  # library(RColorBrewer)
   palettes = list(
     sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
     diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
@@ -2602,7 +2494,7 @@ brewer.master = function(n, palette = 'Accent')
           col.remain = 0;
         }
 
-      col = c(col, brewer.pal(max(next.n, 3), names(palettes[i])))
+      col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
       i = ((i) %% length(palettes))+1
     }
 
@@ -2610,7 +2502,6 @@ brewer.master = function(n, palette = 'Accent')
   return(col)
 }
 
-##################################
 #' @name charToDec
 #' @title charToDec
 #'
@@ -2620,13 +2511,11 @@ brewer.master = function(n, palette = 'Accent')
 #' @return length(c) integer vector of byte representation of c
 #' @author Marcin Imielinski
 #' @export
-##################################
 charToDec = function(c)
   {
     return(as(charToRaw(c), 'integer'))
   }
 
-###################################
 #' @name which.char
 #' @title which.char
 #'
@@ -2642,7 +2531,6 @@ charToDec = function(c)
 #' @return indices in subject that query appears
 #' @author Marcin Imielinski
 #' @export
-###################################
 which.char = function(subject, query)
   {
     if (length(query)>1)
@@ -2651,7 +2539,6 @@ which.char = function(subject, query)
     which(charToRaw(subject[1]) %in% charToRaw(query))
   }
 
-##################################
 #' @name vaggregate
 #' @title vaggregate
 #'
@@ -2665,15 +2552,12 @@ which.char = function(subject, query)
 #' @return named vector indexed by levels of "by"
 #' @author Marcin Imielinski
 #' @export
-##################################
 vaggregate = function(...)
   {
     out = aggregate(...);
     return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
   }
 
-
-####################################
 #' @name modix
 #' @title modix
 #'
@@ -2687,14 +2571,11 @@ vaggregate = function(...)
 #' @return ((ix-1) mod l) - 1
 #' @author Marcin Imielinski
 #' @export
-####################################
 modix = function(ix, l)
   {
     return(((ix-1) %% l)+1)
   }
 
-
-###############################
 #' @name elcycles
 #' @title elcycles
 #'
@@ -2710,17 +2591,16 @@ modix = function(ix, l)
 #' $cycles.eix = list of edges in elementary cycles, where edges are numbered according to the 1D index of adj matrix A
 #' @export
 #' @author Marcin Imielinski
-###############################
 elcycles = function(A)
   {
     if (inherits(A, 'igraph'))
-      A = as.matrix(graph.adjacency(A));
+      A = as.matrix(igraph::graph.adjacency(A));
 
     A = abs(sign(A)) * matrix(1:length(A), nrow = nrow(A))
 
     # list of cycles (ie lists of node indices, seeded with self cycles
     out = lapply(which(diag(A)!=0), function(x) x)
-    cl = clusters(graph.adjacency(A!=0), 'strong')
+    cl = igraph::clusters(igraph::graph.adjacency(A!=0), 'strong')
 
     while (length(cl.left <- which(cl$csize>1))>0)
       {
@@ -2775,7 +2655,7 @@ elcycles = function(A)
             # recompute strongly connected components (zeroing out seeds in A matrix);
             A[seeds, ] = 0
             A[, seeds] = 0
-            cl = clusters(graph.adjacency(A), 'strong')
+            cl = igraph::clusters(igraph::graph.adjacency(A), 'strong')
           }
       }
   }
@@ -2824,9 +2704,6 @@ rmix = function(p, rdens, n = NULL)
       return(tmp)
   }
 
-
-
-################################
 #' @name dmix
 #' @title dmix
 #'
@@ -2840,7 +2717,6 @@ rmix = function(p, rdens, n = NULL)
 #' if collapse = TRUE then the density will be summed according to the mixing parameter yielding a single density
 #' (ie a fuzzy histogram) summarizing the mixing distribution
 #'
-#' @import ggplot2
 #' @param dens character specifying R density function, the possibilities include (with ... arguments shown alongside the density names)
 #' dnorm: mean, sd
 #' dbinom: size, prob
@@ -2857,7 +2733,6 @@ rmix = function(p, rdens, n = NULL)
 #' @return if plot == TRUE then ggplot2 object of plot, otherwise data.frame of data points with fields $id specifying thee mixture id, $x = data value,
 #' @author Marcin Imielinski
 #' @export
-################################
 dmix = function(dens = 'dnorm', xlim = NULL, n = 500, alpha = NULL, plot = F, fill = T, collapse = F,  ...)
   {
     if (is.null(xlim))
@@ -2885,6 +2760,7 @@ dmix = function(dens = 'dnorm', xlim = NULL, n = 500, alpha = NULL, plot = F, fi
 
     x = seq(xlim[1], xlim[2], length = n);
 
+    id = prob = NULL ## NOTE fix
     out = data.frame(id = rep(1:nrow(args), each = length(x)),  x = rep(x, nrow(args)), prob = unlist(lapply(1:nrow(args), function(i)
          d = alpha[i]*do.call(dens, c(list(x=x), as.list(args[i, ]))))))
 
@@ -2896,11 +2772,10 @@ dmix = function(dens = 'dnorm', xlim = NULL, n = 500, alpha = NULL, plot = F, fi
 
     if (plot)
       {
-        require(ggplot2)
         if (fill)
-          return(ggplot(out, aes(x = x, y = prob, group = id, fill = id)) + geom_ribbon(alpha = 0.3, color = 'black', aes(ymin = 0, ymax = prob)) + scale_fill_gradient(low = 'red'))
+          return(ggplot2::ggplot(out, aes(x = x, y = prob, group = id, fill = id)) + geom_ribbon(alpha = 0.3, color = 'black', aes(ymin = 0, ymax = prob)) + scale_fill_gradient(low = 'red'))
         else
-          return(ggplot(out, aes(x = x, y = prob, group = id, color = id)) + geom_line(alpha = 0.3) + scale_color_gradient(low = 'red'))
+          return(ggplot2::ggplot(out, aes(x = x, y = prob, group = id, color = id)) + geom_line(alpha = 0.3) + scale_color_gradient(low = 'red'))
       }
     else
       return(out)
@@ -2989,7 +2864,9 @@ nz = function(x, zero = 0, full = FALSE, matrix = TRUE)
             else
                 cid = factor(tmp[, 'col'])
 
-            out = sparseMatrix(as.integer(rid), as.integer(cid), x = tmp[, 'val'], dimnames = list(levels(rid), levels(cid)))
+            ##out = sparseMatrix::sparseMatrix(as.integer(rid), as.integer(cid), x = tmp[, 'val'], dimnames = list(levels(rid), levels(cid)))
+            ## sparseMatrix not avaiable on R-3.2
+            out = matrix(as.integer(rid), as.integer(cid), x = tmp[, 'val'], dimnames = list(levels(rid), levels(cid)))
 
             if (full)
                 out = as.matrix(out)
@@ -3079,7 +2956,7 @@ morder = function(A, orient = 1)
 #'
 #' @param A query matrix k1 x n
 #' @param B subject matrix k2 x n
-#' @param dir
+#' @param dir 1
 #' @return length k1 vector specifying first row of B matching row i of A
 #' @export
 #' @author Marcin Imielinski
@@ -3245,8 +3122,6 @@ readRDA = function(fn)
     return(as.list(my.env))
   }
 
-
-###############################################
 #' @name dplot
 #' @title dplot
 #'
@@ -3265,10 +3140,8 @@ readRDA = function(fn)
 #' @param text.size text size of legend (= NULL)
 #' @author Marcin Imielinski
 #' @export
-###############################################
 dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwidth = NULL, title = NULL, ylim = NULL, text.size = NULL)
   {
-    require(ggplot2)
 
     df = data.frame(y = y, group = as.character(group), stringsAsFactors = F)
 
@@ -3298,15 +3171,13 @@ dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwid
           g = g + scale_y_log10()
       }
     else if (!is.null(ylim))
-      g = g + scale_continuous(limits = ylim)
+      g = g + scale_y_continuous(limits = ylim)
 
     print(g)
     'voila'
 }
 
 
-
-###############################################
 #' @name dirr
 #' @title dirr
 #'
@@ -3324,10 +3195,9 @@ dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwid
 #' @return named vector of file paths, named by file names in dir gsub-stripped with pattern
 #' @author Marcin Imielinski
 #' @export
-###############################################
 dirr = function(x, pattern = NULL, rep = '', full = TRUE,  ...)
   {
-    out = dir(x, pattern, full = full, ...)
+    out = dir(x, pattern, full.names = full, ...)
     if (!is.null(pattern))
         names(out) = gsub(pattern, rep, dir(x, pattern))
     else
@@ -3668,7 +3538,7 @@ alpha = function(col, alpha)
 #' @param cex.fit character specifying size of text associated with linear regerssion line (=1)
 #' @param square logical flag whether to make square plot
 #' @param pch pch
-#' @param ...
+#' @param ... ...
 #' @author Marcin Imielinski
 #' @export
 ###################################
@@ -3767,7 +3637,6 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
             }
     }
 
-###################################
 #' @name vplot
 #' @title vplot
 #'
@@ -3790,11 +3659,11 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 #' @param alpha numeric vector between 0 and 1 to specify alpha transparency of points if scatter is TRUE (0.3)
 #' @param title character specifying plot title (=NULL)
 #' @author Marcin Imielinski
+#' @import ggplot2
 #' @export
-###################################
 vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE, cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1)
     {
-        require(ggplot2)
+        # require(ggplot2)
         if (!is.factor(group))
             group = as.factor(group)
         dat = data.table(y = suppressWarnings(as.numeric(y)), group)
@@ -3814,7 +3683,6 @@ vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapp
             if (!is.factor(facet2))
                 facet2 = factor(facet2, unique(facet2))
 
-
         suppressWarnings(dat[, facet1 := facet1])
         suppressWarnings(dat[, facet2 := facet2])
 
@@ -3825,12 +3693,14 @@ vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapp
 
         ## if (vfilter)
         ##     {
+        vgroup = NULL ## NOTE fix
         good = as.data.table(dat)[, list(var = var(y)), keyby = vgroup][var>0, vgroup]
         dat = dat[, vfilter := dat$vgroup %in% as.character(good)]
         ## }
 
         if (!is.na(minsup))
             {
+          num = NULL ## NOTE fix
                 good = as.data.table(dat)[, list(num = length(y)), keyby = vgroup][num>minsup, vgroup]
                 dat = dat[(dat$vgroup %in% as.character(good)), ]
             }
@@ -3857,14 +3727,14 @@ vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapp
             {
                 if (dot)
                     {
-                        g = g + geom_dotplot(dat = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+                        g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
                     }
                 else
                     {
                         if (is.null(col.scatter))
-                            g = g + geom_jitter(dat = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                            g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
                         else
-                            g = g + geom_jitter(dat = dat, fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
+                            g = g + geom_jitter(data = dat, fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
                     }
             }
         if (log)
@@ -3969,7 +3839,7 @@ muffle = function(code, ...)
                 df = values(df)
             }
 
-        if (is.data.table(df))
+        if (data.table::is.data.table(df))
             key = key(df)
         else
             key = NULL
@@ -3981,7 +3851,7 @@ muffle = function(code, ...)
                 if (!is.null(key))
                     cols = c(key, cols)
 
-                if (is.data.table(df))
+                if (data.table::is.data.table(df))
                     df = df[, cols, with = F]
                 else
                     df = df[, cols, drop = F]
@@ -3997,10 +3867,10 @@ muffle = function(code, ...)
                     cols = c(key, cols)
 
                 if (length(cols)==1)
-                    if (is.data.table(df))
+                    if (data.table::is.data.table(df))
                         df = as.data.frame(df)
 
-                if (is.data.table(df))
+                if (data.table::is.data.table(df))
                     df[, cols, with = FALSE]
                 else
                     df = df[, cols]
@@ -4012,8 +3882,8 @@ muffle = function(code, ...)
                 df = gr
             }
 
-        if (is.data.table(df))
-            setkeyv(df, key)
+        if (data.table::is.data.table(df))
+            data.table::setkeyv(df, key)
 
         return(df)
     }
@@ -4022,8 +3892,6 @@ muffle = function(code, ...)
 #' @name col.slice
 #' @title col.slice
 #' @aliases %!%
-#'
-#'
 #' @description
 #' Hacked operator for subsetting columns of data.frames, DataFrames, data.tables, GRanges using
 #' a vector of regexps
@@ -4033,12 +3901,13 @@ muffle = function(code, ...)
 #' @param df data.frame
 #' @param regex string to match or number in which case that column is returned (same behavior for data.table)
 #' @return slices of data.frame matching regex
-#' @import data.table
-#' @import GenomicRanges
 #' @rdname col.slice
 #' @exportMethod %!%
 #' @export
 #' @author Marcin Imielinski
+#' @import GenomicRanges
+#' @importFrom data.table data.table fread setnames as.data.table
+#' @importFrom S4Vectors DataFrame
 setGeneric('%!%', function(df, ...) standardGeneric('%!%'))
 
 setMethod("%!%", signature(df = "GRanges"), function(df, ...) {
@@ -4072,12 +3941,11 @@ setMethod("%!%", signature(df = "DataFrame"), function(df, ...) {
 #' @param df data.frame
 #' @param regex string to match or number in which case that column is returned (same behavior for data.table)
 #' @return slices of data.frame matching regex
-#' @import data.table
-#' @import GenomicRanges
 #' @rdname row.slice
 #' @exportMethod %~%
 #' @export
 #' @author Marcin Imielinski
+#' @importFrom data.table setkey := key
 setGeneric('%~%', function(df, ...) standardGeneric('%~%'))
 setMethod("%~%", signature(df = "GRanges"), function(df, x = NULL) {
     if (is.null(x))
@@ -4092,7 +3960,7 @@ setMethod("%~%", signature(df = "data.table"), function(df, x = NULL) {
     if (all(is.na(x)))
         x = sample(1:nrow(df), min(nrow(df), 5))
     if (is.character(x))
-        x = grep(x, df[[key(df)]], ignore.case = TRUE)
+        x = grep(x, df[[gplots::key(df)]], ignore.case = TRUE)
     return(df[x, ])
 })
 setMethod("%~%", signature(df = "data.frame"), function(df, x = NULL) {
@@ -4153,7 +4021,7 @@ mtable = function(mat)
 #' @export
 ucount = function(x)
     {
-        require(data.table)
+        id = id2 = count = NULL ## NOTE fix
         tmp = data.table(id = 1:length(x), id2 = x)[, count := length(id), keyby = id2]
         setkey(tmp, id)
         return(tmp[list(1:length(x)), count])
@@ -4536,7 +4404,6 @@ maf_truncating = function(maf, inclusive=T)
 ###################
 
 
-#'
 #' @name maf_classify
 #' @title maf_classify
 #'
@@ -4582,27 +4449,20 @@ maf_classify = function(maf)
 #'
 #' @param maf maf data.frame
 #' @param filename output file
-#' @param build genome build (='hg19')
+#' @param genome An BSgenome object (was "build genome build (='hg19')")
 #' @author Marcin Imielinski
 #' @export
-maf_to_simple = function(maf, filename, build = 'hg19')
+maf_to_simple = function(maf, filename, genome)
   {
     if (is.null(maf$ref_allele))
       {
-        if (build == 'hg19')
-          library(BSgenome.Hsapiens.UCSC.hg19)
-        else if (build == 'hg18')
-          library(BSgenome.Hsapiens.UCSC.hg18);
-        maf$ref_allele =  getSeq(Hsapiens, paste('chr', gsub('chr', '', maf$chr),  sep = ""), maf$start, maf$end)
+        maf$ref_allele =  Biostrings::getSeq(genome, paste('chr', gsub('chr', '', maf$chr),  sep = ""), maf$start, maf$end)
       }
     if (is.null(maf$tum_allele1))
       maf$tum_allele1 = '-';
 
      write.table(maf[, c('chr', 'start', 'end', 'ref_allele', 'tum_allele1')], filename, quote = F, sep = "\t", row.names = F)
   }
-
-
-
 
 #' @name maf2vcf
 #' @title maf2vcf
@@ -4818,9 +4678,9 @@ mutclusters = function(maf, d = 0, k = 1, method = "single", max.cluster = TRUE)
 ##################################
 gatk_callvariants = function(bams, outdir = './', run = gsub('[^\\w+]', '_', as.character(Sys.time()), perl = T), queue = 'hour', memlimit = 2, sep = '/', skipclean = T, chunk = 250e3, runtype = 'wg', dry = FALSE, dcov = 200, bsub = FALSE, vqsr.memlimit = memlimit)
 {
-  require(tools)
+  # require(tools)
   system(paste('mkdir -p', outdir))
-  outdir = file_path_as_absolute(outdir)
+  outdir = tools::file_path_as_absolute(outdir)
   jobsdir = paste(outdir, 'jobs', sep = '/');
   tmpdir = paste(outdir, 'tmp', '', sep = '/')
   runfile = paste(outdir, 'run', sep = '/')
@@ -4861,7 +4721,6 @@ gatk_callvariants = function(bams, outdir = './', run = gsub('[^\\w+]', '_', as.
 #  return(cmd)
 }
 
-##################
 #' @name gatk_oncotate
 #' @title gatk_oncotate
 #'
@@ -4875,7 +4734,6 @@ gatk_callvariants = function(bams, outdir = './', run = gsub('[^\\w+]', '_', as.
 #' @param queue queue to run on
 #' @author Marcin Imielinski
 #' @export
-#################
 gatk_oncotate = function(gatk.dir, jname = 'gatk.oncotate', mem = 3, queue = 'week', ...)
 {
   if (!file.exists(gatk.dir))
@@ -4885,7 +4743,7 @@ gatk_oncotate = function(gatk.dir, jname = 'gatk.oncotate', mem = 3, queue = 'we
   system(sprintf('mkdir -p %s', oncotator.dir))
   system(sprintf('cp %s/chrs/*/*recal*vcf %s', gatk.dir, oncotator.dir))
 
-  vcf.paths = dir(oncotator.dir, 'vcf', full = T)
+  vcf.paths = dir(oncotator.dir, 'vcf', ful.names = TRUE)
   cmd = paste(ONCOTATOR.PATH, '-v', vcf.paths, '--output-format MAF', paste(vcf.paths, '.maf', sep = ''), 'hg19')
   bcmd = bsub_cmd(cmd, jname, mem = mem, queue = queue, ...)
 
@@ -4971,8 +4829,6 @@ gatk_haplotypecaller = function(outdir, bams, intervals = NULL, dbsnp = Sys.gete
       return(cmd)
 }
 
-
-##########################
 #' @name pindel
 #' @title pindel
 #'
@@ -4999,7 +4855,6 @@ gatk_haplotypecaller = function(outdir, bams, intervals = NULL, dbsnp = Sys.gete
 #' @author Marcin Imielinski
 #' @return character vector of command(s) (only if run = FALSE), otherwise just runs command with system call.
 #' @export
-##########################
 pindel = function(outdir, bams, intervals = NULL, isizes = NULL, hg = Sys.getenv('GATK.FASTA'), genome = 'hg19', outroot = 'out',
   run = F, verbose = T, write_bam = F, oncotate = F, threads = 1, window.size = 10, other.args = '')
   {
@@ -5026,7 +4881,7 @@ pindel = function(outdir, bams, intervals = NULL, isizes = NULL, hg = Sys.getenv
        if (inherits(intervals, 'GRanges'))
         if (length(intervals)>0)
           {
-            intervals = gr.string(intervals, mb = F)
+            intervals = gUtils::gr.string(intervals, mb = F)
             flag = T
           }
 
@@ -5052,9 +4907,102 @@ pindel = function(outdir, bams, intervals = NULL, isizes = NULL, hg = Sys.getenv
       return(cmd)
   }
 
+##########################
+# match.seg.id
+#
+# Just like match.seg for segs1, segs2 which have an $id field (in additinon to $chr, $pos1, $pos2)
+# and returns a numeric vector of length nrow(segs1) that gives the position of the (first) segment in segs2 that intersects segment i of segs1
+#
+# Unlike match.seg, match.seg.id will respect individual $id relationships so that segs can only intersect if they
+# share an $id and also intersect on the genome.
+#
+# Also works on segs with nomenclature handles by "standardize_segs" function.
+#
+##########################
+match.seg.id = function(seg1, seg2, verbose = F)
+{
+  seg1 = standardize_segs(seg1)
+  seg2 = standardize_segs(seg2)
+
+  out = rep(NA, nrow(seg1));
+  uid = unique(seg1$id);
+  for (id in uid)
+  {
+    if (verbose==T) print(sprintf('Finished patient %s', id))
+
+    ix1 = which(seg1$id == id);
+    ix2 = which(seg2$id == id);
+    out[ix1] = ix2[match.seg(seg1[ix1, ], seg2[ix2,])]
+  }
+
+  return(out)
+}
 
 
+############################
+# standardize_segs
+#
+# (data frame seg function)
+#
+# Takes and returns segs data frame standardized to a single format (ie $chr, $pos1, $pos2)
+#
+# if chr = T will ensure "chr" prefix is added to chromossome(if does not exist)
 #############################
+standardize_segs = function(seg, chr = F)
+{
+  if (inherits(seg, 'IRangesList'))
+    seg = irl2gr(seg);
+
+  if (is(seg, 'matrix'))
+    seg = as.data.frame(seg, stringsAsFactors = F)
+
+  if (inherits(seg, 'RangedData') | inherits(seg, 'GRanges') | inherits(seg, 'IRanges'))
+  {
+    val = as.data.frame(values(seg));
+    values(seg) = NULL;
+    seg = as.data.frame(seg, row.names = NULL);  ## returns compressed iranges list
+    seg$seqnames = as.character(seg$seqnames)
+  }
+  else
+    val = NULL;
+
+  field.aliases = list(
+    ID = c('id', 'patient', 'Sample'),
+    chr = c('chrom', 'Chromosome', "contig", "seqnames", "seqname", "space", 'chr'),
+    pos1 = c('loc.start', 'begin', 'Start', 'start', 'Start.bp', 'Start_position', 'pos', 'pos1', 'left', 's1'),
+    pos2 =  c('loc.end', 'End', 'end', "stop", 'End.bp', 'End_position', 'pos2', 'right', 'e1'),
+    strand = c('str', 'strand', 'Strand', 'Str')
+  );
+
+  if (is.null(val))
+    val = seg[, setdiff(names(seg), unlist(field.aliases))]
+
+  seg = seg[, intersect(names(seg), unlist(field.aliases))]
+
+  for (field in setdiff(names(field.aliases), names(seg)))
+    if (!(field %in% names(seg)))
+      names(seg)[names(seg) %in% field.aliases[[field]]] = field;
+
+  if (chr)
+    if (!is.null(seg$chr))
+      if (!grepl('chr', seg$chr[1]))
+        seg$chr = paste('chr', seg$chr, sep = "");
+
+  if (is.null(seg$pos2))
+    seg$pos2 = seg$pos1;
+
+  missing.fields = setdiff(names(field.aliases), c(names(seg), c('chr', 'ID', 'strand')));
+
+  if (length(missing.fields)>0)
+    warning(sprintf('seg file format problem, missing an alias for the following fields:\n\t%s',
+                    paste(sapply(missing.fields, function(x) paste(x, '(can also be', paste(field.aliases[[x]], collapse = ', '), ')')), collapse = "\n\t")));
+
+  if (!is.null(val))
+    seg = cbind(seg, val)
+
+  return(seg)
+}
+
 #' @name allele_multiplicity
 #' @title allele_multiplicity
 #'
@@ -5066,7 +5014,6 @@ pindel = function(outdir, bams, intervals = NULL, isizes = NULL, hg = Sys.getenv
 #' using bsp_participant_id in ind and annotate, but may take a few minutes to pull.
 #' @author Marcin Imielinski
 #' @export
-#############################
 allele_multiplicity = function(ind, maf, abs.seg = NULL, verbose = TRUE)
 {
   rownames(ind) = ind$Individual_Id;
@@ -5082,7 +5029,7 @@ allele_multiplicity = function(ind, maf, abs.seg = NULL, verbose = TRUE)
       if (is.null(abs.seg))
         {
           if (verbose) print('Grabbing absolute segs')
-          abs.seg = get_seg(individuals, absolut = TRUE);
+          abs.seg = get_seg(ind, absolut = TRUE);
         }
       if (verbose) print('Matching maf to absolute segs')
       seg_ix = match.seg.id(maf, abs.seg, verbose = TRUE);
@@ -5153,7 +5100,7 @@ plot_multiplicity = function(individual, maf, plot.reads = F)
   ucn = sort(unique(maf$cn.tot[maf$patient == individual$Individual_Id]))
   ucn = ucn[ucn<10]
   layout(t(matrix(1:((length(ucn)+2)*3), nrow = 3, ncol = length(ucn)+2)), widths = c(1, 4, 2))
-  col = suppressWarnings(brewer.pal(max(k, 3), 'Accent'));
+  col = suppressWarnings(RColorBrewer::brewer.pal(max(k, 3), 'Accent'));
   par(mar=c(0,0,0,0), las=1)
   plot.new()
   plot.new()
@@ -5197,7 +5144,7 @@ plot_multiplicity = function(individual, maf, plot.reads = F)
       abline(v = individual['Purity'], lty = 1)
       plot.new()
       par(mar=c(0,1,0,1), las=1)
-      smartlegend(legend = paste(1:k), ncol = ceiling(k/4), col = col, x = 'left', y = 'center', pch = 19)
+      gplots::legend(legend = paste(1:k), ncol = ceiling(k/4), col = col, x = 'left', y = 'center', pch = 19)
     }
   plot.new()
   plot.new()
@@ -5620,7 +5567,7 @@ pmGSEA = function(gene.sets, sig.table, min.perms = 1e2, max.perms = 1e5,
               if (bootstrap)
                 tmp.ind = sample(length(sig.table), length(gene.set)*n.perm, replace = TRUE)
               else
-                tmp.ind = unlist(sapply(1:ceil(length(gene.set) * n.perm / length(sig.table)), function(x) sample(length(sig.table), length(sig.table))))
+                tmp.ind = unlist(sapply(1:ceiling(length(gene.set) * n.perm / length(sig.table)), function(x) sample(length(sig.table), length(sig.table))))
 
               data.vec = sig.table[tmp.ind[1:(n.perm*length(gene.set))]]
               data.vec = data.vec[order(rep(1:n.perm, each = length(gene.set)), data.vec)]; # sorts each "permuted gene list")
@@ -5873,7 +5820,7 @@ clone_cluster = function(altc, totc, cn, purity, thresh = 0.95, k = 2, mix.model
         p.ccf = ccf(altc, totc, cn, purity, grid.size, verbose);
         cat('Clustering histogram\n')
         s.ccf = sample(as.numeric(names(p.ccf)), 1e4, prob = p.ccf, replace = T)
-        mix.model = normalmixEM(s.ccf, k = k)
+        mix.model = mixtools::normalmixEM(s.ccf, k = k)
       }
     else
       k = length(mix.model$mu)
@@ -6235,174 +6182,6 @@ igv.loci = function(mut, ## GRanges of loci
           }
   }
 
-
-##############
-#' @name dump_mutations_for_IGV_snapshots
-#' @title dump_mutations_for_IGV_snapshots
-#'
-#' @description
-#' dumps "snapshot_queue" file from maf into igv.dir for IGV screen shots
-#' (should be followed by command line call to "make snapshots" or "make snapshots_batch" via Makefile in snapshots directory to take snapshots on the farm
-#' of queued mutations on the farm)
-#'
-#' Optionally dumps "mutation_log" which is a text file input to Mutation Station (Eran Hodis 2011) .. this tdf provides
-#' bsolute paths to pngs (resulting from the predicted outputs of the above) and columns for mutation review.
-#'
-#' Should set dump.mutation.log to TRUE for first run and then for subsequent re-runs (ie to re-do LSF failures) should run with
-#' dump.mutation.log = FALSE, so as to not rewrite the mutation log.
-#' @export
-#' @author Marcin Imielinski
-##############
-dump_mutations_for_IGV_snapshots = function(maf, igv.dir,
-  iset = "LUAD_all_exomes", wkspace = "Lung", # wkspace only needs to be provided if iset is a string
-  mutation.log.name = 'mutation_log', snapshots.queue.filename = 'snapshot_queue', dump.mutation.log = TRUE,
-  capture = TRUE) # capture = F  if you want to take images from whole genome bams)
-{
-  SNAPSHOT.SUBDIR = "images";
-  MUTATION.MAKEFILE.PATH = '/home/unix/marcin/Scripts/Makefiles/Makefile.mutations';
-  system(sprintf('mkdir -p %s/%s', igv.dir, SNAPSHOT.SUBDIR));
-
-  if (is.character(iset))
-    {
-      print(sprintf('Pulling firehose individuals table %s from workspace %s ...', iset, wkspace))
-      iset = get_fh(iset, wkspace = wkspace);
-    }
-
-  if (is.null(maf$patient_name))
-    maf$patient_name = gsub('\\-Tumor', '', maf$Tumor_Sample_Barcode);
-
-  # match up maf's with tumor and normal bam file paths
-  upatient = data.frame(id = unique(maf$patient_name), tumorbam = '', normalbam = '', stringsAsFactors = F);
-  maf$patient_ix = match(maf$patient_name, upatient$id);
-
-  if (capture)
-    upatient[, c('Tumor_bam', 'Normal_bam')] = iset[match(upatient$id, iset$Individual_Id), c('Tumor_clean_bam_file_capture', 'Normal_clean_bam_file_capture')]
-  else
-    upatient[, c('Tumor_bam', 'Normal_bam')] = iset[match(upatient$id, iset$Individual_Id), c('Tumor_clean_bam_file_wgs', 'Normal_clean_bam_file_wgs')]
-  maf[, c('Tumor_bam', 'Normal_bam')] = upatient[maf$patient_ix, c('Tumor_bam', 'Normal_bam')]
-
-  if (is.null(maf$Start_position))
-    {
-      maf$Start_position = as.numeric(gsub('g\\.chr\\w+\\:(\\d+).*', '\\1', maf$Genome_Change));
-      maf$End_position = as.numeric(gsub('g\\.chr\\w+\\:(\\d+).*', '\\1', maf$Genome_Change));
-    }
-
-  if (is.null(maf$Chromosome))
-    maf$Chromosome = as.numeric(gsub('Y', '24', gsub('X', '23', gsub('g\\.chr(\\w+)\\:\\d+.*', '\\1', maf$Genome_Change))));
-
-  maf = maf[order(maf$patient_name), ]; # will optimize time for igv snapshots
-  maf$rowid = 1:nrow(maf);
-  maf$rowid = maf$Protein_Change;
-  maf$label = maf_label(maf, short = TRUE, use.hugo.symbol=T);
-
-  maf$snapshot_path = paste(file_path_as_absolute(paste(igv.dir, SNAPSHOT.SUBDIR, sep = "/")),
-    paste(maf$label, '.png', sep = ""), sep = "/");
-
-  maf$chr = paste('chr', maf$Chromosome, sep = "");
-
-  out = maf[, c('chr', 'Start_position', 'End_position', 'snapshot_path', 'Tumor_bam', 'Normal_bam')]
-
-  bad = which(is.na(out$Tumor_bam) | is.na(out$Normal_bam));
-
-  if (length(bad)>0)
-    {
-      warning(sprintf('There are %d events without a tumor or normal bam link .. removing', length(bad)))
-      out = out[-bad, ];
-    }
-
-  print(sprintf('Dumping %d total events for snapshotting', nrow(out)));
-
-  write.table(out,
-              paste(igv.dir, snapshots.queue.filename, sep = "/"),
-              quote = F, sep = "\t", row.names = F, col.names = F)
-  maf$reviewed = 'Unreviewed';
-
-  mutation_log = maf[, c('rowid', 'Hugo_Symbol', 'patient_name', 'chr', 'Start_position', 'End_position', 'Variant_Classification', 'reviewed', 'label', 'snapshot_path')]
-  names(mutation_log) = c('mutsigrank','gene','individual','chrom','start_pos','end_pos','type','ManualReviewJudgement','label', 'snapshot_path')
-
-  if (dump.mutation.log == T)
-      write.table(mutation_log,
-                  paste(igv.dir, mutation.log.name, sep = "/"),
-                  quote = F, sep = "\t", row.names = F, col.names = TRUE)
-
-  mutation_log$label = maf$label;
-
-  # transfer makefile to new igv snapshot directory to make images
-  system(paste('cp', MUTATION.MAKEFILE.PATH, paste(igv.dir, '/Makefile', sep = "")))
-
-  writeLines(sprintf('Instructions: Now go into shell, cd into directory "%s", and type either "make snapshots" or "make snapshots_batch" to generate screen shots either locally or on LSF, respectively.', igv.dir))
-
-  return(mutation_log)
-}
-
-##############
-#' @name dump_dranger_for_IGV_dump
-#' @title _dranger_for_IGV_snapshots
-#' @description
-#'
-#' dumps "snapshot_queue" file from dranger table into igv.dir for IGV screen shots of translocations
-#' Takes as input:
-#' dranger = data frame obtained by reading in dranger output
-#' iset= firehose iset name OR data.frame of individuals table from firehose obtained by doing get_fh(...,  merged = TRUE) which contains columns $Individual_Id,
-#' $Tumor_clean_bam_file_wgs, $Normal_clean_Bam_file_wgs;
-#' wkspace = firehose workspace (needs to be provided if iset is a name of a firehose iset)
-#'
-#' (should be followed by command line call to "make snapshots" or "make snapshots_batch" via Makefile in snapshots directory to take snapshots on the farm
-#' of queued mutations on the farm)
-#'
-#' @export
-#' @author Marcin Imielinski
-##############
-dump_dranger_for_IGV_snapshots = function(dranger, iset, wkspace = "Lung", igv.dir = "./", mutation.log.name = 'mutation_log', snapshots.queue.filename = 'snapshot_queue', dump.mutation.log = TRUE, chr.include = T)
-{
-  SNAPSHOT.SUBDIR = "images";
-  DRANGER.MAKEFILE.PATH = '/home/unix/marcin/Scripts/Makefiles/Makefile.dranger';
-
-  system(sprintf('mkdir -p %s/%s', igv.dir, SNAPSHOT.SUBDIR));
-
-  if (is.character(iset))
-    iset = get_fh(iset, wkspace = wkspace, merged = TRUE);
-
-  dranger[, c('Tumor_bam', 'Normal_bam')] = iset[match(dranger$individual, iset$Individual_Id), c('Tumor_clean_bam_file_wgs', 'Normal_clean_bam_file_wgs')]
-  dranger$label <- paste(dranger$gene1, dranger$gene2, sep = "-");
-  dranger$label[dranger$gene1 == dranger$gene2] = dranger$gene1[dranger$gene1 == dranger$gene2];
-  dranger$label = paste(dranger$individual, dranger$label, sep = "_")
-
-  if (chr.include == T & !any(grepl('chr', dranger$chr1)))
-    {
-      dranger$chr1 = paste('chr', dranger$chr1, sep = "");
-      dranger$chr2 = paste('chr', dranger$chr2, sep = "");
-    }
-
-  if (chr.include == F & any(grepl('chr', dranger$chr1)))
-    {
-      dranger$chr1 = gsub('chr', '', dranger$chr1)
-      dranger$chr2 = gsub('chr', '', dranger$chr2)
-OA    }
-
-  dranger$snapshot_path = paste(file_path_as_absolute(paste(igv.dir, SNAPSHOT.SUBDIR, sep = "/")),
-    paste(paste(dranger$label, dranger$chr1, dranger$min1, dranger$max1, dranger$chr2, dranger$min2, dranger$max2, sep = "_"), '.png', sep = ""), sep = "/");
-  dranger$Variant_Classification = gsub('([^\\(]+)[\\(]?.*$', '\\1', dranger$fusion)
-  write.tab(dranger[,c('individual', 'chr1', 'min1', 'max1', 'chr2', 'min2', 'max2', 'snapshot_path', 'Tumor_bam', 'Normal_bam')], paste(igv.dir, snapshots.queue.filename, sep = "/"), col.names = F)
-
-  dranger$reviewed = "";
-
-  # dump mutation log so that mutation_station can eventually annotate
-  mutation_log = dranger[, c('label', 'chr1', 'min1', 'max1', 'chr2', 'min2', 'max2', 'Variant_Classification', 'reviewed', 'snapshot_path')]
-  if (dump.mutation.log == T)
-    write.table(mutation_log,
-                paste(igv.dir, mutation.log.name, sep = "/"),
-                quote = F, sep = "\t", row.names = F, col.names = TRUE)
-
-  # transfer makefile to new igv snapshot directory to make images
-  system(paste('cp', DRANGER.MAKEFILE.PATH, paste(igv.dir, '/Makefile', sep = "")))
-
-  writeLines(sprintf('Instructins: Now go into shell, cd into directory "%s", and type either "make snapshots" or "make snapshots_batch" to generate screen shots either locally or on LSF, respectively.', igv.dir))
-
-  return(dranger)
-}
-
-
 #' @name dcast.data.table2
 #' @title dcast.data.table but allows vector arguments for value.var,
 #' @description
@@ -6418,7 +6197,7 @@ dcast.data.table2 = function(data, formula, ..., value.var = NULL, sep = '_')
             value.var = setdiff(colnames(data), terms)
         dt = lapply(value.var, function(x)
             {
-                d = dcast.data.table(data, formula,  ..., value.var = x)
+                d = data.table::dcast.data.table(data, formula,  ..., value.var = x)
                 new.cols = setdiff(colnames(d), key(d))
                 setnames(d, new.cols, paste(new.cols, x, sep = sep))
                 return(d)
@@ -6430,9 +6209,6 @@ dcast.data.table2 = function(data, formula, ..., value.var = NULL, sep = '_')
         return(out)
     }
 
-
-
-#############
 #' @name .igv_host
 #' @title  .igv_host
 #' @rdname igv_host
@@ -6442,7 +6218,6 @@ dcast.data.table2 = function(data, formula, ..., value.var = NULL, sep = '_')
 #'
 #' @export
 #' @author Marcin Imielinski
-##############
 .igv_host = function(h)
     {
         if (grepl('^cga', h))

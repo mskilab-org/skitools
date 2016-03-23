@@ -19,7 +19,7 @@ chunk(from, to = NULL, by = 1, length.out = NULL)
 2 column matrix of indices, each row representing chunk
 }
 \description{
-takes same input as seq (from, to, by, length.out) and outputs a 2 column matrix of indices 
+takes same input as seq (from, to, by, length.out) and outputs a 2 column matrix of indices
 corresponding to "chunks"
 }
 \author{

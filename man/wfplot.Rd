@@ -2,7 +2,7 @@
 % Please edit documentation in R/skitools.R
 \name{wfplot}
 \alias{wfplot}
-\title{wfplot}
+\title{Quick waterfall plot}
 \usage{
 wfplot(data, labels = NULL, names.arg = NULL, col = NULL, las = 2,
   cex = 1, leg.pos = NULL, ...)
@@ -19,6 +19,8 @@ wfplot(data, labels = NULL, names.arg = NULL, col = NULL, las = 2,
 \item{las}{optional integer vector specifying orientation of labels on barplot}
 
 \item{cex}{numeric value specifying size of names.arg data labels}
+
+\item{leg.pos}{NULL}
 
 \item{...}{additional arguments to barplot}
 }

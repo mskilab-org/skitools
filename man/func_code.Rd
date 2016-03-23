@@ -20,12 +20,12 @@ character data of source file containing call to function with arguments hard co
 Produces (simple) R code calling function named "func" with args in list "argv", prepending with
 source() call to directories in the vector "sources" if specified.
 
-NOTE: args in ... can be lists or vectors consisting of numerical values or characters.  Lists can have named fields.  
+NOTE: args in ... can be lists or vectors consisting of numerical values or characters.  Lists can have named fields.
 These will be assigned in a "hard coded" way in the Rcode, so these should be ideally scalars or
-pretty short vectors / lists. 
+pretty short vectors / lists.
 
 For code to run properly, the names of "argv" must correspond to argument names of "func", or
-if the list has unnamed fields then they must be ordered in the order of the function args.  
+if the list has unnamed fields then they must be ordered in the order of the function args.
 
 Useful for dumping tmp code files for farming when there are many arguments being passed
 }

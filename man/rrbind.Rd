@@ -7,7 +7,7 @@
 rrbind(..., union = T)
 }
 \arguments{
-\item{...}{}
+\item{...}{TODO}
 }
 \description{
 like rbind, but takes the intersecting columns of the dfs

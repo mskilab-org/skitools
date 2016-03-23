@@ -2,7 +2,7 @@
 % Please edit documentation in R/skitools.R
 \name{fisher.plot}
 \alias{fisher.plot}
-\title{fisher.plot}
+\title{Plots fisher contingency table with p value}
 \usage{
 fisher.plot(O)
 }

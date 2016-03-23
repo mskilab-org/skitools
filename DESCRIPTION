@@ -6,11 +6,33 @@ Author: Marcin Imielinski <mimielinski@nygenome.org>
 Authors@R: person("Marcin", "Imielinski", email = "mimielinski@nygenome.org", role = c("aut", "cre"))
 Description: R miscellaneous utilities for basic data manipulation, debugging,
     viz, lsf management, and common mskilab tasks.
+Imports:
+    gplots,
+    hwriter,
+    plotrix,
+    ggplot2,
+    data.table,
+    gUtils,
+    devtools,
+    S4Vectors,
+    RColorBrewer,
+    igraph,
+    mixtools,
+    RCytoscape,
+    graph,
+    methods,
+    VariantAnnotation,
+    reshape2,
+    IRanges,
+    tools,
+    Biostrings,
+    GenomeInfoDb
 Depends:
     R (>= 3.1.0),
-    data.table,
-    gplots,
-    hwriter
-License: MIT License
+    GenomicRanges
+Suggests:
+    testthat,
+    BSgenome.Hsapiens.UCSC.hg19
+License: MIT
 LazyData: true
 RoxygenNote: 5.0.1

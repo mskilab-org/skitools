@@ -41,7 +41,7 @@ write.htab(tab, file = NULL, title = NULL, footer = NULL,
 }
 \description{
 writes data frame (or anything castable to data frame) to pretty HTML formatted table to a static location.
-Useful for quick table inspection via Chrome or other web browser. 
+Useful for quick table inspection via Chrome or other web browser.
 
 Very similar syntax to write.tab
 }

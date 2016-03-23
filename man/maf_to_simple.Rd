@@ -4,14 +4,14 @@
 \alias{maf_to_simple}
 \title{maf_to_simple}
 \usage{
-maf_to_simple(maf, filename, build = "hg19")
+maf_to_simple(maf, filename, genome)
 }
 \arguments{
 \item{maf}{maf data.frame}
 
 \item{filename}{output file}
 
-\item{build}{genome build (='hg19')}
+\item{genome}{An BSgenome object (was "build genome build (='hg19')")}
 }
 \description{
 Dumps maf files to "simple" format for input into oncotator, adds dummy ref_allele and tum_allele1 cols if not provided

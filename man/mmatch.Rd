@@ -10,6 +10,8 @@ mmatch(A, B, dir = 1)
 \item{A}{query matrix k1 x n}
 
 \item{B}{subject matrix k2 x n}
+
+\item{dir}{1}
 }
 \value{
 length k1 vector specifying first row of B matching row i of A

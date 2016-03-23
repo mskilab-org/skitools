@@ -40,6 +40,8 @@ splot(x, y, cex = 0.4, poutlier = 0.01, col = alpha("black", 0.3),
 \item{square}{logical flag whether to make square plot}
 
 \item{pch}{pch}
+
+\item{...}{...}
 }
 \description{
 convenient formatted scatter plot with additional features as defaults, useful for fast interactive data inspection / exploration of large

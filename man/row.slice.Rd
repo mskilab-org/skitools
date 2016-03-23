@@ -16,7 +16,7 @@ df \%~\% ...
 slices of data.frame matching regex
 }
 \description{
-Hacked operator for subsetting rows of data.frames, DataFrames, data.tables, GRanges 
+Hacked operator for subsetting rows of data.frames, DataFrames, data.tables, GRanges
 
 df %~% 1:5 retrieves first five rows
 

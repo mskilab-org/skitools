@@ -20,7 +20,7 @@ where n is either an integer vector of length k denoting how many samples to be 
 
 p = params data frame whose named columns correspond to arguments to rdens (eg $n, $shape1, $shape2 for rbeta or $n, $mean, $sd for rnorm)
 rdens = function encoding random number generator for given density, that takes as input named columns of params
-n = either an nrow(p) integer vector or scalar denoting how many samples to draw from each density 
+n = either an nrow(p) integer vector or scalar denoting how many samples to draw from each density
 
 n can also be just be a column of p
 
