@@ -94,7 +94,6 @@ file.name = function(paths)
     return(gsub('(^|(.*\\/))?([^\\/]*)', '\\3', paths))
   }
 
-#########
 #' @name file.dir
 #' @title file.dir
 #'
@@ -106,7 +105,6 @@ file.name = function(paths)
 #' @return character vector of just file.names
 #' @author Marcin Imielinski
 #' @export
-########
 file.dir = function(paths)
   {
     return(gsub('(^|(.*\\/))?([^\\/]*)$', '\\2', paths))
