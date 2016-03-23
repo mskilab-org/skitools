@@ -795,7 +795,7 @@ rrbind = function(..., union = T)
 
     out = do.call('rbind', expanded.dfs);
 
-    if (any(uix <- which(classes[unshared.u] != 'character'))) ## was <<-, don't know why
+    if (any(uix <<- which(classes[unshared.u] != 'character')))
       {
           ix = match(unshared.u, names(out))
           for (j in uix) ### HACK to prevent stupid class mismatches leading to NA BS
@@ -1565,7 +1565,7 @@ write.htab = function(tab, file = NULL,
     tab[is.na(tab)] = '';
     tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
 
-    if (any(lix <- sapply(names(tab), function(x) is.list(tab[, x]))))
+    if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
       for (i in which(lix))
         tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
 

@@ -21,7 +21,7 @@ Imports:
     RCytoscape,
     graph,
     methods,
-    VariantAnnotation,bioc
+    VariantAnnotation,
     reshape2,
     IRanges,
     tools,
