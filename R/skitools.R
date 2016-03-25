@@ -5884,6 +5884,7 @@ clone_cluster = function(altc, totc, cn, purity, thresh = 0.95, k = 2, mix.model
 #' @param loci GRanges or IGV parsable string specifying what window(s) on genome to view (=NULL)
 #' @param gr  GRanges or GRAngesList of numeric genomic data or interval genomic annotations to send to IGV session, if gr has field $score then data will be dumped to .bw otherwise to .bed or .gff (=NULL)
 #' @param snapshot file path to store snapshot in (has to be interpretable on file system where IGV is running)
+#' @param track.view command for setting the track display mode ("expand","squish" or "collapse")
 #' @param new logical flag whether to start new IGV session
 #' @param reset logical flag whether to reset connection between R and IGV (useful if IGV non responsive)
 #' @param host character specifying host where IGV is running
@@ -5898,6 +5899,7 @@ igv = function(
     gr = NULL, ## granges object
     loci = NULL, #can either be a list or data.frame with fields $chr, $pos1, $pos2 or a gene name / gene list
     snapshot = NULL, # file path to save image to
+    track.view = NULL,
     new = FALSE,
     reset = FALSE,
     wkspace = 'PanLungWGS',
@@ -5936,7 +5938,7 @@ igv = function(
     if (nchar(host)==0)
         stop('IGV host field is empty, either specify via host argument to this function or set IGV_HOST environment variable')
 
-    con = tryCatch(suppressWarnings(socketConnection(host = host, port = port)), error =
+    con = tryCatch(suppressWarnings(socketConnection(host = host, port = port, open="r+", blocking = TRUE)), error =
            function(x) (stop(sprintf('IGV does not appear to be running on host %s, port %s.  Please start IGV (v2 or later) in external shell for host %s, then retry igv command.', host, port, Sys.getenv('HOST')))))
 
     WEB.DIR = '~/public_html'
@@ -6049,6 +6051,17 @@ igv = function(
         else
             igv.cmd(paste('goto', paste(loci, collapse = " | ")), con);
 
+    ## trackview commands
+    cat(sprintf("%s: %s\n",track.view,class(track.view)))
+    if (!is.null(track.view)) {
+        track.view <- tolower(track.view)
+        if (track.view %in% c('expand','squish','collapse')) {
+            igv.cmd(track.view, con)
+        }
+        else {
+            warning(sprintf("unrecognixed track.view '$s'\n"))
+        }
+    }
 
     if (!is.null(sort.locus))
         {
@@ -6083,7 +6096,10 @@ igv.cmd = function(cmd, con, verbose = TRUE)
 {
     if (verbose)
         cat(sprintf('Sending to IGV via connection %s: %s\n', summary(con)$description, cmd))
-  writeLines(cmd, con)
+    writeLines(cmd, con)
+    response <- readLines(con,n=1)
+    if (verbose)
+        cat(sprintf("IGV replies: %s\n",response))
 }
 
 
