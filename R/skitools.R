@@ -7569,3 +7569,53 @@ chr2num = function(x, xy = FALSE)
 
      return(out)
        }
+
+
+#' Improved rbind for intersecting columns of data.frames or data.tables
+#'
+#' like rbind, but takes the intersecting columns of the dfs
+#' rrbind = function(df1, df2, [df3 ... etc], )
+#' @param ... list of data frames to concatenate
+#' @param union if union flag is used then will take union of columns (and put NA's for columns of df1 not in df2 and vice versa). Default TRUE
+#' @param as.data.table [Default FALSE] return as a \link{data.table}
+#' @export
+rrbind2 = function(..., union = T, as.data.table = FALSE)
+    {
+        dfs = list(...);  # gets list of data frames
+        dfs = dfs[!sapply(dfs, is.null)]
+        dfs = dfs[sapply(dfs, ncol)>0]
+        names.list = lapply(dfs, names);
+        cols = unique(unlist(names.list));
+        unshared = lapply(names.list, function(x) setdiff(cols, x));
+        ix = which(sapply(dfs, nrow)>0)
+        ## only call expanded dfs if needed
+        if (any(sapply(unshared, length) != 0))
+            expanded.dts <- lapply(ix, function(x) {
+                                       tmp = dfs[[x]]
+                                       if (is.data.table(dfs[[x]]))
+                                           tmp = as.data.frame(tmp)
+                                       tmp[, unshared[[x]]] = NA;
+                                       return(as.data.table(as.data.frame(tmp[, cols])))
+                                   })
+        else
+            expanded.dts <- lapply(dfs, function(x) as.data.table(as.data.frame(x)))
+
+        ## convert data frames (or DataFrame) to data table.
+        ## need to convert DataFrame to data.frmae for data.table(...) call.
+        ## structure call is way faster than data.table(as.data.frame(...))
+        ## and works on data.frame and DataFrame
+                                        #    dts <- lapply(expanded.dfs, function(x) structure(as.list(x), class='data.table'))
+                                        #   rout <- data.frame(rbindlist(dts))
+
+        rout <- rbindlist(expanded.dts)
+        if (!as.data.table)
+            rout = as.data.frame(rout)
+
+        if (!union)
+            {
+                shared = setdiff(cols, unique(unlist(unshared)))
+                rout = rout[, shared];
+            }
+
+        return(rout)
+    }

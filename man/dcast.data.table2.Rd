@@ -4,7 +4,7 @@
 \alias{dcast.data.table2}
 \title{dcast.data.table but allows vector arguments for value.var,}
 \usage{
-dcast.data.table2(data, formula, ..., value.var = NULL, sep = "_")
+\method{dcast}{data.table2}(data, formula, ..., value.var = NULL, sep = "_")
 }
 \description{
 if value.var is a vector then will combine the right hand side column names with each element of value.var

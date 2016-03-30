@@ -10,27 +10,28 @@ Imports:
     gplots,
     hwriter,
     plotrix,
-    ggplot2,
-    data.table,
-    gUtils,    
-    devtools,
     S4Vectors,
     RColorBrewer,
-    igraph,
     RCytoscape,
     graph,
-    methods,
-    VariantAnnotation,
-    reshape2,
-    IRanges,
-    tools,
-    Biostrings,
-    GenomeInfoDb
+    methods,		
+    reshape2,		
+    IRanges,		
+    tools,		
+    Biostrings,		
+    GenomeInfoDb	
 Depends:
     R (>= 3.1.0),
-    GenomicRanges
+    GenomicRanges,
+    VariantAnnotation,
+    devtools,
+    gUtils,
+    ggplot2,
+    data.table,
+    igraph,	
 Suggests:
     testthat,
+    parallel,
     BSgenome.Hsapiens.UCSC.hg19
 License: MIT
 LazyData: true
