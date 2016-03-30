@@ -7570,6 +7570,7 @@ chr2num = function(x, xy = FALSE)
      return(out)
        }
 
+<<<<<<< HEAD
 
 #' Improved rbind for intersecting columns of data.frames or data.tables
 #'
@@ -7619,3 +7620,369 @@ rrbind2 = function(..., union = T, as.data.table = FALSE)
 
         return(rout)
     }
+=======
+#' parse.grl
+#'
+#' quick function to parse \code{GRangesList} from character vector IGV / UCSC style strings of format gr1;gr2;gr3 where each gr is of format chr:start-end[+/-]
+#'
+#' @param x String to parse
+#' @param seqlengths [Default \link{hg_seqlengths}
+#' @param ... dummy
+#' @name parse.grl
+#' @export
+parse.grl = function(x, seqlengths = hg_seqlengths())
+{
+    nm = names(x)
+    tmp = strsplit(x, '[;]')
+    tmp.u = unlist(tmp)
+    tmp.u = gsub('\\,', '', tmp.u)
+    tmp.id = rep(1:length(tmp), sapply(tmp, length))
+    str = gsub('.*([\\+\\-])$','\\1', tmp.u)
+    spl = strsplit(tmp.u, '[\\:\\-\\+]', perl = T)
+    if (any(ix <- sapply(spl, length)==1))
+        spl[ix] = strsplit(gr.string(seqinfo2gr(seqlengths)[sapply(spl[ix], function(x) x[[1]])], mb = F), '[\\:\\-\\+]', perl = T)
+    else if (any(ix <- sapply(spl, length)==2))
+        spl[ix] = lapply(spl, function(x) x[c(1,2,2)])
+    if (any(ix <- !str %in% c('+', '-')))
+        str[ix] = '*'
+    df = cbind(as.data.frame(matrix(unlist(spl), ncol = 3, byrow = T), stringsAsFactors = F), str)
+    names(df) = c('chr', 'start', 'end', 'strand')
+    rownames(df) = NULL
+    gr = seg2gr(df, seqlengths = seqlengths)[, c()]
+    grl = split(gr, tmp.id)
+    names(grl) = nm
+    return(grl)
+}
+
+#' parse.gr
+#'
+#' quick function to parse gr from character vector IGV / UCSC style strings of format gr1;gr2;gr3 where each gr is of format chr:start-end[+/-]
+#'
+#' @name parse.gr
+#' @export
+parse.gr = function(...)
+{
+    return(unlist(parse.grl(...)))
+}
+
+#' gr.sub
+#'
+#' will apply gsub to seqlevels of gr, by default removing 'chr', and "0.1" suffixes, and replacing "MT" with "M"
+#' @name gr.sub
+#' @export
+gr.sub = function(gr, a = c('(^chr)(\\.1$)', 'MT'), b= c('', 'M'))
+{
+    tmp = mapply(function(x, y) seqlevels(gr) <<- gsub(x, y, seqlevels(gr)), a, b)
+    return(gr)
+}
+
+#' gr.refactor
+#'
+#' Takes a pile of ranges gr and new seqnames "sn" (either of length 1 or
+#' of length(gr)) and returns a gr object with the new seqnames and same
+#' widths and new start coordinates.  These coordinates are determined by placing
+#' each gr on the corresponding chromosome at 1 + gap after previous gr (or at 1)
+#' @param gr \code{GRanges} to refactor
+#' @param sn character vector of new seqnames
+#' @param gap Default 0
+#' @param rev Default FALSE
+#' @name gr.refactor
+#' @export
+gr.refactor = function(gr, sn, gap = 0, rev = FALSE)
+{
+    if (is.factor(sn))
+        slev = levels(sn)
+    else
+        slev = unique(sn);
+
+    sn = cbind(as.character(start(gr)), as.character(sn))[,2]
+    w = width(gr)
+    gap = pmax(cbind(gap, w)[,1], 0);
+                                        #    gap = pmax(gap, 0);
+                                        #    starts = levapply(width(gr), sn, function(x) cumsum(gap+c(1, x[1:(length(x)-1)]))[1:length(x)]-gap)
+
+    starts = levapply(1:length(w), sn, function(x) cumsum(gap[x] + c(1, w[x[1:(length(x)-1)]])[1:length(x)])-gap[x])
+    ir = IRanges(starts, width = width(gr))
+
+                                        # figure out seqlevels so that the order matches seqlevels of gr with
+                                        # derivative chromosomes "next" to their original
+    sl = aggregate(end(ir)+gap, by = list(sn), FUN = max); sl = structure(sl[,2], names = sl[,1])
+
+                                        # reorder and add any missing levels
+    oth.names = setdiff(slev, names(sl))
+    if (length(oth.names)>0)
+        sl[oth.names] = NA
+    sl = sl[slev]
+
+    out = GRanges(sn, ir, strand = strand(gr), seqlengths = sl)
+    values(out) = values(gr);
+
+    return(out)
+}
+
+#' gr.stripstrand
+#'
+#' sets strand to "*"
+#' @param gr \code{GRanges} to remove the strand from
+#' @name gr.stripstrand
+#' @export
+gr.stripstrand = function(gr)
+{
+    strand(gr) = "*"
+    return(gr)
+}
+
+#' gr.tostring
+#'
+#' dumps out a quick text representation of a gr object (ie a character vector)
+#' @param gr \code{GRanges}
+#' @param places Number of decimal places. Default 2
+#' @param interval Default 1e6
+#' @param unit Default "MB"
+#' @param prefix Default "chr"
+#' @return text representation of input
+#' @name gr.tostring
+#' @export
+gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'chr')
+{
+    p1 = round(start(gr)/interval, places);
+    p2 = round(end(gr)/interval, places);
+    return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
+}
+
+#'
+#' Takes gr (Granges object) and maps onto a flattened coordinate system defined by windows (GRanges object)
+#' a provided "gap" (in sequence units).  If squeeze == T then will additionally squeeze ranges into xlim.
+#'
+#' output is list with two fields corresponding to data frames:
+#' $grl.segs = data frame of input gr's "lifted" onto new flattened coordinate space (NOTE: nrow of this not necessarily equal to length(gr))
+#' $window.segs = the coordinates of input windows in the new flattened (and squeezed) space
+#'
+#' @param gr \code{GRanges} to flatten
+#' @param windows \code{GRanges} to flatten onto
+#' @param gap Default 0
+#' @param strand.agnostic Default FALSE
+#' @param squeeze Default FALSE. If TRUE, then will additionally squeeze ranges into xlim
+#' @param xlim Default c(0,1)
+#' @param pintersect Default FALSE
+#' @return output is list with two fields corresponding to data frames:
+#'   $grl.segs = data frame of input gr's "lifted" onto new flattened coordinate space (NOTE: nrow of this not necessarily equal to length(gr))
+#'   $window.segs = the coordinates of input windows in the new flattened (and squeezed) space
+#'
+#' FIX: turn this into Chain object
+#' @name gr.flatmap
+#' @export
+gr.flatmap = function(gr, windows, gap = 0, strand.agnostic = T, squeeze = F, xlim = c(0, 1), pintersect=FALSE)
+{
+    if (strand.agnostic)
+        strand(windows) = "*"
+
+    ## now flatten "window" coordinates, so we first map gr to windows
+    ## (replicating some gr if necessary)
+                                        #    h = findOverlaps(gr, windows)
+
+    h = gr.findoverlaps(gr, windows, pintersect=pintersect);
+
+    window.segs = gr.flatten(windows, gap = gap)
+
+    grl.segs = as.data.frame(gr);
+    grl.segs = grl.segs[values(h)$query.id, ];
+    grl.segs$query.id = values(h)$query.id;
+    grl.segs$window = values(h)$subject.id
+    grl.segs$start = start(h);
+    grl.segs$end = end(h);
+    grl.segs$pos1 = pmax(window.segs[values(h)$subject.id, ]$start,
+                         window.segs[values(h)$subject.id, ]$start + grl.segs$start - start(windows)[values(h)$subject.id])
+    grl.segs$pos2 = pmin(window.segs[values(h)$subject.id, ]$end,
+                         window.segs[values(h)$subject.id, ]$start + grl.segs$end - start(windows)[values(h)$subject.id])
+    grl.segs$chr = grl.segs$seqnames
+
+    if (squeeze)
+    {
+        min.win = min(window.segs$start)
+        max.win = max(window.segs$end)
+        grl.segs$pos1 = affine.map(grl.segs$pos1, xlim = c(min.win, max.win), ylim = xlim)
+        grl.segs$pos2 = affine.map(grl.segs$pos2, xlim = c(min.win, max.win), ylim = xlim)
+        window.segs$start = affine.map(window.segs$start, xlim = c(min.win, max.win), ylim = xlim)
+        window.segs$end = affine.map(window.segs$end, xlim = c(min.win, max.win), ylim = xlim)
+    }
+
+    return(list(grl.segs = grl.segs, window.segs = window.segs))
+}
+
+#' Provide transparency to colors
+#'
+#' takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @param col color string
+#' @param alpha alpha value between 0 and 1
+#' @return rgb color like the input, but with transparency added
+#' @export
+alpha = function(col, alpha)
+{
+    col.rgb = col2rgb(col)
+    return(rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha))
+}
+
+#'
+#' (this is different from %in% which does not remove non matching ranges from the grls)
+#'
+#' does not return list in necessarily same order
+                                        # @param grl \link{GRangesList} to filter
+                                        # @param windows \link{GRanges} windows to keep
+#' @name grl.filter
+#' @export
+grl.filter = function(grl, windows)
+{
+    tmp = as.data.frame(grl);
+    tmp = tmp[seg.on.seg(tmp, windows), ]
+    FORBIDDEN = c('seqnames', 'start', 'end', 'strand', 'ranges', 'seqlevels', 'seqlengths', 'isCircular', 'genome', 'width', 'element');
+    gr.metadata = tmp[, setdiff(colnames(tmp), FORBIDDEN)];
+
+    if (!is.null(dim(gr.metadata)))
+        out.grl = split(GRanges(tmp$seqnames, IRanges(tmp$start, tmp$end), seqlengths = seqlengths(grl), gr.metadata,
+                                strand = tmp$strand), tmp$element)
+    else
+        out.grl = split(GRanges(tmp$seqnames, IRanges(tmp$start, tmp$end), seqlengths = seqlengths(grl),
+                                strand = tmp$strand), tmp$element);
+
+    values(out.grl) = values(grl)[match(names(out.grl), names(grl)), ]
+    return(out.grl);
+}
+
+#'
+#' splits GRL's with respect to their seqnames and strand (default), returning
+#' new grl whose items only contain ranges with a single seqname / strand
+#'
+#' can also split by arbitrary (specified) genomic ranges value fields
+#' @param grl \code{GRangesList} to split
+#' @param seqname Default TRUE
+#' @param strand Default TRUE
+#' @param values columns of values field in grl
+#' @name grl.split
+#' @export
+grl.split = function(grl, seqname = TRUE, strand = TRUE,
+                     values = c() # columns of values field in grl
+                     )
+{
+    ele = tryCatch(as.data.frame(grl)$element, error = function(e) e)
+    if (inherits(ele, 'error'))
+    {
+        if (is.null(names(grl)))
+            nm = 1:length(names(grl))
+        else
+            nm = names(grl)
+
+        ele = unlist(lapply(1:length(grl), function(x) rep(nm[x], length(grl[[x]]))))
+    }
+
+    gr = unlist(grl)
+    names(gr) = NULL;
+
+    by = ele;
+    if (seqname)
+        by = paste(by, seqnames(gr))
+
+    if (strand)
+        by = paste(by, strand(gr))
+
+    values = intersect(names(values(gr)), values);
+    if (length(values)>0)
+        for (val in values)
+            by = paste(by, values(gr)[, val])
+
+    out = split(gr, by);
+    names(out) = ele[!duplicated(by)]
+
+    values(out) = values(grl[ele[!duplicated(by)]])
+
+    return(out)
+}
+
+
+#' grl.span
+#'
+#' Returns GRanges object representing the left / right extent of each GRL item.  In case of "chimeric" GRL items (ie that map
+#' to two chromosomes) there are two options:
+#' (1) specify "chr" chromosome as argument to subset GRL's that are on that chromosome, and compute GRL extents from this, any GRL
+#'     full outside of that chromosome will get a 0 width GRL
+#' (2) (default) allow chimeric GRL items to get an extent that is with respect to the first chromosome in that GRL
+#'
+#' If a grl item contains ranges that lie on different chromosomes, then corresponding grange will have chromosome "NA" and IRange(0, 0)
+#' @param grl \link{GRangesList} to query
+#' @param chr [Default NULL]
+#' @param ir [Default FALSE]
+#' @param keep.strand [Default TRUE]
+#' @name grl.span
+#' @export
+grl.span = function(grl, chr = NULL, ir = FALSE, keep.strand = TRUE)
+{
+    if (is.null(names(grl)))
+        names(grl) = 1:length(grl);
+
+    tmp = tryCatch(as.data.frame(grl), error = function(e) e)
+
+    if (inherits(tmp, 'error')) ## gr names are screwy so do some gymnastics
+    {
+        if (is.null(names(grl)))
+            names.grl = 1:length(grl)
+        else
+            names.grl = names(grl);
+
+        element = as.character(Rle(names.grl, sapply(grl, length)))
+        tmp.gr = unlist(grl)
+        names(tmp.gr) = NULL;
+        tmp = as.data.frame(tmp.gr);
+        tmp$element = element;
+    }
+
+    if (is.null(chr))
+    {
+        chrmap = aggregate(formula = seqnames ~ element, data = tmp, FUN = function(x) x[1]);
+        chrmap = structure(as.character(chrmap[,2]), names = chrmap[,1])
+
+        if (keep.strand)
+        {
+            strmap = aggregate(formula = as.character(strand) ~ element, data = tmp, FUN =
+                                                                                         function(x) {y = unique(x); if (length(y)>1) return('*') else y[1]})
+            strmap = structure(as.character(strmap[,2]), names = strmap[,1])
+            str = strmap[names(grl)];
+        }
+        else
+            str = '*'
+
+        tmp = tmp[tmp$seqnames == chrmap[tmp$element], ]; ## remove all gr from each GRL item that don't map to the chr of the first gr
+        chr = chrmap[names(grl)];
+        out.gr = GRanges(chr, IRanges(1,0), seqlengths = seqlengths(grl), strand = str)
+    }
+    else
+    {
+        if (length(chr)>1)
+            warning('chr has length greater than 1, only the first element will be used')
+        tmp = tmp[tmp$seqnames == chr[1], ]
+        out.gr = rep(GRanges(chr, IRanges(1, 0)), length(grl)) # missing values
+    }
+
+    if (nrow(tmp)>0)
+    {
+        tmp = split(GRanges(tmp$seqnames, IRanges(tmp$start, tmp$end)), tmp$element)
+        out.gr[match(names(tmp), names(grl))] = GRanges(chr[names(tmp)],
+                                                        IRanges(sapply(start(tmp), min), sapply(end(tmp), max)), strand = strand(out.gr)[match(names(tmp), names(grl))]);
+        names(out.gr) = names(grl)
+    }
+    return(out.gr)
+}
+
+#' get.var.col
+#'
+#' simple function storing default
+#' variant color scheme
+#' @name get.var.col
+get.varcol = function()
+{
+    VAR.COL = c('XA' = 'green', 'XG' = 'brown', 'XC' = 'blue', 'XT' = 'red', 'D'= alpha('lightblue', 0.4),
+                'I'= 'purple', 'N' = alpha('white', 0.8), 'S' = alpha('pink', 0.9))
+    return(VAR.COL)
+}
+
+>>>>>>> 891713894cf7c3b9d11b7aaea4f51cba46df8e58
