@@ -7570,7 +7570,6 @@ chr2num = function(x, xy = FALSE)
      return(out)
        }
 
-<<<<<<< HEAD
 
 #' Improved rbind for intersecting columns of data.frames or data.tables
 #'
@@ -7620,7 +7619,7 @@ rrbind2 = function(..., union = T, as.data.table = FALSE)
 
         return(rout)
     }
-=======
+
 #' parse.grl
 #'
 #' quick function to parse \code{GRangesList} from character vector IGV / UCSC style strings of format gr1;gr2;gr3 where each gr is of format chr:start-end[+/-]
