@@ -5,8 +5,9 @@
 \title{ra_breaks}
 \usage{
 ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
-  chr.convert = T, snowman = FALSE, breakpointer = FALSE,
-  seqlevels = NULL, get.loose = FALSE)
+  chr.convert = T, snowman = FALSE, swap.header = NULL,
+  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE,
+  get.loose = FALSE)
 }
 \description{
 takes in either file or data frame from dranger or snowman or path to BND / SV type vcf file

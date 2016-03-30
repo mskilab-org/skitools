@@ -5,7 +5,7 @@
 \title{igv}
 \usage{
 igv(paths = NULL, gr = NULL, loci = NULL, snapshot = NULL,
-  new = FALSE, reset = FALSE, wkspace = "PanLungWGS",
+  track.view = NULL, new = FALSE, reset = FALSE, wkspace = "PanLungWGS",
   host = Sys.getenv("IGV_HOST"), mac = !grepl("(^cga)|(node\\\\d+)", host),
   sort.locus = NULL, gsub.paths = list(c("/seq/picard_aggregation/",
   "/Volumes/seq_picard_aggregation/"), c("/xchip/singtex/",
@@ -24,6 +24,8 @@ igv(paths = NULL, gr = NULL, loci = NULL, snapshot = NULL,
 \item{loci}{GRanges or IGV parsable string specifying what window(s) on genome to view (=NULL)}
 
 \item{snapshot}{file path to store snapshot in (has to be interpretable on file system where IGV is running)}
+
+\item{track.view}{command for setting the track display mode ("expand","squish" or "collapse")}
 
 \item{new}{logical flag whether to start new IGV session}
 
