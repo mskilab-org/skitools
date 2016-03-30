@@ -1561,7 +1561,10 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                  data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
 
              if (chr.convert)
-                 seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
+                 {
+                     seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
+                 }
+
              
              out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
              out = split(out, out$ra.index)
@@ -7545,3 +7548,24 @@ splice.cigar = function(reads, verbose = TRUE, fast = TRUE, use.D = TRUE, rem.so
             return(out.gr)
     }
 }
+
+#' Convert from chrXX to numeric format
+#'
+#' Convert from chrXX to numeric format
+#' @param x factor, Rle or character vector with chromosome names
+#' @param xy Flag to convert M to 25, Y to 24 and X to 23. Default FALSE
+#' @return character vector with xy=FALSE, or numeric vector with xy=TRUE
+#' @export
+##########################
+chr2num = function(x, xy = FALSE)
+  {
+      if (inherits(x, 'factor') | inherits(x, 'Rle'))
+            x = as.character(x)
+
+     out = gsub('chr', '', x);
+
+     if (!xy)
+            out = as.numeric(gsub('M', '25', gsub('Y', '24', gsub('X', '23', out))))
+
+     return(out)
+       }
