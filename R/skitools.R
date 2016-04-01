@@ -7027,3 +7027,23 @@ subset2 <- function(x, condition) {
     browser()
     x[r, ]
 }
+
+#' @name %WW%
+#' @title subset x on y ranges wise obeying strand
+#' @description
+#' shortcut for x[gr.in(x,y, ignore.strand = FALSE)]
+#'
+#' gr1 %WW% gr2 returns the subsets of gr that overlaps gr2 not ignoring strand
+#'
+#' @return subset of gr1 that overlaps gr2
+#' @rdname gr.in
+#' @exportMethod %^%
+#' @export
+#' @author Marcin Imielinski
+setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
+setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
+    if (is.character(y))
+        y = parse.gr(y)
+    return(x[gr.in(x, y, ignore.strand = FALSE)])
+})
+
