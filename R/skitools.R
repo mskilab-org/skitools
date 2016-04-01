@@ -6744,3 +6744,58 @@ gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
     isdisc <- gr$qname %in% qn
     return(isdisc)
 }
+
+#' Minimal overlaps for GRanges/GRangesList
+#'
+#' Takes any number of GRanges or GRangesList and reduces them to the minimal
+#' set of overlapping windows, ignoring strand (optional).  Can also
+#' collapse only within levels of a meta data field "by"
+#'
+#' Will populate output with metadata of first row of input contributing the reduced output range.
+#'
+#' @param ... \code{GRanges} or \code{GRangesList}
+#' @return GRanges
+#' @export
+gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
+    input <- do.call(grbind, list(...))
+    if (length(input)==0)
+        return(input)
+    input.meta = values(input)
+    if (is.null(by))
+        values(input) = data.frame(i = 1:length(input), bykey = 1)
+    else
+        values(input) = data.frame(i = 1:length(input), bykey = values(input)[, by])
+
+    if (span)
+    {
+        if (ignore.strand)
+            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
+        else
+            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
+    }
+    else
+    {
+        if (ignore.strand)
+            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
+        else
+            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
+    }
+
+    values(out) = input.meta[out$i, ]
+
+                                        #input = do.call(grbind, input)
+    ## for (i in seq_along(input)) {
+    ##   if (inherits(input[[i]], 'GRanges'))
+    ##     input[[i]] <- reduce(gr.stripstrand(input[[i]]))
+    ##   else if (inherits(input[[i]], 'GRangesList'))
+    ##     input[[i]] <- reduce(gr.stripstrand(unlist(input[[i]])))
+    ##   else
+    ##     stop('reduce.window: Need to input GRanges or GRangesList objects')
+    ##   seqlengths(input[[i]]) <- seqlengths(input[[i]])*NA
+    ## }
+
+    ## output <- do.call('c', input)
+
+    return(out)
+                                        #return(sort(reduce(output)))
+}
