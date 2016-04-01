@@ -6892,3 +6892,13 @@ ra.setdiff <- function(ra1, ra2, ...) {
     return(ra1[unique(in.ra1.only)])
 
 }
+
+#' ra.union
+#'
+#' returns events in ra1 that are in ra2 also
+#'
+#' @name ra.union
+#' @export
+ra.union <- function(ra1, ra2, ...)
+    return(ra1[unique(ra.overlaps(ra1, ra2, ...)[, 'ra1.ix'])])
+
