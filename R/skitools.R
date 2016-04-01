@@ -6902,3 +6902,36 @@ ra.setdiff <- function(ra1, ra2, ...) {
 ra.union <- function(ra1, ra2, ...)
     return(ra1[unique(ra.overlaps(ra1, ra2, ...)[, 'ra1.ix'])])
 
+#' gr.all
+#'
+#' Return a GRanges that holds interavals for all of HG19
+#'
+#' @param unmap [default F] Optinally add a "unmapped" chr
+#' @param M [default F] Include mitochondrial chr
+#' @param Y [default T] Include Y chr
+#' @return \code{GRanges} object with one element per chromosome
+gr.all <- function(unmap=FALSE, M=FALSE, Y=TRUE) {
+    gr <- si2gr(gr.tfix(GRanges(1, IRanges(1,1))))
+
+    if (!M)
+        gr <- gr[seqnames(gr) != 'M']
+    if (!Y)
+        gr <- gr[seqnames(gr) != 'Y']
+
+
+    if (!unmap)
+        return(gr[!seqnames(gr) %in% "Unmapped"])
+    else
+        return(gr)
+}
+
+
+setGeneric('%|%', function(gr, ...) standardGeneric('%|%'))
+setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
+    if (is.data.table(df))
+        df = as.data.frame(df)
+    else if (inherits(df, 'GRanges'))
+        df = values(df)
+    values(gr) = cbind(values(gr), df)
+    return(gr)
+})
