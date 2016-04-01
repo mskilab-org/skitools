@@ -6503,4 +6503,123 @@ gc_content = function(segs, bs_genome) ##build = 'hg19')
     return(as.numeric(sapply(gregexpr('[GC]', tmp), length)/sapply(tmp, nchar)))
 }
 
+#' import.ucsc
+#'
+#' wrapper around rtracklayer import that
+#' (1) handles "as" formats
+#' (2) has additional flag chrsub to sub in 'chr' in selection, and then sub it out of the output
+#' @name import.ucsc
+#' @export
+import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FALSE, as = NULL, ...)
+{
+    si = NULL;
+
+    if (verbose)
+        cat('importing', as.character(con), '\n')
+
+    if (grepl('(\\.bw)|(\\.bigwig)', con, ignore.case = TRUE))
+    {
+        if (is.null(as))
+            as = 'RleList'
+
+        if (is.character(con))
+            f = BigWigFile(normalizePath(con))
+        else
+            f = con
+
+        si = tryCatch(seqinfo(f), error = function(con) NULL)
+    }
+    else if (grepl('\\.wig', con, ignore.case = TRUE))
+    {
+        if (is.null(as))
+            as = 'RleList'
+
+        if (is.character(con))
+            f = WIGFile(normalizePath(con))
+        else
+            f = con
+
+        si = tryCatch(seqinfo(f), error = function(con) NULL)
+    }
+    else if (grepl('\\.bed', con, ignore.case = TRUE))
+    {
+        if (is.null(as))
+            as = 'GRanges'
+
+        if (is.character(con))
+            f = BEDFile(normalizePath(con))
+        else
+            f = con
+                                        #                            si = tryCatch(seqinfo(f), error = function(con) NULL)
+        bed.style = T
+    }
+    else if (grepl('\\.gff', con, ignore.case = TRUE))
+    {
+        if (is.null(as))
+            as = 'GRangesList'
+
+        if (is.character(con))
+            f = GFFFile(normalizePath(con))
+        else
+            f = con
+
+        si = tryCatch(seqinfo(f), error = function(con) NULL)
+    }
+    else if (grepl('\\.2bit', con, ignore.case = T))
+    {
+        if (is.null(as))
+            as = 'RleList'
+        if (is.character(con))
+            f = TwoBitFile(normalizePath(con))
+        else
+            f = con
+
+        si = tryCatch(seqinfo(f), error = function(con) NULL)
+    }
+    else if (grepl('\\.bedgraph', con, ignore.case = T))
+    {
+        if (is.null(as))
+            as = 'GRanges'
+
+        if (is.character(con))
+            f = BEDGraphFile(normalizePath(con))
+        else
+            f = con
+                                        #                           si = tryCatch(seqinfo(f), error = function(con) NULL)
+        bed.style = T
+    }
+    else
+        f = con
+
+    if (chrsub & !is.null(si) & !is.null(selection))
+        selection = gr.fix(gr.chr(selection), si, drop = T)
+
+    if (class(f) %in% c('BEDFile'))
+    {
+        if (!is.null(selection))
+            out = import(f, selection = selection, asRangedData = FALSE, ... )
+        else
+            out = import(f, asRangedData = FALSE, ...)
+    }
+    else
+    {
+        if (!is.null(selection))
+            out = import(f, selection = selection, as = as, ... )
+        else
+            out = import(f, as = as, ...)
+    }
+
+    if (!is(out, 'GRanges'))
+        out = as(out, 'GRanges')
+
+                                        #    if (chrsub & !is.null(si))
+    if (chrsub)
+        out = gr.sub(out, 'chr', '')
+
+    if (verbose)
+        cat('Finished importing', as.character(con), '\n')
+
+    return(out)
+}
+
 
