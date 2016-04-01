@@ -7753,3 +7753,88 @@ grl.span = function(grl, chr = NULL, ir = FALSE, keep.strand = TRUE)
     return(out.gr)
 }
 
+#' Create GRanges from Seqinfo
+#'
+#' Creates a genomic ranges from seqinfo object
+#' ie a pile of ranges spanning the genome
+#' @param si Seqinfo object
+#' @param strip.empty Don't know. Default FALSE
+#' @examples
+#' \dontrun{si <- Seqinfo(names(hg_seqlength(), hg_seqlengths()))
+#' seqinfo2gr(si)}
+#' @export
+seqinfo2gr <- function(si, strip.empty = FALSE)
+{
+    if (is(si, 'vector')) ## treat si as seqlengths if vector
+        si = Seqinfo(seqlengths = si, seqnames = names(si))
+    else if (!is(si, 'Seqinfo'))
+        si = seqinfo(si)
+
+    sl = seqlengths(si)
+    sn = seqnames(si);
+    sl[is.na(sl)] = 0;
+
+    if (strip.empty)
+    {
+        sn = sn[sl!=0];
+        sl = sl[sl!=0];
+    }
+
+    sigr = GRanges(sn, IRanges(rep(1, length(sl)), width = sl), seqlengths = seqlengths(si), strand = rep('+', length(sl)))
+    names(sigr) = sn;
+
+    return(sigr)
+}
+
+#' gr.tostring
+#'
+#' dumps out a quick text representation of a gr object (ie a character vector)
+#' @param gr \code{GRanges}
+#' @param places Number of decimal places. Default 2
+#' @param interval Default 1e6
+#' @param unit Default "MB"
+#' @param prefix Default "chr"
+#' @return text representation of input
+#' @name gr.tostring
+#' @export
+gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'chr')
+{
+    p1 = round(start(gr)/interval, places);
+    p2 = round(end(gr)/interval, places);
+    return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
+}
+
+#' More robust and faster implementation of GenomicRangs::setdiff
+#'
+#' Robust to common edge cases of setdiff(gr1, gr2)  where gr2 ranges are contained inside gr1's (yieldings
+#' setdiffs yield two output ranges for some of the input gr1 intervals.
+#'
+#' @param query \code{GRanges} object as query
+#' @param subject \code{GRanges} object as subject
+#' @param max.slice Default Inf. If query is bigger than this, chunk into smaller on different cores
+#' @param verbose Default FALSE
+#' @param mc.cores Default 1. Only works if exceeded max.slice
+#' @param ... arguments to be passed to \link{gr.findoverlaps}
+#' @return returns indices of query in subject or NA if none found
+#' @name gr.match
+#' @export
+gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
+{
+    if (!is.null(by)) ## in this case need to be careful about setdiffing only within the "by" level
+    {
+        tmp = grdt(subject)
+        tmp$strand = factor(tmp$strand, c('+', '-', '*'))
+        sl = seqlengths(subject)
+        gp = seg2gr(tmp[, as.data.frame(gaps(IRanges(start, end), 1, sl[seqnames][1])), by = c('seqnames', 'strand', by)], seqinfo = seqinfo(subject))
+    }
+    else ## otherwise easier
+    {
+        if (ignore.strand)
+            gp = gaps(gr.stripstrand(subject)) %Q% (strand == '*')
+        else
+            gp = gaps(subject)
+    }
+
+    out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
+    return(out)
+}
