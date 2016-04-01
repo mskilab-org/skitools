@@ -6148,60 +6148,6 @@ get.mate.gr = function(reads)
         ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
 
-#' count.clips
-#'
-#' takes gr or gappedalignment object and uses cigar field (or takes character vector of cigar strings)
-#' and returns data frame with fields (for character input)
-#' $right.clips number of "right" soft clips (eg cigar 89M12S)
-#' #left.clips number of "left" soft clips (eg cigar 12S89M)
-#' or appends these fields to the reads object
-#'
-#' @param reads GenomicRanges holding the reads
-#' @param hard [Default TRUE] option counts hard clips
-#' @name count.clips
-#' @export
-count.clips = function(reads, hard = FALSE)
-{
-    if (length(reads) == 0)
-        return(reads)
-    if (inherits(reads, 'GRanges') | inherits(reads, 'GappedAlignments'))
-        cigar = values(reads)$cigar
-    else
-        cigar = reads;
-
-    if (!inherits(cigar, 'character') & !inherits(cigar, 'factor'))
-        stop('Input must be GRanges, GappedAlignments, or character vector')
-
-    out = data.frame(left.clips = rep(0, length(cigar)), right.clips = rep(0, length(cigar)));
-
-    re.left = '^(\\d+)S.*'
-    re.right = '.*[A-Z](\\d+)S$'
-
-    lclip.ix = grep(re.left, cigar)
-    rclip.ix = grep(re.right, cigar)
-
-    if (length(lclip.ix)>0)
-    {
-        left.clips = gsub(re.left, '\\1', cigar[lclip.ix])
-        out$left.clips[lclip.ix] = as.numeric(left.clips)
-    }
-
-    if (length(rclip.ix)>0)
-    {
-        right.clips = gsub(re.right, '\\1', cigar[rclip.ix])
-        out$right.clips[rclip.ix] = as.numeric(right.clips)
-    }
-
-    if (inherits(reads, 'GRanges') | inherits(reads, 'GappedAlignments'))
-    {
-        values(reads)$right.clips = out$right.clips
-        values(reads)$left.clips = out$left.clips
-        out = reads
-    }
-
-    return(out)
-}
-
 #' varbase
 #'
 #' takes gr or gappedalignment object "reads" and uses cigar, MD, seq fields
