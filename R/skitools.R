@@ -6620,4 +6620,31 @@ rrbind2 = function(..., union = T, as.data.table = FALSE)
     return(rout)
 }
 
+#' Identify matches between query and dictionary
+#'
+#' Wrapper around matchPdict to identify matches between a query
+#' string query and dictionary dict (both BString objects or subclasses)
+#'
+#' @param query Query
+#' @param dict Dictionary
+#' @param midpoint Flag for output the coordinates of the match as the location,
+#'   where the midpoint of the dict string matches the given query. Default FALSE
+#' @return a vector of indices of length width(query) that contains
+#' indices of the (starting) dictionary in the query string
+#' @export
+match.bs = function(query, dict, midpoint = FALSE)
+{
+    names(dict) = as.character(1:length(dict))
+
+    tmp = sort(unlist(matchPDict(dict, query)))
+    out = rep(NA, length(query))
+
+    if (!midpoint)
+        out[start(tmp)] = as.numeric(names(tmp))
+    else
+        out[floor((start(tmp)+end(tmp))/2)] = as.numeric(names(tmp))
+
+    return(out)
+}
+
 
