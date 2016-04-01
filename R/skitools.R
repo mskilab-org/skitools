@@ -6842,3 +6842,17 @@ gr.pad = function(gr, pad)
     end(gr) = ifelse(is.na(en), end(gr)+pad, en)
     return(gr)
 }
+
+#' gr2grl
+#' Quick way to make grl from list of indices into a GRanges gr
+#'
+#' @param gr \code{GRanges} to split
+#' @param ix vector to split on
+#' @export
+gr2grl = function(gr, ix)
+{
+    out = split(gr[unlist(ix)], sapply(1:length(ix), function(x) rep(x, length(ix[[x]]))))
+    if (!is.null(names(ix)))
+        names(out) = names(ix)
+    return(out)
+}
