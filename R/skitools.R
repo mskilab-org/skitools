@@ -3044,18 +3044,6 @@ readRDA = function(fn)
     load(fn, my.env);
     return(as.list(my.env))
   }
-
-############################################################
-#' @name gr.flip
-#' @title gr.flip
-#'
-#' @description
-#' alias to gr.flipstrand for backward compatibility
-#'
-#' @param ... args to gr.flipstrand in gUtils
-#' @return flipped GRAnges
-#' @author Marcin Imielinski
-#' @export
 ############################################################
 gr.flip = function(...)
   {
@@ -3205,57 +3193,6 @@ pad = function(x, k, clip = T)
     if (clip)
       out = out[out>0]
     return(out)
-  }
-
-##############################
-#' @name affine.map
-#' @title affine.map
-#'
-#' @description
-#' affinely maps 1D points in vector x from interval xlim to interval ylim,
-#' ie takes points that lie in
-#' interval xlim and mapping onto interval ylim using linear / affine map defined by:
-#' (x0,y0) = c(xlim(1), ylim(1)),
-#' (x1,y1) = c(xlim(2), ylim(2))
-#' (using two point formula for line)
-#' useful for plotting.
-#'
-#' if cap.max or cap.min == T then values outside of the range will be capped at min or max
-#'
-#' @param x input vector to affinely transform
-#' @param ylim length 2 vector of y bounds to project data into (=c(0,1))
-#' @param xlim length 2 vector of x bounds to project data from (=c(min(x), max(x)))
-#' @param cap logical flag whether to cap data below xmin and above xmax of x vector ie return as ymin, ymax respectively (=FALSE)
-#' @param cap.min logical flag whether to cap data below xmin  of x vector ie return as ymin (=cap)
-#' @param cap.max logical flag whether to cap  data above xmax of x vector ie return as ymax (=cap)
-#' @param clip logical flag whether to clip data below xmin and above xmax of x vector ie return as NA (=TRUE)
-#' @param clip.min logical flag whether to clip data below xmin  of x vector ie return as NA (=clip)
-#' @param clip.max logical flag whether to clip data above xmax  of x vector ie return as NA (=clip)
-#' @return x values transformed by affine map defined by xlim and ylim
-#' @export
-#' @author Marcin Imielinski
- ##############################
-affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.min = cap, cap.max = cap, clip = T, clip.min = clip, clip.max = clip)
-  {
-  #  xlim[2] = max(xlim);
-  #  ylim[2] = max(ylim);
-
-    if (xlim[2]==xlim[1])
-      y = rep(mean(ylim), length(x))
-    else
-      y = (ylim[2]-ylim[1]) / (xlim[2]-xlim[1])*(x-xlim[1]) + ylim[1]
-
-    if (cap.min)
-      y[x<min(xlim)] = ylim[which.min(xlim)]
-    else if (clip.min)
-      y[x<min(xlim)] = NA;
-
-    if (cap.max)
-      y[x>max(xlim)] = ylim[which.max(xlim)]
-    else if (clip.max)
-      y[x>max(xlim)] = NA;
-
-    return(y)
   }
 
 
@@ -7476,21 +7413,6 @@ gr.refactor = function(gr, sn, gap = 0, rev = FALSE)
     values(out) = values(gr);
 
     return(out)
-}
-
-
-#' Provide transparency to colors
-#'
-#' takes provided colors and gives them the specified alpha (ie transparency) value
-#'
-#' @param col color string
-#' @param alpha alpha value between 0 and 1
-#' @return rgb color like the input, but with transparency added
-#' @export
-alpha = function(col, alpha)
-{
-    col.rgb = col2rgb(col)
-    return(rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha))
 }
 
 
