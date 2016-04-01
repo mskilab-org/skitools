@@ -6935,3 +6935,21 @@ setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
     values(gr) = cbind(values(gr), df)
     return(gr)
 })
+
+#' @name toggle_grfo
+#' @title toggle data.table vs IRanges find overlaps
+#' @description
+#'
+#' toggles global setting of whether to use data.table vs IRanges find overlaps machinery
+#'
+#' @export
+#' @author Marcin Imielinski
+.toggle_grfo = function()
+{
+    old.val = as.logical(Sys.getenv('GRFO_FOVERLAPS'))
+    if (is.na(old.val))
+        old.val = FALSE
+    Sys.setenv(GRFO_FOVERLAPS = !old.val)
+    cat('GRFO_FOVERLAPS is', Sys.getenv('GRFO_FOVERLAPS'), '\n\t...Default gr.findoverlaps behavior will use',
+        ifelse(Sys.getenv('GRFO_FOVERLAPS'), 'data.table foverlaps', 'IRanges findOverlaps'), '\n')
+}
