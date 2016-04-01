@@ -6463,3 +6463,44 @@ grl.split = function(grl, seqname = TRUE, strand = TRUE,
     return(out)
 }
 
+#' Get GC content from reference genome
+#'
+#' Uses BSgenome package to compute gc content for a collection of segments in seg data frame ($chr, $start, $end or $chr, $pos1, $pos2 or $chr, $begin, $end)
+#' Returns vector of gc content of length nrow(segs).
+#' @param segs Segment data frame to pull gc from
+#' @param bs_genome A \code{\link{BSgenome}} object. Perhaps \code{BSgenome.Hsapiens.UCSC.hg19::Hsapiens}
+#' @export
+#' @name gc_content
+gc_content = function(segs, bs_genome) ##build = 'hg19')
+{
+    segs = standardize_segs(segs, chr = TRUE);
+
+    ## NEW
+    tmp = getSeq(bs_genome, segs$chr, segs$pos1, segs$pos2, as.character = TRUE)
+    ##     if (build == 'hg19') {
+    ##       if (requireNamespace("BSgenome.Hsapiens.UCSC.hg19", quietly=TRUE)) {
+    ##         tmp = getSeq(BSgenome.Hsapiens.UCSC.hg19::Hsapiens, segs$chr, segs$pos1, segs$pos2, as.character = TRUE)
+    ##       }
+    ##     }
+    ##     else if (build == 'hg18') {
+    ##       if (requireNamespace("BSgenome.Hsapiens.UCSC.hg18", quietly=TRUE)) {
+    ##         tmp = getSeq(BSgenome.Hsapiens.UCSC.hg18::Hsapiens, segs$chr, segs$pos1, segs$pos2, as.character = TRUE)
+    ##       }
+    ##     }
+    ##     else
+    ##       stop('gc_content: hg build not recognized');
+
+    ## OLD
+    ##    if (build == 'hg19')
+    ##      library(BSgenome.Hsapiens.UCSC.hg19)
+    ##    else if (build == 'hg18')
+    ##     library(BSgenome.Hsapiens.UCSC.hg18)
+    ##  else
+    ##   stop('gc_content: hg build not recognized');
+
+    ## tmp = getSeq(Hsapiens, segs$chr, segs$pos1, segs$pos2, as.character = T)
+
+    return(as.numeric(sapply(gregexpr('[GC]', tmp), length)/sapply(tmp, nchar)))
+}
+
+
