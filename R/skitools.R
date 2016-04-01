@@ -2407,25 +2407,6 @@ which.char = function(subject, query)
     which(charToRaw(subject[1]) %in% charToRaw(query))
   }
 
-#' @name vaggregate
-#' @title vaggregate
-#'
-#' @description
-#' same as aggregate except returns named vector
-#' with names as first column of output and values as second
-#'
-#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
-#'
-#' @param ... arguments to aggregate
-#' @return named vector indexed by levels of "by"
-#' @author Marcin Imielinski
-#' @export
-vaggregate = function(...)
-  {
-    out = aggregate(...);
-    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
-  }
-
 #' @name modix
 #' @title modix
 #'
@@ -6575,19 +6556,19 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
 
 
 #####################################################################
-                                        #
-                                        #
-                                        # $$\      $$\ $$\                                      $$\     $$\ $$\
-                                        # $$$\    $$$ |\__|                                     $$ |    \__|$$ |
-                                        # $$$$\  $$$$ |$$\  $$$$$$$\  $$$$$$$\       $$\   $$\$$$$$$\   $$\ $$ |
-                                        # $$\$$\$$ $$ |$$ |$$  _____|$$  _____|      $$ |  $$ \_$$  _|  $$ |$$ |
-                                        # $$ \$$$  $$ |$$ |\$$$$$$\  $$ /            $$ |  $$ | $$ |    $$ |$$ |
-                                        # $$ |\$  /$$ |$$ | \____$$\ $$ |            $$ |  $$ | $$ |$$\ $$ |$$ |
-                                        # $$ | \_/ $$ |$$ |$$$$$$$  |\$$$$$$$\       \$$$$$$  | \$$$$  |$$ |$$ |
-                                        # \__|     \__|\__|\_______/  \_______|       \______/   \____/ \__|\__|
-                                        #
-                                        #
-                                        # Misc util
+#
+#
+# $$\      $$\ $$\                                      $$\     $$\ $$\
+# $$$\    $$$ |\__|                                     $$ |    \__|$$ |
+# $$$$\  $$$$ |$$\  $$$$$$$\  $$$$$$$\       $$\   $$\$$$$$$\   $$\ $$ |
+# $$\$$\$$ $$ |$$ |$$  _____|$$  _____|      $$ |  $$ \_$$  _|  $$ |$$ |
+# $$ \$$$  $$ |$$ |\$$$$$$\  $$ /            $$ |  $$ | $$ |    $$ |$$ |
+# $$ |\$  /$$ |$$ | \____$$\ $$ |            $$ |  $$ | $$ |$$\ $$ |$$ |
+# $$ | \_/ $$ |$$ |$$$$$$$  |\$$$$$$$\       \$$$$$$  | \$$$$  |$$ |$$ |
+# \__|     \__|\__|\_______/  \_______|       \______/   \____/ \__|\__|
+#
+#
+# Misc util
 ################
 
 #' Improved rbidn for intersecting columns of data.frames or data.tables
