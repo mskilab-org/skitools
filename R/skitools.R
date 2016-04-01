@@ -4743,70 +4743,6 @@ match.seg.id = function(seg1, seg2, verbose = F)
 }
 
 
-############################
-# standardize_segs
-#
-# (data frame seg function)
-#
-# Takes and returns segs data frame standardized to a single format (ie $chr, $pos1, $pos2)
-#
-# if chr = T will ensure "chr" prefix is added to chromossome(if does not exist)
-#############################
-standardize_segs = function(seg, chr = F)
-{
-  if (inherits(seg, 'IRangesList'))
-    seg = irl2gr(seg);
-
-  if (is(seg, 'matrix'))
-    seg = as.data.frame(seg, stringsAsFactors = F)
-
-  if (inherits(seg, 'RangedData') | inherits(seg, 'GRanges') | inherits(seg, 'IRanges'))
-  {
-    val = as.data.frame(values(seg));
-    values(seg) = NULL;
-    seg = as.data.frame(seg, row.names = NULL);  ## returns compressed iranges list
-    seg$seqnames = as.character(seg$seqnames)
-  }
-  else
-    val = NULL;
-
-  field.aliases = list(
-    ID = c('id', 'patient', 'Sample'),
-    chr = c('chrom', 'Chromosome', "contig", "seqnames", "seqname", "space", 'chr'),
-    pos1 = c('loc.start', 'begin', 'Start', 'start', 'Start.bp', 'Start_position', 'pos', 'pos1', 'left', 's1'),
-    pos2 =  c('loc.end', 'End', 'end', "stop", 'End.bp', 'End_position', 'pos2', 'right', 'e1'),
-    strand = c('str', 'strand', 'Strand', 'Str')
-  );
-
-  if (is.null(val))
-    val = seg[, setdiff(names(seg), unlist(field.aliases))]
-
-  seg = seg[, intersect(names(seg), unlist(field.aliases))]
-
-  for (field in setdiff(names(field.aliases), names(seg)))
-    if (!(field %in% names(seg)))
-      names(seg)[names(seg) %in% field.aliases[[field]]] = field;
-
-  if (chr)
-    if (!is.null(seg$chr))
-      if (!grepl('chr', seg$chr[1]))
-        seg$chr = paste('chr', seg$chr, sep = "");
-
-  if (is.null(seg$pos2))
-    seg$pos2 = seg$pos1;
-
-  missing.fields = setdiff(names(field.aliases), c(names(seg), c('chr', 'ID', 'strand')));
-
-  if (length(missing.fields)>0)
-    warning(sprintf('seg file format problem, missing an alias for the following fields:\n\t%s',
-                    paste(sapply(missing.fields, function(x) paste(x, '(can also be', paste(field.aliases[[x]], collapse = ', '), ')')), collapse = "\n\t")));
-
-  if (!is.null(val))
-    seg = cbind(seg, val)
-
-  return(seg)
-}
-
 #' @name allele_multiplicity
 #' @title allele_multiplicity
 #'
@@ -6147,7 +6083,7 @@ get.mate.gr = function(reads)
     else if (inherits(reads, 'data.table'))
         ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
-
+s
 #' Convert from chrXX to numeric format
 #'
 #' Convert from chrXX to numeric format
