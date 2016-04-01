@@ -6877,3 +6877,18 @@ system.call <- function(syscall, verbose=T) {
     }
                                         #system(syscall, intern=T, ignore.stdout=TRUE, ignore.stderr=TRUE)
 }
+
+#'
+#' identifies events that are in ra1 that do not exist in ra2.
+#' Aside from ra1 and ra2, all arguments are sent to ra.overlaps
+#'
+#' @name ra.overlaps
+#' @export
+ra.setdiff <- function(ra1, ra2, ...) {
+
+    ro <- ra.overlaps(ra1, ra2, ...)
+
+    in.ra1.only <- setdiff(seq_along(ra1), ro[, 'ra1.ix'])
+    return(ra1[unique(in.ra1.only)])
+
+}
