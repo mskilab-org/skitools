@@ -7001,3 +7001,22 @@ setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
     end(gr) = end(gr)-sh
     return(gr)
 })
+
+#' @name %&%
+#' @title subset x on y ranges wise ignoring strand
+#' @description
+#' shortcut for x[gr.in(x,y)]
+#'
+#' gr1 %&% gr2 returns the subsets of gr1 that overlaps gr2
+#'
+#' @return subset of gr1 that overlaps gr2
+#' @rdname gr.in
+#' @exportMethod %^%
+#' @export
+#' @author Marcin Imielinski
+setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
+setMethod("%&%", signature(x = "GRanges"), function(x, y) {
+    if (is.character(y))
+        y = parse.gr(y)
+    return(x[gr.in(x, y)])
+})
