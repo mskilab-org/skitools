@@ -6799,3 +6799,46 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
     return(out)
                                         #return(sort(reduce(output)))
 }
+
+
+#' Return windows with minimal coverage
+#'
+#' Takes a set of GRanges and removes any ranges that
+#' don't have a minimal coverage value. If you give it
+#' a GRangesList, you will get back an unlisted GRanges.
+#'
+#' @param gr \code{GRanges} to filter
+#' @param min.cov Minimum number of overlaps to keep. Default 2
+#' @param buffer Add a buffer to the ranges when computing overlaps. Default 0
+#' @param ignore.strand Ignore the strand when comparing overlaps. Default TRUE
+#' @param pintersect Force the pintersect option for \link{gr.findoverlaps}
+#' @return GRanges
+#' @export
+gr.mincov <- function(gr, min.cov=2, buffer=0, ignore.strand=TRUE, pintersect=FALSE) {
+
+    if (inherits(gr, 'GRangesList'))
+        gr <- unlist(gr)
+    if (!inherits(gr, 'GRanges'))
+        stop('gr.mincov: Requires a GRanges input')
+
+    gr2 <- gr.pad(gr, buffer)
+
+    tab <- table(gr.findoverlaps(gr2, gr2, ignore.strand=ignore.strand, pintersect=pintersect)$subject.id)
+    winkeep <- as.numeric(names(tab[tab >= min.cov]))
+
+    return(gr[winkeep])
+
+}
+
+
+#' Nice padding
+#'
+#' @return GRanges
+#' @keywords internal
+gr.pad = function(gr, pad)
+{
+    start(gr) = pmax(1, start(gr)-pad)
+    en = pmin(seqlengths(gr)[as.character(seqnames(gr))], end(gr)+pad)
+    end(gr) = ifelse(is.na(en), end(gr)+pad, en)
+    return(gr)
+}
