@@ -6953,3 +6953,51 @@ setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
     cat('GRFO_FOVERLAPS is', Sys.getenv('GRFO_FOVERLAPS'), '\n\t...Default gr.findoverlaps behavior will use',
         ifelse(Sys.getenv('GRFO_FOVERLAPS'), 'data.table foverlaps', 'IRanges findOverlaps'), '\n')
 }
+
+
+setGeneric('%|%', function(gr, ...) standardGeneric('%|%'))
+setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
+    if (is.data.table(df))
+        df = as.data.frame(df)
+    else if (inherits(df, 'GRanges'))
+        df = values(df)
+    values(gr) = cbind(values(gr), df)
+    return(gr)
+})
+
+
+#' @name %+%
+#' @title Nudge GRanges right
+#' @description
+#' Operator to shift GRanges right "sh" bases
+#'
+#' @return shifted granges
+#' @rdname gr.nudge
+#' @exportMethod %+%
+#' @export
+#' @author Marcin Imielinski
+setGeneric('%+%', function(gr, ...) standardGeneric('%+%'))
+setMethod("%+%", signature(gr = "GRanges"), function(gr, sh) {
+    end(gr) = end(gr)+sh
+    start(gr) = start(gr)+sh
+    return(gr)
+})
+
+#' @name %-%
+#' @title Shift GRanges left
+#' @description
+#' Operator to shift GRanges left "sh" bases
+#'
+#' df %!% c('string.*to.*match', 'another.string.to.match')
+#'
+#' @return shifted granges
+#' @rdname gr.nudge
+#' @exportMethod %-%
+#' @export
+#' @author Marcin Imielinski
+setGeneric('%-%', function(gr, ...) standardGeneric('%-%'))
+setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
+    start(gr) = start(gr)-sh
+    end(gr) = end(gr)-sh
+    return(gr)
+})
