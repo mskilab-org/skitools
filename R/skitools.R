@@ -6657,3 +6657,23 @@ read_hg = function(hg19 = T, fft = F)
         return(Hsapiens)
     }
 }
+
+#' Filter reads by average PHRED score
+#' Defines a cutoff score for the mean PHRED quality of a read
+#' in a GRanges.
+#' @param gr GRanges or data.table of reads that has a \code{qname} and \code{qual} field
+#' @param cutoff cutoff score for mean PHRED quality. Default "+"
+#' @return GRanges or data.table where reads have mean quality score >= cutoff
+#' @export
+gr.readfilter <- function(gr, cutoff = '+') {
+
+    cutoff <- as.numeric(charToRaw(cutoff))
+    qual   <- as.character(gr$qual)
+    logvec <- sapply(qual, function(x) mean(as.numeric(charToRaw(x))) < cutoff)
+
+    qn <- unique(gr$qname[logvec])
+
+    gr <- gr[!(gr$qname %in% qn)]
+
+    return(gr)
+}
