@@ -754,61 +754,6 @@ func_code = function(func, sources = c(), ...)
     out
   }
 
-#############################
-#' @name rrbind
-#' @title rrbind
-#'
-#' @description
-#' like rbind, but takes the intersecting columns of the dfs
-#'
-#' if union flag is used then will take union of columns (and put NA's for columns of df1 not in df2 and vice versa)
-#'
-#' @param ... TODO
-#' @export
-#' @author Marcin Imielinski
-############################
-rrbind = function(..., union = T)
-  {
-    dfs = list(...);  # gets list of data frames
-    if (any(ix <- sapply(dfs, function(x) class(x)[1])!='data.frame'))
-        dfs[ix] = lapply(dfs[ix], as.data.frame)
-
-    dfs = dfs[!sapply(dfs, is.null)]
-    dfs = dfs[sapply(dfs, ncol)>0]
-
-    ## defactorize (need to do to cat without introducing NA's in weird places)
-    dfs = lapply(dfs, function(x) { for (y in names(x)) if (is.factor(x[,y])) x[, y] = as.character(x[, y]); return(x)})
-
-    names.list = lapply(dfs, names);
-    classes = unlist(lapply(dfs, function(x) sapply(names(x), function(y) class(x[, y]))))
-    cols = unique(unlist(names.list));
-    unshared = lapply(names.list, function(x) setdiff(cols, x));
-    unshared.u = unique(unlist(unshared))
-    ix = which(sapply(dfs, nrow)>0)
-    expanded.dfs = lapply(ix, function(x)
-      {
-        dfs[[x]][, unshared[[x]]] = as.character(NA);
-        return(dfs[[x]][, cols, drop = F])
-      })
-
-    out = do.call('rbind', expanded.dfs);
-
-    if (any(uix <<- which(classes[unshared.u] != 'character')))
-      {
-          ix = match(unshared.u, names(out))
-          for (j in uix) ### HACK to prevent stupid class mismatches leading to NA BS
-              out[, ix[j]] = as(out[, ix[j]], classes[unshared.u[j]])
-      }
-
-    if (!union)
-      {
-        shared = setdiff(cols, unique(unlist(unshared)))
-        out = out[, shared];
-      }
-
-   return(out)
-}
-
 
 #############################
 #' @name read.delim.cat
