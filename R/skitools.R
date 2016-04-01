@@ -6856,3 +6856,24 @@ gr2grl = function(gr, ix)
         names(out) = names(ix)
     return(out)
 }
+
+
+#' Wrapper to base \code{system} function to call system (e.g. perl) from R.
+#' The only benefit to this wrapper is a more controlled verbose argument.
+#'
+#' @author Jeremiah Wala \email{jwala@@broadinstitute.org}
+#' @param syscall string containing the system call
+#' @param verbose print the syscall to screen, and it's stdout
+#' @export
+#' @examples
+#' # system.call('perl s/[0-9]+//g file1 > file2')
+system.call <- function(syscall, verbose=T) {
+    if (verbose)
+        print(syscall)
+    if (verbose)
+        system(syscall)
+    else {
+        system(syscall, intern=TRUE) #, stderr=FALSE, stdin=FALSE)
+    }
+                                        #system(syscall, intern=T, ignore.stdout=TRUE, ignore.stderr=TRUE)
+}
