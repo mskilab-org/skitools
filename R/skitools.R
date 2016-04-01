@@ -7020,3 +7020,10 @@ setMethod("%&%", signature(x = "GRanges"), function(x, y) {
         y = parse.gr(y)
     return(x[gr.in(x, y)])
 })
+
+subset2 <- function(x, condition) {
+    condition_call <- substitute(condition)
+    r <- eval(condition_call, x)
+    browser()
+    x[r, ]
+}
