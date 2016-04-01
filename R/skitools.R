@@ -6677,3 +6677,31 @@ gr.readfilter <- function(gr, cutoff = '+') {
 
     return(gr)
 }
+
+#' Check if reads are clipped
+#'
+#' Returns a logical vector of length of the input GRanges that
+#' that classifies a read as clipped or not. The user can specify
+#' a cutoff value for how many bases need to be clipped.
+#' @param gr Granges OR data.table that has \code{cigar} field and \code{qname} field
+#' @param clip.cutoff Minimum number of bases that are clipped to call the reads as clipped
+#' @return logical of length of input, denoting whether that read is part of a clipped read pair.
+#' @export
+gr.isclip <- function(gr, clip.cutoff=10) {
+    if (inherits(gr, 'GRanges') && length(gr)==0)
+        return(logical(0))
+    if (inherits(gr, 'data.table') && nrow(gr) == 0)
+        return(logical(0))
+
+    if (inherits(gr, 'GRanges'))
+        nm <- names(mcols(gr))
+    else
+        nm <- colnames(gr)
+    if (any(!('cigar' %in% nm)))
+        stop('gr.isclip: reads need flag and cigar')
+    cig <- countCigar(gr$cigar)
+    return(cig[,"S"] >= clip.cutoff)
+    ##logvec <- grepl('[0-9][0-9]S', gr$cigar)
+    ##logvec[is.na(logvec)] <- FALSE
+    ##return(logvec)
+}
