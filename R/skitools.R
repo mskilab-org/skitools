@@ -6657,7 +6657,7 @@ read_hg = function(hg19 = T, fft = F)
         return(Hsapiens)
     }
 }
-
+o
 #' Filter reads by average PHRED score
 #' Defines a cutoff score for the mean PHRED quality of a read
 #' in a GRanges.
@@ -6704,4 +6704,43 @@ gr.isclip <- function(gr, clip.cutoff=10) {
     ##logvec <- grepl('[0-9][0-9]S', gr$cigar)
     ##logvec[is.na(logvec)] <- FALSE
     ##return(logvec)
+}
+
+#' Checks if reads are discordant
+#'
+#' Returns a logical vector denoting if a read is discordant.
+#' There is only a minimum absolute isize, and any read below this is
+#' not considered discordant. This will return logicals based on read pairs
+#' @param gr Granges OR data.table that has \code{isize} field and \code{qname} field
+#' @param isize Minimum insert size required to call dis<cordant. Default 1000
+#' @param unmap.only Find only pairs with an unmapped read
+#' @return logical vector of length of input, denoting each read as discordant or not
+#' @export
+gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
+
+    if (inherits(gr, 'GRanges') && length(gr)==0)
+        return(logical(0))
+    if (inherits(gr, 'data.table') && nrow(gr)==0)
+        return(logical(0))
+
+    if (inherits(gr, 'GRanges'))
+        nm <- names(mcols(gr))
+    else
+        nm <- colnames(gr)
+
+    if (any(!(c('isize') %in% nm )))
+        stop('gr.isdigsc: reads need flag and cigar')
+
+    if (inherits(gr, 'GRanges'))
+        st <- start(gr) == 1
+    else
+        st <- gr$start == 1
+    if (unmap.only)
+        logvec <- bitAnd(gr$flag, 8) != 0 | st  # last two get reads with unmapped mates and reads that are unmapped, respectively
+    else
+        logvec <- abs(gr$isize) >= isize | gr$isize==0 | bitAnd(gr$flag, 8) != 0 | st  # last two get reads with unmapped mates and reads that are unmapped, respectively
+    logvec[is.na(logvec)] <- FALSE
+    qn <- gr$qname[logvec]
+    isdisc <- gr$qname %in% qn
+    return(isdisc)
 }
