@@ -1009,173 +1009,6 @@ gr2gatk = function(gr, file, add.chr = F)
   return(0)
 }
 
-#' gr.peaks
-#'
-#' Finds "peaks" in an input GRanges with value field y.
-#' first piles up ranges according to field score (default = 1 for each range)
-#' then finds peaks.  If peel > 0, then recursively peels segments
-#' contributing to top peak, and recomputes nextpeak "peel" times
-#' if peel>0, bootstrap controls whether to bootstrap peak interval nbootstrap times
-#' if id.field is not NULL will peel off with respect to unique (sample) id of segment and not purely according to width
-#' if FUN preovided then will complex aggregating function of piled up values in dijoint intervals prior to computing "coverage"
-#' (FUN must take in a single argument and return a scalar)
-#' if id.field is not NULL, AGG.FUN is a second fun to aggregate values from id.field to output interval
-gr.peaks = function(gr, field = 'score', minima = F, peel = 0, id.field = NULL, bootstrap = TRUE, na.rm = TRUE, pbootstrap = 0.95, nbootstrap = 1e4, FUN = NULL, AGG.FUN = sum,
-                    peel.gr = NULL, ## when peeling will use these segs instead of gr (which can just be a standard granges of scores)
-                    score.only = FALSE,
-                    verbose = peel>0)
-
-{
-
-
-  if (!is(gr, 'GRanges'))
-    gr = gUtils::seg2gr(gr)
-
-  if (is.null(field))
-    field = 'score'
-
-  if (!(field %in% names(values(gr))))
-    values(gr)[, field] = 1
-
-  if (is.logical(values(gr)[, field]))
-    values(gr)[, field] = as.numeric(values(gr)[, field])
-
-  if (peel>0 & !score.only)
-  {
-    if (verbose)
-      cat('Peeling\n')
-    out = GRanges()
-
-    if (bootstrap)
-      pbootstrap = pmax(0, pmin(1, pmax(pbootstrap, 1-pbootstrap)))
-
-    ## peel.gr are an over-ride if we have pre-computed the score and only want to match peaks to their supporting segments
-    if (is.null(peel.gr))
-      peel.gr = gr
-
-    for (p in 1:peel)
-    {
-      if (verbose)
-        cat('Peel', p, '\n')
-      if (p == 1)
-        last = gr.peaks(gr, field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
-      else
-      {
-        ## only need to recompute peak in region containing any in.peak intervals
-        tmp = gr.peaks(gr[gUtils::gr.in(gr, peak.hood), ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
-        last = c(last[!gUtils::gr.in(last, peak.hood)], tmp)
-      }
-
-      ## these are the regions with the maximum peak value
-      mix = which(values(last)[, field] == max(values(last)[, field]))
-
-      ## there can be more than one peaks with the same value
-      ## and some are related since they are supported by the same gr
-      ## we group these peaks and define a tmp.peak to span all the peaks that are related
-      ## to the top peak
-      ## the peak is the span beteween the first and last interval with the maximum
-      ## peak value that are connected through at least one segment to the peak value
-
-      ##
-      tmp.peak = last[mix]
-
-      if (length(tmp.peak)>1)
-      {
-        tmp.peak.gr = gr[gUtils::gr.in(gr, tmp.peak)]
-        ov = gUtils::gr.findoverlaps(tmp.peak, tmp.peak.gr)
-        ed = rbind(ov$query.id, ov$subject.id+length(tmp.peak))[1:(length(ov)*2)]
-        cl = igraph::clusters(igraph::graph(ed), 'weak')$membership
-        tmp = tmp.peak[cl[1:length(tmp.peak)] %in% cl[1]]
-        peak = GRanges(seqnames(tmp)[1], IRanges(min(start(tmp)), max(end(tmp))))
-        values(peak)[, field] = values(tmp.peak)[, field][1]
-      }
-      else
-        peak = tmp.peak
-      ## tmp.peak is the interval spanning all the top values in this region
-
-      in.peak1 =  gUtils::gr.in(peel.gr, gUtils::gr.start(peak))
-      in.peak2 = gUtils::gr.in(peel.gr, gUtils::gr.end(peak))
-      in.peak = in.peak1 | in.peak2
-
-      ## peak.gr are the gr supporting the peak
-      peak.gr = peel.gr[in.peak1 & in.peak2] ## want to be more strict with segments used for peeling
-      peak.hood = reduce(peak.gr) ## actual peak will be a subset of this, and we can this in further iterations to limit peak revision
-
-      if (bootstrap)
-      {
-        ## asking across bootstrap smaples how does the intersection fluctuate
-        ## among segments contributing to the peak
-
-        if (!is.null(id.field))
-        {
-          peak.gr = gUtils::seg2gr(gUtils::gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
-                                                eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
-                                         by = eval(id.field)])
-          names(values(peak.gr))[3] = field ## not sure why I need to do this line, should be done above
-        }
-
-        B = matrix(sample(1:length(peak.gr), nbootstrap * length(peak.gr), prob = abs(values(peak.gr)[, field]), replace = TRUE), ncol = length(peak.gr))
-        ## bootstrap segment samples
-        ## the intersection is tha max start and min end among the segments in each
-        st = apply(matrix(start(peak.gr)[B], ncol = length(peak.gr)), 1, max)
-        en = apply(matrix(end(peak.gr)[B], ncol = length(peak.gr)), 1, min)
-
-        ## take the left tail of the start position as the left peak boundary
-        start(peak) = quantile(st, (1-pbootstrap)/2)
-
-        ## and the right tail of the end position as the right peak boundary
-        end(peak) = quantile(en, pbootstrap + (1-pbootstrap)/2)
-
-        in.peak =  gUtils::gr.in(gr, peak)
-      }
-      gr = gr[!in.peak]
-      peak$peeled = TRUE
-      out = c(out, peak)
-      if (length(gr)==0)
-        return(out)
-    }
-    last$peeled = FALSE
-    return(c(out, last[-mix]))
-  }
-
-  if (na.rm)
-    if (any(na <- is.na(values(gr)[, field])))
-      gr = gr[!na]
-
-    if (!is.null(FUN))
-    {
-      agr = disjoin(gr)
-      values(agr)[, field] = NA
-      tmp.mat = cbind(as.matrix(values(gUtils::gr.val(agr[, c()], gr, field, weighted = FALSE, verbose = verbose, by = id.field, FUN = FUN, default.val = 0))))
-      values(agr)[, field] = apply(tmp.mat, 1, AGG.FUN)
-      gr = agr
-    }
-
-    cov = as(coverage(gr, weight = values(gr)[, field]), 'GRanges')
-
-    if (score.only)
-      return(cov)
-
-    dcov = diff(cov$score)
-    dchrom = diff(as.integer(seqnames(cov)))
-
-    if (minima)
-      peak.ix = (c(0, dcov) < 0 & c(0, dchrom)==0) & (c(dcov, 0) > 0 & c(dchrom, 0)==0)
-    else
-      peak.ix = (c(0, dcov) > 0 & c(0, dchrom)==0) & (c(dcov, 0) < 0 & c(dchrom, 0)==0)
-
-    out = cov[which(peak.ix)]
-
-    if (minima)
-      out = out[order(out$score)]
-    else
-      out = out[order(-out$score)]
-
-    names(values(out)) = field
-
-    return(out)
-}
-
 #' grdt
 #'
 #' Converts gr to data frame
@@ -3599,26 +3432,7 @@ plop = function(fn, prefix = NULL)
       mapply(function(x, y) system(paste('cp', x, y)), fn, new.fn)
       return(new.fn)
   }
-
-
-#' @name alpha
-#' @title alphoa
-#' @description
-#' Give transparency value to colors
-#'
-#' Takes provided colors and gives them the specified alpha (ie transparency) value
-#' @param col RGB color
-#' @param alpha value of alpha
-#'
-#' @author Marcin Imielinski
-#' @export
-alpha = function(col, alpha)
-  {
-    col.rgb = col2rgb(col)
-    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-    names(out) = names(col)
-    return(out)
-  }
+ 
 
 ###################################
 #' @name splot
@@ -7838,3 +7652,32 @@ gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
     out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
     return(out)
 }
+
+#' Convert data.table to GRanges
+#'
+#' Takes as input a data.table which must have the fields: start, end, strand, seqnames.
+#' All of the remaining fields are added as meta data to the GRanges
+#' @param dt data.table to convert to GRanges
+#' @return GRanges object of length = nrow(dt)
+#' @examples
+#' \dontrun{r <- dtgr(data.table(start=1, seqnames="X", end=2, strand='+'))}
+#' @export
+dtgr <- function(dt) {
+
+    rr <- IRanges(dt$start, dt$end)
+    if (!'strand' %in% colnames(dt))
+        dt$strand <- '*'
+    sf <- factor(dt$strand, levels=c('+', '-', '*'))
+    ff <- factor(dt$seqnames, levels=unique(dt$seqnames))
+    out <- GRanges(seqnames=ff, ranges=rr, strand=sf)
+    if (inherits(dt, 'data.table'))
+        mc <- as.data.frame(dt[, setdiff(colnames(dt), c('start', 'end', 'seqnames', 'strand')), with=FALSE])
+    else if (inherits(dt, 'data.frame'))
+        mc <- as.data.frame(dt[, setdiff(colnames(dt), c('start', 'end', 'seqnames', 'strand'))])
+    else
+        warning("Needs to be data.table or data.frame")
+    if (nrow(mc))
+        mcols(out) <- mc
+    return(out)
+}
+
