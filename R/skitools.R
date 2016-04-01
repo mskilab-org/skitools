@@ -6647,4 +6647,38 @@ match.bs = function(query, dict, midpoint = FALSE)
     return(out)
 }
 
+#' Wrapper around BSgenome call
+#'
+#' Retreives either the BSgenome hg18 or hg19 genome by default.  Requires packages
+#' BSgenome.Hsapiens.UCSC.hg19 for hg19 and BSgenome.Hsapiens.UCSC.hg19 for hg18.
+#'
+#' If fft = TRUE, can also also return the hg19 ffTrack (requires that the file exists)
+#' Requires the existence of environment variable HG.FFT pointing to ffTrack .rds file..
+#'
+#' @param hg19 Logical whether to return hg18 or hg19 BSgenome. Default TRUE
+#' @param fft Logical whether to return an ffTrack. Default FALSE
+#' @return BSgenome or ffTrack of the genome
+#' @export
+read_hg = function(hg19 = T, fft = F)
+{
+    if (fft)
+    {
+        if (file.exists(Sys.getenv('HG.FFT')))
+            REFGENE.FILE.HG19.FFT = Sys.getenv('HG.FFT')
+        else if (file.exists('~/DB/ffTracks/hg19.rds'))
+            REFGENE.FILE.HG19.FFT = '~/DB/ffTracks/hg19.rds'
+        else
+            stop("Need to supply environment variable to FFtracked genome or load BSGenome. Env Var: HG.FFT")
 
+        return(readRDS(REFGENE.FILE.HG19.FFT))
+    }
+    else
+    {
+        require(BSgenome)
+        if (hg19)
+            library(BSgenome.Hsapiens.UCSC.hg19)
+        else
+            library(BSgenome.Hsapiens.UCSC.hg18)
+        return(Hsapiens)
+    }
+}
