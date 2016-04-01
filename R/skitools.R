@@ -7603,3 +7603,29 @@ dtgr <- function(dt) {
     return(out)
 }
 
+#' Filters GRangesList to only include ranges in the specified window
+#'
+#' (this is different from %in% which does not remove non matching ranges from the grls)
+#'
+#' does not return list in necessarily same order
+                                        # @param grl \link{GRangesList} to filter
+                                        # @param windows \link{GRanges} windows to keep
+#' @name grl.filter
+#' @export
+grl.filter = function(grl, windows)
+{
+    tmp = as.data.frame(grl);
+    tmp = tmp[seg.on.seg(tmp, windows), ]
+    FORBIDDEN = c('seqnames', 'start', 'end', 'strand', 'ranges', 'seqlevels', 'seqlengths', 'isCircular', 'genome', 'width', 'element');
+    gr.metadata = tmp[, setdiff(colnames(tmp), FORBIDDEN)];
+
+    if (!is.null(dim(gr.metadata)))
+        out.grl = split(GRanges(tmp$seqnames, IRanges(tmp$start, tmp$end), seqlengths = seqlengths(grl), gr.metadata,
+                                strand = tmp$strand), tmp$element)
+    else
+        out.grl = split(GRanges(tmp$seqnames, IRanges(tmp$start, tmp$end), seqlengths = seqlengths(grl),
+                                strand = tmp$strand), tmp$element);
+
+    values(out.grl) = values(grl)[match(names(out.grl), names(grl)), ]
+    return(out.grl);
+}
