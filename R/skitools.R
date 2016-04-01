@@ -7629,3 +7629,53 @@ grl.filter = function(grl, windows)
     values(out.grl) = values(grl)[match(names(out.grl), names(grl)), ]
     return(out.grl);
 }
+#' grl.split
+#'
+#' splits GRL's with respect to their seqnames and strand (default), returning
+#' new grl whose items only contain ranges with a single seqname / strand
+#'
+#' can also split by arbitrary (specified) genomic ranges value fields
+#' @param grl \code{GRangesList} to split
+#' @param seqname Default TRUE
+#' @param strand Default TRUE
+#' @param values columns of values field in grl
+#' @name grl.split
+#' @export
+grl.split = function(grl, seqname = TRUE, strand = TRUE,
+                     values = c() # columns of values field in grl
+                     )
+{
+    ele = tryCatch(as.data.frame(grl)$element, error = function(e) e)
+    if (inherits(ele, 'error'))
+    {
+        if (is.null(names(grl)))
+            nm = 1:length(names(grl))
+        else
+            nm = names(grl)
+
+        ele = unlist(lapply(1:length(grl), function(x) rep(nm[x], length(grl[[x]]))))
+    }
+
+    gr = unlist(grl)
+    names(gr) = NULL;
+
+    by = ele;
+    if (seqname)
+        by = paste(by, seqnames(gr))
+
+    if (strand)
+        by = paste(by, strand(gr))
+
+    values = intersect(names(values(gr)), values);
+    if (length(values)>0)
+        for (val in values)
+            by = paste(by, values(gr)[, val])
+
+    out = split(gr, by);
+    names(out) = ele[!duplicated(by)]
+
+    values(out) = values(grl[ele[!duplicated(by)]])
+
+    return(out)
+}
+
