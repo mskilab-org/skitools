@@ -28,7 +28,7 @@ Depends:
     gUtils,
     ggplot2,
     data.table,
-    igraph,	
+    igraph
 Suggests:
     testthat,
     parallel,

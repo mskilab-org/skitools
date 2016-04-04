@@ -7753,3 +7753,151 @@ grl.span = function(grl, chr = NULL, ir = FALSE, keep.strand = TRUE)
     return(out.gr)
 }
 
+
+
+#' @name get_seq
+#' @title get_seq
+#' Retrieve genomic sequenes
+#'
+#' Wrapper around getSeq which does the "chr" and seqnames conversion if necessary
+#' also handles GRangesList queries
+#'
+#' @param hg A BSgenome or and ffTrack object with levels = c('A','T','G','C','N')
+#' @param gr GRanges object to define the ranges
+#' @param unlist logical whether to unlist the final output into a single DNAStringSet. Default TRUE
+#' @param mc.cores Optional multicore call. Default 1
+#' @param mc.chunks Optional define how to chunk the multicore call. Default mc.cores
+#' @param verbose Increase verbosity
+#' @return DNAStringSet of sequences
+#' @export
+get_seq = function(hg, gr, unlist = TRUE, mc.cores = 1, mc.chunks = mc.cores,
+    as.data.table = FALSE, verbose = FALSE)
+    {
+        if (inherits(gr, 'GRangesList'))
+            {
+                grl = gr;
+                old.names = names(grl);
+                gr = unlist(grl);
+                names(gr) = unlist(lapply(1:length(grl), function(x) rep(x, length(grl[[x]]))))
+                seq = get_seq(hg, gr, mc.cores = mc.cores, mc.chunks = mc.chunks, verbose = verbose)
+                cl = class(seq)
+                out = split(seq, names(gr))
+                out = out[order(as.numeric(names(out)))]
+                if (unlist)
+                    out = do.call('c', lapply(out, function(x) do.call(cl, list(unlist(x)))))
+                names(out) = names(grl)
+                return(out)
+            }
+        else
+            {
+                if (is(hg, 'ffTrack'))
+                    {
+                        if (!isClass('ffTrack'))
+                            stop('ffTrack library needs to be loaded')
+                        if (!all(sort(hg@.levels) == sort(c('A', 'T', 'G', 'C', 'N'))))
+                            cat("ffTrack not in correct format for get_seq, levels must contain only: 'A', 'T', 'G', 'C', 'N'\n")
+                    }
+                else ## only sub in 'chr' if hg is a BSenome
+                    if (!all(grepl('chr', as.character(seqnames(gr)))))
+                        gr = gr.chr(gr)
+
+                gr = gr.fix(gr, hg)
+                if (mc.cores>1)
+	            {
+                        ix = suppressWarnings(split(1:length(gr), 1:mc.chunks))
+
+                        if (is(hg, 'ffTrack'))
+                            {
+
+                                mcout <- mclapply(ix, function(x)
+                                    {
+                                        tmp = suppressWarnings(hg[gr[x]])
+                                        if (any(is.na(tmp)))
+                                            stop("ffTrack corrupt: has NA values, can't convert to DNAString")
+
+                                        if (!as.data.table) {
+                                            bst = DNAStringSet(sapply(split(tmp, as.vector(Rle(1:length(x), width(gr)[x]))), function(y) paste(y, collapse = '')))
+                                            names(bst) = names(gr)[x]
+                                        } else {
+                                            bst <- data.table(seq=sapply(split(tmp, as.vector(Rle(1:length(x), width(gr)[x]))), function(y) paste(y, collapse='')))
+                                            bst[, names:=names(gr)[x]]
+                                        }
+
+                                        if (any(strand(gr)[x]=='-'))
+                                            {
+                                                ix.tmp = as.logical(strand(gr)[x]=='-')
+                                                if (!as.data.table)
+                                                    bst[ix.tmp] = Biostrings::complement(bst[ix.tmp])
+                                                else
+                                                    bst$seq[ix.tmp] <- as.character(Biostrings::complement(DNAStringSet(bst$seq[ix.tmp])))
+                                            }
+
+                                        if (verbose)
+                                            cat('.')
+
+                                        return(bst)
+                                    }
+                                                , mc.cores = mc.cores)
+
+                                if (!as.data.table)
+                                    {
+                                        if (length(mcout)>1)
+                                            tmp = c(mcout[[1]], mcout[[2]])
+                                        out <- do.call('c', mcout)[order(unlist(ix))]
+                                    }
+                                else
+                                    out <- rbindlist(mcout)
+                            }
+                        else
+                            {
+                                out = do.call(c, mclapply(ix, function(x)
+                                    {
+                                        if (verbose)
+                                            cat('.')
+                                        return(getSeq(hg, gr[x]))
+                                    }
+                                   ,mc.cores = mc.cores))[order(unlist(ix))]
+                                if (verbose)
+                                    cat('\n')
+                            }
+                    }
+                else
+                    {
+                        if (is(hg, 'ffTrack'))
+                            {
+                                tmp = suppressWarnings(hg[gr])
+
+                                tmp[is.na(tmp)] = 'N'
+
+                                if (any(is.na(tmp)))
+                                    stop("ffTrack corrupt: has NA values, can't convert to DNAString")
+
+                                if (as.data.table) {
+                                    bst <- data.table(seq=sapply(split(tmp, as.vector(Rle(1:length(gr), width(gr)))), function(x) paste(x, collapse='')))
+                                    bst[, names:=names(gr)]
+                                } else {
+                                    bst = DNAStringSet(sapply(split(tmp, as.numeric(Rle(1:length(gr), width(gr)))), function(x) paste(x, collapse = '')))
+                                    names(bst) = names(gr)
+                                }
+
+                                if (any(as.character(strand(gr))=='-'))
+                                    {
+                                        ix = as.logical(strand(gr)=='-')
+                                        if (!as.data.table) {
+                                            bstc <- as.character(bst)
+                                            bstc[ix] <- as.character(Biostrings::complement(bst[ix]))
+                                            bst <- DNAStringSet(bstc)  ## BIZARRE bug with line below
+                                        #bst[ix] = Biostrings::complement(bst[ix])
+                                        } else {
+                                            bst$seq[ix] <- as.character(Biostrings::complement(DNAStringSet(bst$seq[ix])))
+                                        }
+                                    }
+
+                                return(bst)
+                            }
+                        else
+                            out = getSeq(hg, gr)
+                    }
+                return(out)
+            }
+    }
