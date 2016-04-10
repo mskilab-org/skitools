@@ -3746,8 +3746,6 @@ setMethod("%~%", signature(df = "vector"), function(df, x = NULL) {
 })
 
 
-
-
 #' @name mtable
 #' @title mtable
 #' @description
@@ -5894,6 +5892,7 @@ igv.loci = function(mut, ## GRanges of loci
           }
   }
 
+
 #' @name dcast.data.table2
 #' @title dcast.data.table but allows vector arguments for value.var,
 #' @description
@@ -6039,7 +6038,8 @@ get.mate.gr = function(reads)
     else if (inherits(reads, 'data.table'))
         ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
-s
+
+
 #' Convert from chrXX to numeric format
 #'
 #' Convert from chrXX to numeric format
@@ -6060,6 +6060,7 @@ chr2num = function(x, xy = FALSE)
 
      return(out)
        }
+
 
 
 #' gr.refactor
@@ -6105,6 +6106,7 @@ gr.refactor = function(gr, sn, gap = 0, rev = FALSE)
 
     return(out)
 }
+
 
 
 #' grl.span
@@ -6657,7 +6659,7 @@ read_hg = function(hg19 = T, fft = F)
         return(Hsapiens)
     }
 }
-o
+
 #' Filter reads by average PHRED score
 #' Defines a cutoff score for the mean PHRED quality of a read
 #' in a GRanges.
@@ -6705,6 +6707,7 @@ gr.isclip <- function(gr, clip.cutoff=10) {
     ##logvec[is.na(logvec)] <- FALSE
     ##return(logvec)
 }
+
 
 #' Checks if reads are discordant
 #'
