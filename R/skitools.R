@@ -7014,7 +7014,7 @@ setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
-#' @exportMethod %^%
+#' @exportMethod %&%
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
@@ -7040,7 +7040,7 @@ subset2 <- function(x, condition) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
-#' @exportMethod %^%
+#' @exportMethod %WW%
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
