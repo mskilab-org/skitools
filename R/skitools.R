@@ -4039,8 +4039,6 @@ setMethod("%~%", signature(df = "vector"), function(df, x = NULL) {
 })
 
 
-
-
 #' @name mtable
 #' @title mtable
 #' @description
@@ -6187,6 +6185,7 @@ igv.loci = function(mut, ## GRanges of loci
           }
   }
 
+
 #' @name dcast.data.table2
 #' @title dcast.data.table but allows vector arguments for value.var,
 #' @description
@@ -6333,6 +6332,10 @@ get.mate.gr = function(reads)
         ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 #' Convert from chrXX to numeric format
 #'
 #' Convert from chrXX to numeric format
@@ -6353,6 +6356,7 @@ chr2num = function(x, xy = FALSE)
 
      return(out)
        }
+
 
 
 #' gr.refactor
@@ -6398,6 +6402,7 @@ gr.refactor = function(gr, sn, gap = 0, rev = FALSE)
 
     return(out)
 }
+
 
 
 #' grl.span
@@ -6999,6 +7004,7 @@ gr.isclip <- function(gr, clip.cutoff=10) {
     ##return(logvec)
 }
 
+
 #' Checks if reads are discordant
 #'
 #' Returns a logical vector denoting if a read is discordant.
@@ -7302,6 +7308,10 @@ setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
+<<<<<<< HEAD
+=======
+#' @exportMethod %&%
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
@@ -7327,6 +7337,10 @@ subset2 <- function(x, condition) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
+<<<<<<< HEAD
+=======
+#' @exportMethod %WW%
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
@@ -7725,6 +7739,7 @@ setMethod("%||%", signature(x = "GRanges"), function(x, y) {
 })
 
 
+<<<<<<< HEAD
 ##################################
 #' @name vaggregate
 #' @title vaggregate
@@ -7765,11 +7780,26 @@ vaggregate = function(...)
 modix = function(ix, l)
   {
     return(((ix-1) %% l)+1)
+=======
+
+#' @name plot.blank
+#' @title plot.blank
+#' @description
+#' Makes blank plot
+#' 
+#' @export
+#' @author Marcin Imielinski
+plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes = F, ...)
+  {
+    plot(0, type = "n", axes = axes, xlab = xlab, ylab = ylab, xlim = xlim, ylim = ylim, ...)
+#    par(usr = c(xlim, ylim))
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
   }
 
 
 
 
+<<<<<<< HEAD
 #' @name affine.map
 #' @title affine.map
 #' @description
@@ -7867,6 +7897,24 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
       col.min = col2rgb(col.min)/255
     else
       error('Color should be either length 3 vector or character')
+=======
+#' @name col.scale
+#' @title col.scale
+#' @description
+#' Makes color scale
+#' 
+#' @export
+#' @author Marcin Imielinski
+col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
+  invert = F # if T flips rgb.min and rgb.max
+  )
+  {
+    if (!is.numeric(col.min))
+      if (is.character(col.min))
+        col.min = col2rgb(col.min)/255
+      else
+        error('Color should be either length 3 vector or character')
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 
     if (!is.numeric(col.max))
       if (is.character(col.max))
@@ -7874,6 +7922,7 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
       else
         error('Color should be either length 3 vector or character')
 
+<<<<<<< HEAD
       col.min = as.numeric(col.min);
       col.max = as.numeric(col.max);
 
@@ -7882,12 +7931,23 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
       col.max = pmax(0, pmin(1, col.max))
 
       if (invert)
+=======
+    col.min = as.numeric(col.min);
+    col.max = as.numeric(col.max);
+
+    x = (pmax(val.range[1], pmin(val.range[2], x))-val.range[1])/diff(val.range);
+    col.min = pmax(0, pmin(1, col.min))
+    col.max = pmax(0, pmin(1, col.max))
+
+    if (invert)
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
       {
         tmp = col.max
         col.max = col.min
         col.min = tmp
       }
 
+<<<<<<< HEAD
       nna = !is.na(x);
 
       out = rep(na.col, length(x))
@@ -7980,3 +8040,14 @@ plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes 
   plot(0, type = "n", axes = axes, xlab = xlab, ylab = ylab, xlim = xlim, ylim = ylim, ...)
   #    par(usr = c(xlim, ylim))
 }
+=======
+    nna = !is.na(x);
+    
+    out = rep(na.col, length(x))
+    out[nna] = rgb((col.max[1]-col.min[1])*x[nna] + col.min[1],
+        (col.max[2]-col.min[2])*x[nna] + col.min[2],
+        (col.max[3]-col.min[3])*x[nna] + col.min[3])
+    
+    return(out)           
+  }
+>>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
