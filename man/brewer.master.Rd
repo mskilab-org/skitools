@@ -5,11 +5,17 @@
 \title{brewer.master}
 \usage{
 brewer.master(n, palette = "Accent")
+
+brewer.master(n, palette = "Accent")
 }
 \arguments{
 \item{n}{TODO}
 
 \item{palette}{character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)}
+
+\item{scalar}{positive integer of number of colors to return}
+
+\item{palette}{any brewer.pal palette to begin with (default 'Accent')}
 }
 \value{
 length(n) character vector of colors
@@ -18,8 +24,15 @@ length(n) character vector of colors
 Makes a lot of brewer colors using an "inexhaustible" brewer palette ie will not complain if number of colors requested is too high.
 
 Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
+
+Make brewer colors using entire palette
+
+Makes a lot of brewer colors using entire brewer palette
 }
 \author{
 Marcin Imielinski
+
+Marcin Imielinski
 }
+\keyword{internal}
 

@@ -5,7 +5,10 @@
 \title{col.scale}
 \usage{
 col.scale(x, val.range = c(0, 1), col.min = "white", col.max = "black",
-  na.col = "white", invert = FALSE)
+  na.col = "white", invert = F)
+
+col.scale(x, val.range = c(0, 1), col.min = "white", col.max = "black",
+  na.col = "white", invert = F)
 }
 \arguments{
 \item{x}{length n numeric or integer data to color}
@@ -29,8 +32,18 @@ in val.range (default c(0,1)) to a linear color scale of between col.min (defaul
 and col.max (default black), each which are length 3 vectors or characters.  RGB values are scaled between 0 and 1.
 
 Values below and above val.min and val.max are mapped to col.max and col.max respectively
+
+Assign rgb colors to numeric data
+
+Assigns rgb colors to numeric data values in vector "x".. maps scalar values
+in val.range (default c(0,1)) to a linear color scale of between col.min (default white)
+and col.max (default black), each which are length 3 vectors or characters.  RGB values are scaled between 0 and 1.
+Values below and above val.min and val.max are mapped to col.max and col.max respectively
 }
 \author{
 Marcin Imielinski
+
+Marcin Imielinski
 }
+\keyword{internal}
 

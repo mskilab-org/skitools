@@ -5,21 +5,35 @@
 \title{modix}
 \usage{
 modix(ix, l)
+
+modix(ix, l)
 }
 \arguments{
+\item{ix}{input indices to apply module}
+
+\item{l}{base of ix}
+
 \item{ix}{input indices to apply module}
 
 \item{l}{base of ix}
 }
 \value{
 ((ix-1) mod l) - 1
+
+((ix-1) mod l) - 1
 }
 \description{
 Takes integer input ix and projects on to 1-based modulus over base l
 
 ie modix(1, 5) -> 1, modix(5, 5) -> 5, modix(6, 5) -> 1
+
+Takes integer input ix and projects on to 1-based modulus over base l
+
+ie modix(1, 5) -> 1, modix(5, 5) -> 5, modix(6, 5) -> 1
 }
 \author{
+Marcin Imielinski
+
 Marcin Imielinski
 }
 

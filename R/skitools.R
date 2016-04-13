@@ -3557,8 +3557,301 @@ vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapp
         'voila'
     }
 
+ 
+###############################
+#' varcount
+#'
+#' Wrapper around applyPileups
+#' 
+#' takes in vector of bam paths, GRanges corresponding to sites / territories to query,
+#' and outputs a list with fields
+#' $counts = 3D matrix of base counts
+#' (A, C, G, T, N) x sites x bams subject to mapq and baseq thresholds
+#  $gr = output ranges corresponding to "sites" columns of output
+#'#' 
+#'
+#' (uses varbase)
+#'
+#'
+#' ... = other args go to read.bam
+#' @name varcount
+#' @export
+###############################
+varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, indel = F, ...)
+  {
+    require(abind)
+    require(Rsamtools)
+
+    out = list()
+
+    if (any(width(gr)!=1))
+      gr = gr.start(gr)
+
+    if (is.character(bams))
+        {            
+            bami = gsub('\\.bam$', '.bai', bams)
+            ix = file.exists(bami)
+            if (any(!ix))
+                bami[!ix] = paste(bams[!ix], 'bai', sep = ',')
+            bams = BamFile(bams, index = bami)
+        }
+    
+    ix = as.logical(seqnames(gr) %in% seqlevels(bams))
+    print(table(ix))
+    if (any(ix))
+        {
+            pp = ApplyPileupsParam(which = gr[ix], what = c("seq"), minBaseQuality = min.baseq, minMapQuality = min.mapq, maxDepth = max.depth)
+            pu = applyPileups(PileupFiles(bams), function(x) x, param = pp)
+        }
+
+    if (is(bams, 'BamFile'))
+        bam.paths = path(bams)   
+    else if (is(bams, 'list'))
+        bam.paths = sapply(bams, path)
+    else if (is(bams, 'character'))
+        bam.paths = bams
+
+    if (!indel)
+        {
+            cnames = c('A', 'C', 'G', 'T', 'N')
+            out$counts = array(NA, dim = c(length(cnames), length(gr), length(bams)), dimnames = list(cnames, NULL, bam.paths))
+            if (any(ix))
+                {
+                    nna = sapply(pu, function(x) length(x$seq)>0)
+                    out$counts[,ix[nna],] = aperm(do.call('abind', lapply(pu, function(x)
+                        {
+                            x$seq[cnames,,, drop = F]
+                        })), c(1,3,2))
+            }
+        }
+    else
+        {
+            cnames = unique(unlist(lapply(pu, function(x) rownames(x$seq))))
+            cnames = cnames[order(nchar(cnames), cnames)]
+            out$counts = array(NA, dim = c(length(cnames), length(gr), length(bams)), dimnames = list(cnames, NULL, bam.paths))
+            if (any(ix))
+                {
+                nna = sapply(pu, function(x) length(x$seq)>0)
+                out$counts[,ix[nna],] = aperm(do.call('abind', lapply(pu, function(x)
+                    {
+                        out = array(NA, dim = c(length(cnames), dim(x$seq)[2:3]), dimnames = list(cnames));
+                        out[rownames(x$seq),, ] = x$seq
+                        return(out)
+                    })), c(1,3,2))
+            }
+        }    
+    out$gr = gr
+    
+    return(out)    
+  }
 
 
+################################
+#' mafcount 
+#'
+#' Returns base counts for reference and alternative allele for an input tum and norm bam and maf data frame or GRAnges specifying substitutions
+#'
+#' maf is a single width GRanges describing variants and field 'ref' (or 'Reference_Allele'), 'alt' (or 'Tum_Seq_Allele1') specifying reference and alt allele.
+#' maf is assumed to have width 1 and strand is ignored.  
+#'
+#' @name mafcount
+#' @export
+#################################
+mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T, mc.cores = 1, ...)
+ {
+    bams = tum.bam
+    if (!is.null(norm.bam))
+      bams = c(bams, norm.bam)
+    
+    chunks = chunk(1, length(maf), chunk.size)
+
+    if (is.null(maf$Tumor_Seq_Allele1))
+      maf$Tumor_Seq_Allele1 = maf$alt
+
+    if (is.null(maf$Tumor_Seq_Allele2))
+      maf$Reference_Allele = maf$ref
+    
+    maf$alt.count.t =  maf$ref.count.t = NA
+
+    if (!is.null(norm.bam))
+      maf$alt.count.n =  maf$ref.count.n = NA
+
+    if (verbose)
+      cat('Initialized\n')
+
+    if (is.data.frame(maf))
+      maf = seg2gr(maf)
+    
+    tmp = do.call('rbind',
+        mclapply(1:nrow(chunks), function(i)
+            {
+                if (verbose)
+                    cat('Starting chunk ', chunks[i, 1], ' to ', chunks[i, 2], '\n')
+                
+                ix = chunks[i,1]:chunks[i,2]
+               if (verbose)
+                   now = Sys.time()
+               
+               vc = varcount(bams, maf[ix], ...)
+               
+               if (verbose)
+                 print(Sys.time() - now)
+               
+               tum.count = vc$counts[, , 1]
+
+               if (is.null(dim(tum.count)))
+                 tum.count = cbind(tum.count)
+
+               out = cbind(
+                 tum.count[cbind(match(maf$Tumor_Seq_Allele1[ix], rownames(tum.count)), 1:length(ix))],
+                 tum.count[cbind(match(maf$Reference_Allele[ix], rownames(tum.count)), 1:length(ix))]
+                 )
+
+               if (verbose)
+                 cat('Num rows:', nrow(out), '\n')
+                     
+               if (!is.null(norm.bam))
+                 {
+                   norm.count = vc$counts[, , 2]
+                   
+                   if (is.null(dim(norm.count)))
+                     norm.count = cbind(norm.count)
+                   
+                   out = cbind(out, 
+                     norm.count[cbind(match(maf$Tumor_Seq_Allele1[ix], rownames(norm.count)), 1:length(ix))],
+                     norm.count[cbind(match(maf$Reference_Allele[ix], rownames(norm.count)), 1:length(ix))]
+                     )
+                 }
+               return(out)               
+            }, mc.cores = mc.cores))
+
+    
+
+    maf$alt.count.t = tmp[,1]
+    maf$ref.count.t = tmp[,2]
+    maf$alt.frac.t = maf$alt.count.t / (maf$alt.count.t + maf$ref.count.t)
+    maf$ref.frac.t = 1 - maf$alt.frac.t
+
+    if (!is.null(norm.bam))
+      {
+        maf$alt.count.n = tmp[,3]
+        maf$ref.count.n = tmp[,4]
+        maf$alt.frac.n = maf$alt.count.n / (maf$alt.count.n + maf$ref.count.n)
+        maf$ref.frac.n = 1 - maf$alt.frac.n
+      }
+
+    return(maf)
+  }
+
+#' hets
+#'
+#' generates allele fraction at all possible hets at sites specified by vcf (eg hapmap) input
+#' for tumor and normal
+#'
+#' @name hets
+#' @export
+hets = function(tum.bam, norm.bam = NULL, out.file, vcf.file = '/cga/meyerson/home/marcin/DB/dbSNP/hapmap_3.3.b37.vcf', chunk.size1 = 1e3, chunk.size2 = 1e2, mc.cores = 1, verbose = T, na.rm = TRUE, 
+  filt.norm = T ## if TRUE will remove any sites that have allele fraction 0 or 1 or NA in MAF 
+  )
+  {    
+      f = file(vcf.file, 'r')
+      if (grepl('VCF', readLines(f, 1)))
+          vcf = TRUE
+      else
+          vcf = FALSE
+
+      sl = hg_seqlengths()
+
+      if (verbose)
+          st = Sys.time()
+
+      nprocessed = 0
+      nhets = 0
+      first = T
+      ## get past headers
+      while (grepl('^#', last.line <<- readLines(f, n=1))){}
+
+      if (verbose)
+          cat('Opened vcf, writing hets to text file', out.file, '\n')
+
+      out.cols = c('seqnames', 'start', 'end', 'Tumor_Seq_Allele1', 'Reference_Allele', 'ref.count.t', 'alt.count.t', 'ref.count.n', 'alt.count.n', 'alt.frac.t', 'ref.frac.t', 'alt.frac.n', 'ref.frac.n')
+
+
+      if (vcf)
+          col.ix = 1:5
+      else
+          {
+              col.ix = match(c("Chromosome", "Start_position", "End_position", "Reference_Allele", "Tumor_Seq_Allele1", "Tumor_Seq_Allele2"), strsplit(last.line, '\t')[[1]])
+              if (any(is.na(col.ix)))
+                  stop('Error processing variant file: must be valid VCF or MAF')
+          }
+      
+      while (!is.null(tmp <- tryCatch(read.delim(file = f, as.is = T, header = F, nrows = chunk.size1)[, col.ix], error = function(x) NULL)))
+          {
+              if (vcf)
+                  names(tmp) = c('chr', 'start', 'name', 'ref', 'alt')
+              else
+                  {
+                      names(tmp) = c('chr', 'start', 'name', 'ref', 'alt', 'alt2')
+                      ## just in case the first tumor seq allele is equal to reference .. which happens in mafs
+                      tmp$alt = ifelse(tmp$alt==tmp$ref, tmp$alt2, tmp$alt)
+                  }
+              
+              loc = seg2gr(tmp, seqlengths = sl)    
+              clock({loc.count = mafcount(tum.bam, norm.bam, loc, indel = T, chunk.size = chunk.size2, mc.cores = mc.cores)})
+              nprocessed = nprocessed + length(loc.count)
+              
+              if (filt.norm & !is.null(loc.count$alt.frac.n))
+                  loc.count = loc.count[which(loc.count$alt.frac.n != 1 & loc.count$alt.frac.n != 0)]
+              
+              nhets = nhets + length(loc.count)
+              if (length(loc.count)>0)
+                  {
+                      df = as.data.frame(loc.count)
+                      if (na.rm) ## remove any entries with 0 ref or alt reads in tumor or normal
+                          {
+                              if (!is.null(norm.bam)) 
+                                  naix = apply(df[, c('alt.count.t', 'ref.count.t', 'alt.count.n', 'ref.count.n')], 1, function(x) all(is.na(x)))
+                              else
+                                  naix = apply(df[, c('alt.count.t', 'ref.count.t')], 1, function(x) all(is.na(x)))
+                              df = df[which(!naix), ]
+                          }
+                      out.cols = intersect(out.cols, names(df))
+                      if (first)
+                          {
+
+                              write.tab(df[, out.cols], out.file, append = F, col.names = T)
+                              first = F
+                          }
+                      else                      
+                          write.tab(df[, out.cols], out.file, append = T, col.names = F)
+                  }
+              
+              if (verbose)
+                  cat(sprintf('Processed %s sites, wrote %s candidate hets\n', nprocessed, nhets))
+              
+              if (verbose)
+                  {
+                      cat('Time elapsed:\n')
+                      print(Sys.time() - st)
+                  }              
+          }
+      
+      close(f)
+
+      if (verbose)
+          cat('Finished het processing wrote to file', out.file, '\n')
+  }
+
+
+#' @name clock
+#' @title clock
+#'
+#' times expression
+#'
+#' @param expr R code to eval while suppressing all errors
+#' @author Marcin Imielinski
+#' @export
 clock = function(expr)
   {
     now = Sys.time()
@@ -6039,7 +6332,7 @@ get.mate.gr = function(reads)
     else if (inherits(reads, 'data.table'))
         ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
-s
+
 #' Convert from chrXX to numeric format
 #'
 #' Convert from chrXX to numeric format
@@ -6657,7 +6950,7 @@ read_hg = function(hg19 = T, fft = F)
         return(Hsapiens)
     }
 }
-o
+
 #' Filter reads by average PHRED score
 #' Defines a cutoff score for the mean PHRED quality of a read
 #' in a GRanges.
@@ -6973,7 +7266,6 @@ setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
 #'
 #' @return shifted granges
 #' @rdname gr.nudge
-#' @exportMethod %+%
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%+%', function(gr, ...) standardGeneric('%+%'))
@@ -6992,7 +7284,6 @@ setMethod("%+%", signature(gr = "GRanges"), function(gr, sh) {
 #'
 #' @return shifted granges
 #' @rdname gr.nudge
-#' @exportMethod %-%
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%-%', function(gr, ...) standardGeneric('%-%'))
@@ -7011,7 +7302,6 @@ setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
-#' @exportMethod %^%
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
@@ -7037,7 +7327,6 @@ subset2 <- function(x, condition) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
-#' @exportMethod %^%
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
@@ -7435,3 +7724,259 @@ setMethod("%||%", signature(x = "GRanges"), function(x, y) {
     return(reduce(grbind(x[, c()], y[, c()])))
 })
 
+
+##################################
+#' @name vaggregate
+#' @title vaggregate
+#'
+#' @description
+#' same as aggregate except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#' 
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#' @export
+##################################
+vaggregate = function(...)
+  {
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+  }
+
+
+####################################
+#' @name modix
+#' @title modix
+#'
+#' @description
+#' Takes integer input ix and projects on to 1-based modulus over base l
+#'
+#' ie modix(1, 5) -> 1, modix(5, 5) -> 5, modix(6, 5) -> 1
+#'
+#' @param ix input indices to apply module
+#' @param l base of ix
+#' @return ((ix-1) mod l) - 1 
+#' @author Marcin Imielinski
+#' @export
+####################################
+modix = function(ix, l)
+  {
+    return(((ix-1) %% l)+1)
+  }
+
+
+
+
+#' @name affine.map
+#' @title affine.map
+#' @description
+#'
+#'
+#' affinely maps 1D points in vector x from interval xlim to interval ylim,
+#' ie takes points that lie in
+#' interval xlim and mapping onto interval ylim using linear / affine map defined by:
+#' (x0,y0) = c(xlim(1), ylim(1)),
+#' (x1,y1) = c(xlim(2), ylim(2))
+#' (using two point formula for line)
+#' useful for plotting.
+#'
+#' if cap.max or cap.min == T then values outside of the range will be capped at min or max
+#' @rdname affine-map-methods
+#' @author Marcin Imielinski
+#' @keywords internal
+affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.min = cap, cap.max = cap, clip = T, clip.min = clip, clip.max = clip)
+{
+  #  xlim[2] = max(xlim);
+  #  ylim[2] = max(ylim);
+
+  if (xlim[2]==xlim[1])
+    y = rep(mean(ylim), length(x))
+  else
+    y = (ylim[2]-ylim[1]) / (xlim[2]-xlim[1])*(x-xlim[1]) + ylim[1]
+
+  if (cap.min)
+    y[x<min(xlim)] = ylim[which.min(xlim)]
+  else if (clip.min)
+    y[x<min(xlim)] = NA;
+
+  if (cap.max)
+    y[x>max(xlim)] = ylim[which.max(xlim)]
+  else if (clip.max)
+    y[x>max(xlim)] = NA;
+
+  return(y)
+}
+
+
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+alpha = function(col, alpha)
+{
+  col.rgb = col2rgb(col)
+  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
+}
+
+#' Blends colors
+#'
+#' @param cols colors to blend
+#' @keywords internal
+blend = function(cols)
+{
+  col.rgb = rowMeans(col2rgb(cols))
+  out = rgb(red = col.rgb['red']/255, green = col.rgb['green']/255, blue = col.rgb['blue']/255)
+  return(out)
+}
+
+
+#' @name col.scale
+#' @title col.scale
+#' @description
+#'
+#' Assign rgb colors to numeric data
+#'
+#' Assigns rgb colors to numeric data values in vector "x".. maps scalar values
+#' in val.range (default c(0,1)) to a linear color scale of between col.min (default white)
+#' and col.max (default black), each which are length 3 vectors or characters.  RGB values are scaled between 0 and 1.
+#' Values below and above val.min and val.max are mapped to col.max and col.max respectively
+#'
+#' @author Marcin Imielinski
+#' @keywords internal
+col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
+                     invert = F # if T flips rgb.min and rgb.max
+)
+{
+
+  ## NOTE fix
+  error = NULL
+
+  if (!is.numeric(col.min))
+    if (is.character(col.min))
+      col.min = col2rgb(col.min)/255
+    else
+      error('Color should be either length 3 vector or character')
+
+    if (!is.numeric(col.max))
+      if (is.character(col.max))
+        col.max = col2rgb(col.max)/255
+      else
+        error('Color should be either length 3 vector or character')
+
+      col.min = as.numeric(col.min);
+      col.max = as.numeric(col.max);
+
+      x = (pmax(val.range[1], pmin(val.range[2], x))-val.range[1])/diff(val.range);
+      col.min = pmax(0, pmin(1, col.min))
+      col.max = pmax(0, pmin(1, col.max))
+
+      if (invert)
+      {
+        tmp = col.max
+        col.max = col.min
+        col.min = tmp
+      }
+
+      nna = !is.na(x);
+
+      out = rep(na.col, length(x))
+      out[nna] = rgb((col.max[1]-col.min[1])*x[nna] + col.min[1],
+                     (col.max[2]-col.min[2])*x[nna] + col.min[2],
+                     (col.max[3]-col.min[3])*x[nna] + col.min[3])
+
+      return(out)
+}
+
+#' @name brewer.master
+#' @title brewer.master
+#' @description
+#' Make brewer colors using entire palette
+#'
+#' Makes a lot of brewer colors using entire brewer palette
+#' @param scalar positive integer of number of colors to return
+#' @param palette any brewer.pal palette to begin with (default 'Accent')
+#'
+#' @export
+#' @keywords internal
+#' @author Marcin Imielinski
+brewer.master = function(n, palette = 'Accent')
+{
+  palettes = list(
+    sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
+    diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
+    qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
+  );
+
+  palettes = unlist(palettes);
+  names(palettes) = gsub('\\w+\\.', '', names(palettes))
+
+  if (palette %in% names(palettes))
+    i = match(palette, names(palettes))
+  else
+    i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
+
+  col = c();
+  col.remain = n;
+
+  while (col.remain > 0)
+  {
+    if (col.remain > palettes[i])
+    {
+      next.n = palettes[i]
+      col.remain = col.remain-next.n;
+    }
+    else
+    {
+      next.n = col.remain
+      col.remain = 0;
+    }
+
+    col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
+    i = ((i) %% length(palettes))+1
+  }
+
+  col = col[1:n]
+  return(col)
+}
+
+
+#' @name lighten
+#' @title lighten
+#' @description
+#' lighten
+#'
+#' lightens / darkens colors by brighness factor f (in -255 .. 255) that will make lighter if > 0 and darker < 0
+#' @author Marcin Imielinski
+#' @keywords internal
+lighten = function(col, f)
+{
+  M = col2rgb(col)
+  return(apply(matrix(pmax(0, pmin(255, M + f*matrix(rep(1, length(M)), nrow = nrow(M)))), ncol = length(col))/255, 2, function(x) rgb(x[1], x[2], x[3])))
+}
+
+
+#' @name plot.blank
+#' @title plot.blank
+#' @description
+#' Make a blank plot
+#'
+#' Shortcut for making blank plot with no axes
+#' @author Marcin Imielinski
+#' @keywords internal
+plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes = F, bg.col = "white", ...)
+{
+  par(bg = bg.col)
+  plot(0, type = "n", axes = axes, xlab = xlab, ylab = ylab, xlim = xlim, ylim = ylim, ...)
+  #    par(usr = c(xlim, ylim))
+}

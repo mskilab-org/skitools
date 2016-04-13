@@ -2,32 +2,20 @@
 % Please edit documentation in R/skitools.R
 \name{alpha}
 \alias{alpha}
-\title{alphoa}
+\title{alpha}
 \usage{
-alpha(col, alpha)
-
 alpha(col, alpha)
 }
 \arguments{
 \item{col}{RGB color}
-
-\item{alpha}{value of alpha}
-
-\item{col}{color string}
-
-\item{alpha}{alpha value between 0 and 1}
-}
-\value{
-rgb color like the input, but with transparency added
 }
 \description{
 Give transparency value to colors
 
 Takes provided colors and gives them the specified alpha (ie transparency) value
-
-takes provided colors and gives them the specified alpha (ie transparency) value
 }
 \author{
 Marcin Imielinski
 }
+\keyword{internal}
 
