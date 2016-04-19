@@ -3587,25 +3587,33 @@ varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, ind
     if (any(width(gr)!=1))
       gr = gr.start(gr)
 
+    
     if (is.character(bams))
         {            
             bami = gsub('\\.bam$', '.bai', bams)
             ix = file.exists(bami)
             if (any(!ix))
-                bami[!ix] = paste(bams[!ix], 'bai', sep = ',')
-            bams = BamFile(bams, index = bami)
+                bami[!ix] = paste(bams[!ix], 'bai', sep = '.')
+            if (any(!file.exists(bami)))
+                stop('one or more BAM file indices missing')
+            fuck = mapply(function(bam, bai) BamFile(bam, index = bai), bams, bami, SIMPLIFY = FALSE)
+            bams = BamFileList(mapply(function(bam, bai) BamFile(bam, index = bai), bams, bami, SIMPLIFY = FALSE))
+#            bams = BamFile(bams, index = bami)
         }
+    else if (is(bams, 'BamFile'))
+        bams = BamFileList(bams)
     
-    ix = as.logical(seqnames(gr) %in% seqlevels(bams))
-    print(table(ix))
+    ix = as.logical(as.character(seqnames(gr)) %in% seqlevels(bams))
     if (any(ix))
         {
             pp = ApplyPileupsParam(which = gr[ix], what = c("seq"), minBaseQuality = min.baseq, minMapQuality = min.mapq, maxDepth = max.depth)
             pu = applyPileups(PileupFiles(bams), function(x) x, param = pp)
         }
 
-    if (is(bams, 'BamFile'))
-        bam.paths = path(bams)   
+    if (is(bams, 'BamFile') | is(bams, 'BamFileList'))
+        bam.paths = Rsamtools::path(bams)
+    else if (is(bams, 'BamFileList'))
+        bam.paths = sapply(bams, path)
     else if (is(bams, 'list'))
         bam.paths = sapply(bams, path)
     else if (is(bams, 'character'))
@@ -3618,7 +3626,7 @@ varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, ind
             if (any(ix))
                 {
                     nna = sapply(pu, function(x) length(x$seq)>0)
-                    out$counts[,ix[nna],] = aperm(do.call('abind', lapply(pu, function(x)
+                    out$counts[,which(ix)[nna],] = aperm(do.call('abind', lapply(pu, function(x)
                         {
                             x$seq[cnames,,, drop = F]
                         })), c(1,3,2))
@@ -3632,12 +3640,12 @@ varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, ind
             if (any(ix))
                 {
                 nna = sapply(pu, function(x) length(x$seq)>0)
-                out$counts[,ix[nna],] = aperm(do.call('abind', lapply(pu, function(x)
+                out$counts[,which(ix)[nna],] = aperm(do.call('abind', lapply(pu, function(x)
                     {
                         out = array(NA, dim = c(length(cnames), dim(x$seq)[2:3]), dimnames = list(cnames));
                         out[rownames(x$seq),, ] = x$seq
-                        return(out)
                     })), c(1,3,2))
+                        return(out)
             }
         }    
     out$gr = gr
@@ -3658,10 +3666,19 @@ varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, ind
 #' @export
 #################################
 mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T, mc.cores = 1, ...)
- {
-    bams = tum.bam
-    if (!is.null(norm.bam))
-      bams = c(bams, norm.bam)
+    {
+
+        if (is.character(tum.bam))
+            tum.bam = BamFile(tum.bam)
+        
+        bams = BamFileList(tum.bam)
+        
+        if (!is.null(norm.bam))
+            {
+                if (is.character(norm.bam))
+                    norm.bam = BamFile(norm.bam)
+                bams = c(bams, BamFileList(norm.bam))
+            }
     
     chunks = chunk(1, length(maf), chunk.size)
 
@@ -3701,7 +3718,7 @@ mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T
 
                if (is.null(dim(tum.count)))
                  tum.count = cbind(tum.count)
-
+        
                out = cbind(
                  tum.count[cbind(match(maf$Tumor_Seq_Allele1[ix], rownames(tum.count)), 1:length(ix))],
                  tum.count[cbind(match(maf$Reference_Allele[ix], rownames(tum.count)), 1:length(ix))]
@@ -4956,7 +4973,45 @@ pindel = function(outdir, bams, intervals = NULL, isizes = NULL, hg = Sys.getenv
       system(cmd)
     else
       return(cmd)
-  }
+}
+
+#' Label discordant read pairs
+#'
+#' Labels read pairs discordant based on whether they have (1) ++ or -- strand orientation (2) "-" strand read start
+#' is not greater than dmin or less than dmin ahead of  "+" strand read on same chromosome
+#'
+#' @note need to merge with gr.isdisc
+#' @name discordant.pairs
+#' @export 
+discordant.pairs = function(pairs, inter.only = F, ## will only include interchromosomal pairs
+  dmin = 50, dmax = 500)
+{
+  pairs.gr = grl.unlist(pairs)
+  chr = as.character(seqnames(pairs.gr));
+  str = as.character(strand(pairs.gr));
+  st = start(pairs.gr);
+  en = end(pairs.gr);
+
+  chr.l = split(chr, pairs.gr$grl.ix)
+  str.l = split(str, pairs.gr$grl.ix)
+  st.l = split(st, pairs.gr$grl.ix)
+  en.l = split(en, pairs.gr$grl.ix)
+
+  tmp.out = sapply(chr.l, function(x) length(unique(x)))>1 ## any item w more than one chrom is discordant
+
+  if (any(!tmp.out))
+    tmp.out[!tmp.out] = sapply(str.l[!tmp.out], function(x) length(unique(x)))==1 ## any item w only a single strand is discordant
+
+  if (any(!tmp.out))
+    {
+      d = sapply(en.l[!tmp.out], max) - sapply(st.l[!tmp.out], min) ## any item w only a single strand is discordant
+      tmp.out[!tmp.out] = d<dmin | d>dmax
+    }
+
+  out = rep(NA, length(pairs))
+  out[as.numeric(names(chr.l))] = tmp.out
+}
+
 
 ##########################
 # match.seg.id
@@ -6332,10 +6387,7 @@ get.mate.gr = function(reads)
         ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
 
-<<<<<<< HEAD
-=======
 
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 #' Convert from chrXX to numeric format
 #'
 #' Convert from chrXX to numeric format
@@ -7308,10 +7360,7 @@ setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
-<<<<<<< HEAD
-=======
 #' @exportMethod %&%
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
@@ -7337,10 +7386,7 @@ subset2 <- function(x, condition) {
 #'
 #' @return subset of gr1 that overlaps gr2
 #' @rdname gr.in
-<<<<<<< HEAD
-=======
 #' @exportMethod %WW%
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 #' @export
 #' @author Marcin Imielinski
 setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
@@ -7739,7 +7785,7 @@ setMethod("%||%", signature(x = "GRanges"), function(x, y) {
 })
 
 
-<<<<<<< HEAD
+
 ##################################
 #' @name vaggregate
 #' @title vaggregate
@@ -7780,26 +7826,11 @@ vaggregate = function(...)
 modix = function(ix, l)
   {
     return(((ix-1) %% l)+1)
-=======
-
-#' @name plot.blank
-#' @title plot.blank
-#' @description
-#' Makes blank plot
-#' 
-#' @export
-#' @author Marcin Imielinski
-plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes = F, ...)
-  {
-    plot(0, type = "n", axes = axes, xlab = xlab, ylab = ylab, xlim = xlim, ylim = ylim, ...)
-#    par(usr = c(xlim, ylim))
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
   }
 
 
 
 
-<<<<<<< HEAD
 #' @name affine.map
 #' @title affine.map
 #' @description
@@ -7816,6 +7847,7 @@ plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes 
 #' if cap.max or cap.min == T then values outside of the range will be capped at min or max
 #' @rdname affine-map-methods
 #' @author Marcin Imielinski
+#' @export
 #' @keywords internal
 affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.min = cap, cap.max = cap, clip = T, clip.min = clip, clip.max = clip)
 {
@@ -7851,6 +7883,7 @@ affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.m
 #' @author Marcin Imielinski
 #' @param col RGB color
 #' @keywords internal
+#' @export
 alpha = function(col, alpha)
 {
   col.rgb = col2rgb(col)
@@ -7861,8 +7894,11 @@ alpha = function(col, alpha)
 
 #' Blends colors
 #'
+#' 
 #' @param cols colors to blend
 #' @keywords internal
+#' @name blend
+#' @export
 blend = function(cols)
 {
   col.rgb = rowMeans(col2rgb(cols))
@@ -7883,6 +7919,7 @@ blend = function(cols)
 #' Values below and above val.min and val.max are mapped to col.max and col.max respectively
 #'
 #' @author Marcin Imielinski
+#' @export
 #' @keywords internal
 col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
                      invert = F # if T flips rgb.min and rgb.max
@@ -7897,24 +7934,6 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
       col.min = col2rgb(col.min)/255
     else
       error('Color should be either length 3 vector or character')
-=======
-#' @name col.scale
-#' @title col.scale
-#' @description
-#' Makes color scale
-#' 
-#' @export
-#' @author Marcin Imielinski
-col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
-  invert = F # if T flips rgb.min and rgb.max
-  )
-  {
-    if (!is.numeric(col.min))
-      if (is.character(col.min))
-        col.min = col2rgb(col.min)/255
-      else
-        error('Color should be either length 3 vector or character')
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
 
     if (!is.numeric(col.max))
       if (is.character(col.max))
@@ -7922,7 +7941,6 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
       else
         error('Color should be either length 3 vector or character')
 
-<<<<<<< HEAD
       col.min = as.numeric(col.min);
       col.max = as.numeric(col.max);
 
@@ -7931,23 +7949,12 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
       col.max = pmax(0, pmin(1, col.max))
 
       if (invert)
-=======
-    col.min = as.numeric(col.min);
-    col.max = as.numeric(col.max);
-
-    x = (pmax(val.range[1], pmin(val.range[2], x))-val.range[1])/diff(val.range);
-    col.min = pmax(0, pmin(1, col.min))
-    col.max = pmax(0, pmin(1, col.max))
-
-    if (invert)
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
       {
         tmp = col.max
         col.max = col.min
         col.min = tmp
       }
 
-<<<<<<< HEAD
       nna = !is.na(x);
 
       out = rep(na.col, length(x))
@@ -7956,58 +7963,6 @@ col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black
                      (col.max[3]-col.min[3])*x[nna] + col.min[3])
 
       return(out)
-}
-
-#' @name brewer.master
-#' @title brewer.master
-#' @description
-#' Make brewer colors using entire palette
-#'
-#' Makes a lot of brewer colors using entire brewer palette
-#' @param scalar positive integer of number of colors to return
-#' @param palette any brewer.pal palette to begin with (default 'Accent')
-#'
-#' @export
-#' @keywords internal
-#' @author Marcin Imielinski
-brewer.master = function(n, palette = 'Accent')
-{
-  palettes = list(
-    sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
-    diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
-    qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
-  );
-
-  palettes = unlist(palettes);
-  names(palettes) = gsub('\\w+\\.', '', names(palettes))
-
-  if (palette %in% names(palettes))
-    i = match(palette, names(palettes))
-  else
-    i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
-
-  col = c();
-  col.remain = n;
-
-  while (col.remain > 0)
-  {
-    if (col.remain > palettes[i])
-    {
-      next.n = palettes[i]
-      col.remain = col.remain-next.n;
-    }
-    else
-    {
-      next.n = col.remain
-      col.remain = 0;
-    }
-
-    col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
-    i = ((i) %% length(palettes))+1
-  }
-
-  col = col[1:n]
-  return(col)
 }
 
 
@@ -8040,14 +7995,67 @@ plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes 
   plot(0, type = "n", axes = axes, xlab = xlab, ylab = ylab, xlim = xlim, ylim = ylim, ...)
   #    par(usr = c(xlim, ylim))
 }
-=======
-    nna = !is.na(x);
-    
-    out = rep(na.col, length(x))
-    out[nna] = rgb((col.max[1]-col.min[1])*x[nna] + col.min[1],
-        (col.max[2]-col.min[2])*x[nna] + col.min[2],
-        (col.max[3]-col.min[3])*x[nna] + col.min[3])
-    
-    return(out)           
-  }
->>>>>>> ee54099bdca5710c7cbf234ec03d70f43f78da60
+
+
+#' standardize_segs
+#'
+#' (data frame seg function)
+#'
+#' Takes and returns segs data frame standardized to a single format (ie $chr, $pos1, $pos2)
+#'
+#' if chr = TRUE will ensure "chr" prefix is added to chromossome(if does not exist)#'
+#' @export
+standardize_segs = function(seg, chr = FALSE)
+{
+  #if (inherits(seg, 'IRangesList'))
+  #  seg = irl2gr(seg);
+
+  if (is(seg, 'matrix'))
+    seg = as.data.frame(seg, stringsAsFactors = FALSE)
+
+  # if (inherits(seg, 'RangedData') | inherits(seg, 'GRanges') | inherits(seg, 'IRanges'))
+  # {
+  #   val = as.data.frame(values(seg));
+  #   values(seg) = NULL;
+  #   seg = as.data.frame(seg, row.names = NULL);  ## returns compressed iranges list
+  #   seg$seqnames = as.character(seg$seqnames)
+  # }
+  # else
+  val = NULL;
+
+  field.aliases = list(
+    ID = c('id', 'patient', 'Sample'),
+    chr = c('seqnames', 'chrom', 'Chromosome', "contig", "seqnames", "seqname", "space", 'chr', 'Seqnames'),
+    pos1 = c('start', 'loc.start', 'begin', 'Start', 'start', 'Start.bp', 'Start_position', 'pos', 'pos1', 'left', 's1'),
+    pos2 =  c('end', 'loc.end', 'End', 'end', "stop", 'End.bp', 'End_position', 'pos2', 'right', 'e1'),
+    strand = c('strand', 'str', 'strand', 'Strand', 'Str')
+  );
+
+  if (is.null(val))
+    val = seg[, setdiff(names(seg), unlist(field.aliases))]
+
+  seg = seg[, intersect(names(seg), unlist(field.aliases))]
+
+  for (field in setdiff(names(field.aliases), names(seg)))
+    if (!(field %in% names(seg)))
+      names(seg)[names(seg) %in% field.aliases[[field]]] = field;
+
+  if (chr)
+    if (!is.null(seg$chr))
+      if (!grepl('chr', seg$chr[1]))
+        seg$chr = paste('chr', seg$chr, sep = "");
+
+  if (is.null(seg$pos2))
+    seg$pos2 = seg$pos1;
+
+  missing.fields = setdiff(names(field.aliases), c(names(seg), c('chr', 'ID', 'strand')));
+
+  if (length(missing.fields)>0)
+    warning(sprintf('seg file format problem, missing an alias for the following fields:\n\t%s',
+                    paste(sapply(missing.fields, function(x) paste(x, '(can also be', paste(field.aliases[[x]], collapse = ', '), ')')), collapse = "\n\t")));
+
+  if (!is.null(val))
+    seg = cbind(seg, val)
+
+  return(seg)
+}
