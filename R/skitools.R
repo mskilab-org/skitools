@@ -1087,7 +1087,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                         return (GRangesList())
 
                       ## fix mateids if not included
-                      if (!"MATEID"%in%colnames(mcols(vgr))) {
+                      if  (!"MATEID"%in% colnames(mcols(vgr))) {
                         nm <- vgr$MATEID <- names(vgr)
                         ix <- grepl("1$",nm)
                         vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
@@ -1121,38 +1121,58 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       alt <- sapply(vgr$ALT, function(x) x[1])
                       vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                       vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+                      shft = as.numeric(grepl('^[\\[\\]]', alt, perl = TRUE))
+                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr) + shft, sep = ''))
+                      
                       vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                       vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
+                      if (any(ix<- !(vgr$mateid %in% names(vgr))))
+                          {
+                              warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
+                              vgr$mateid[ix] = NA
+                          }
+                          
                       if (all(is.na(vgr$mateid)))
-                          if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                              }
-                          else if (!is.null(vgr$SCTG))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                                  require(igraph)
-                                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                          {
+                              if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+                                  {
+                                      warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                                      vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                                  }
 
-                                  if (any(duplicated(vgr$mateid)))
+                              if (any(ix<- !(vgr$mateid %in% names(vgr))))
+                                  {
+                                      warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
+                                      vgr$mateid[ix] = NA
+                                  }
+
+                              if (any(is.na(vgr$mateid)))                              
+                                  if (!is.null(vgr$SCTG))
                                       {
-                                          warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                                          bix = bix[!duplicated(vgr$mateid)]
-                                          vgr = vgr[!duplicated(vgr$mateid)]
+                                          warning('MATEID tag missing or malformed, guessing BND partner from coordinates and SCTG')
+                                          require(igraph)
+                                          vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                                          names(vgr) = paste(vgr$SCTG, vgr$coord, sep = '_')                                         
+                                          
+                                          if (any(duplicated(vgr$mateid)))
+                                          {
+                                              warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                                              bix = bix[!duplicated(vgr$mateid)]
+                                              vgr = vgr[!duplicated(vgr$mateid)]
+                                          }
                                       }
-                              }
-                          else
-                              stop('MATEID tag missing')
+                             
+                              if (is.null(vgr$mateid))
+                                  stop('MATEID tag missing')
+                          }
 
                       vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                       pix = which(!is.na(vgr$mix))
 
                       vgr.pair = vgr[pix]
+
 
                       if (length(vgr.pair)==0)
                           stop('No mates found despite nonzero number of BND rows in VCF')
@@ -1318,7 +1338,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
              
              if (is.character(rafile$str2) | is.factor(rafile$str2))
                  rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
-
              
              if (is.numeric(rafile$str1))
                  rafile$str1 = ifelse(rafile$str1>0, '+', '-')
@@ -7315,287 +7334,6 @@ setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
     values(gr) = cbind(values(gr), df)
     return(gr)
 })
-
-
-#' @name %+%
-#' @title Nudge GRanges right
-#' @description
-#' Operator to shift GRanges right "sh" bases
-#'
-#' @return shifted granges
-#' @rdname gr.nudge
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%+%', function(gr, ...) standardGeneric('%+%'))
-setMethod("%+%", signature(gr = "GRanges"), function(gr, sh) {
-    end(gr) = end(gr)+sh
-    start(gr) = start(gr)+sh
-    return(gr)
-})
-
-#' @name %-%
-#' @title Shift GRanges left
-#' @description
-#' Operator to shift GRanges left "sh" bases
-#'
-#' df %!% c('string.*to.*match', 'another.string.to.match')
-#'
-#' @return shifted granges
-#' @rdname gr.nudge
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%-%', function(gr, ...) standardGeneric('%-%'))
-setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
-    start(gr) = start(gr)-sh
-    end(gr) = end(gr)-sh
-    return(gr)
-})
-
-#' @name %&%
-#' @title subset x on y ranges wise ignoring strand
-#' @description
-#' shortcut for x[gr.in(x,y)]
-#'
-#' gr1 %&% gr2 returns the subsets of gr1 that overlaps gr2
-#'
-#' @return subset of gr1 that overlaps gr2
-#' @rdname gr.in
-#' @exportMethod %&%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
-setMethod("%&%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(x[gr.in(x, y)])
-})
-
-subset2 <- function(x, condition) {
-    condition_call <- substitute(condition)
-    r <- eval(condition_call, x)
-    browser()
-    x[r, ]
-}
-
-#' @name %WW%
-#' @title subset x on y ranges wise obeying strand
-#' @description
-#' shortcut for x[gr.in(x,y, ignore.strand = FALSE)]
-#'
-#' gr1 %WW% gr2 returns the subsets of gr that overlaps gr2 not ignoring strand
-#'
-#' @return subset of gr1 that overlaps gr2
-#' @rdname gr.in
-#' @exportMethod %WW%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
-setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(x[gr.in(x, y, ignore.strand = FALSE)])
-})
-
-
-#' @name %O%
-#' @title gr.val shortcut to get fractional overlap of gr1 by gr2, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %O% gr2
-#'
-#' @return fractional overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %O%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%O%', function(x, ...) standardGeneric('%O%'))
-setMethod("%O%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov/width(x))
-})
-
-#' @name %OO%
-#' @title gr.val shortcut to get fractional overlap of gr1 by gr2, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %OO% gr2
-#'
-#' @return fractional overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %OO%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%OO%', function(x, ...) standardGeneric('%OO%'))
-setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov/width(x))
-})
-
-#' @name %o%
-#' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %o% gr2
-#'
-#' @return bases overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %o%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%o%', function(x, ...) standardGeneric('%o%'))
-setMethod("%o%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-
-
-#' @name %oo%
-#' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %oo% gr2
-#'
-#' @return bases overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %oo%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%oo%', function(x, ...) standardGeneric('%oo%'))
-setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-
-#' @name %N%
-#' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %N% gr2
-#'
-#' @return bases overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %N%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%N%', function(x, ...) standardGeneric('%N%'))
-setMethod("%N%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , length(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-
-#' @name %NN%
-#' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %NN% gr2
-#'
-#' @return bases overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %N%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%NN%', function(x, ...) standardGeneric('%NN%'))
-setMethod("%NN%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , length(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-
-#' @name %_%
-#' @title setdiff shortcut (strand agnostic)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %_% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.setdiff
-#' @exportMethod %_%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%_%', function(x, ...) standardGeneric('%_%'))
-setMethod("%_%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    setdiff(gr.stripstrand(x[, c()]), gr.stripstrand(y[, c()]))
-})
-
-#' @name %**%
-#' @title gr.findoverlaps (respects strand)
-#' @description
-#' Shortcut for gr.findoverlaps
-#'
-#' gr1 %**% gr2
-#'
-#' @return new granges containing every pairwise intersection of ranges in gr1 and gr2 with a join of the corresponding metadata
-#' @rdname grfo
-#' @exportMethod %**%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%**%', function(x, ...) standardGeneric('%**%'))
-setMethod("%**%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    gr = gr.findoverlaps(x, y, qcol = names(values(x)), scol = names(values(y)), ignore.strand = FALSE)
-    return(gr)
-})
-
-#' @name %^^%
-#' @title gr.in shortcut (respects strand)
-#' @description
-#' Shortcut for gr.in
-#'
-#' gr1 %^^% gr2
-#'
-#' @return logical vector of length gr1 which is TRUE at entry i only if gr1[i] intersects at least one interval in gr2
-#' @rdname gr.in
-#' @exportMethod %^^%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%^^%', function(x, ...) standardGeneric('%^^%'))
-setMethod("%^^%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(gr.in(x, y, ignore.strand = FALSE))
-})
-
-#' @name %$$%
-#' @title gr.val shortcut to get mean values of subject "x" meta data fields in query "y" (respects strand)
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %$$% gr2
-#'
-#' @return gr1 with extra meta data fields populated from gr2
-#' @rdname gr.val
-#' @exportMethod %$$%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%$$%', function(x, ...) standardGeneric('%$$%'))
-setMethod("%$$%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(gr.val(x, y, val = names(values(y)), ignore.strand = FALSE))
-})
-
-
 
 #' @name get_seq
 #' @title get_seq
