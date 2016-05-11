@@ -1086,7 +1086,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                         return (GRangesList())
 
                       ## fix mateids if not included
-                      if (!"MATEID"%in%colnames(mcols(vgr))) {
+                      if  (!"MATEID"%in% colnames(mcols(vgr))) {
                         nm <- vgr$MATEID <- names(vgr)
                         ix <- grepl("1$",nm)
                         vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
@@ -1120,38 +1120,58 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       alt <- sapply(vgr$ALT, function(x) x[1])
                       vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                       vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+                      shft = as.numeric(grepl('^[\\[\\]]', alt, perl = TRUE))
+                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr) + shft, sep = ''))
+                      
                       vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                       vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
+                      if (any(ix<- !(vgr$mateid %in% names(vgr))))
+                          {
+                              warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
+                              vgr$mateid[ix] = NA
+                          }
+                          
                       if (all(is.na(vgr$mateid)))
-                          if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                              }
-                          else if (!is.null(vgr$SCTG))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                                  require(igraph)
-                                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                          {
+                              if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+                                  {
+                                      warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                                      vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                                  }
 
-                                  if (any(duplicated(vgr$mateid)))
+                              if (any(ix<- !(vgr$mateid %in% names(vgr))))
+                                  {
+                                      warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
+                                      vgr$mateid[ix] = NA
+                                  }
+
+                              if (any(is.na(vgr$mateid)))                              
+                                  if (!is.null(vgr$SCTG))
                                       {
-                                          warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                                          bix = bix[!duplicated(vgr$mateid)]
-                                          vgr = vgr[!duplicated(vgr$mateid)]
+                                          warning('MATEID tag missing or malformed, guessing BND partner from coordinates and SCTG')
+                                          require(igraph)
+                                          vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                                          names(vgr) = paste(vgr$SCTG, vgr$coord, sep = '_')                                         
+                                          
+                                          if (any(duplicated(vgr$mateid)))
+                                          {
+                                              warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                                              bix = bix[!duplicated(vgr$mateid)]
+                                              vgr = vgr[!duplicated(vgr$mateid)]
+                                          }
                                       }
-                              }
-                          else
-                              stop('MATEID tag missing')
+                             
+                              if (is.null(vgr$mateid))
+                                  stop('MATEID tag missing')
+                          }
 
                       vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                       pix = which(!is.na(vgr$mix))
 
                       vgr.pair = vgr[pix]
+
 
                       if (length(vgr.pair)==0)
                           stop('No mates found despite nonzero number of BND rows in VCF')
@@ -1317,7 +1337,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
              
              if (is.character(rafile$str2) | is.factor(rafile$str2))
                  rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
-
              
              if (is.numeric(rafile$str1))
                  rafile$str1 = ifelse(rafile$str1>0, '+', '-')
