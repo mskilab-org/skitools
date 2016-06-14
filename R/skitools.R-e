@@ -55,7 +55,6 @@
     out
 }
 
-
 ## shorthand listing largest objects in the workspace
 lsos <- function(..., n=10) {
     .ls.objects(..., order.by="Size", decreasing=TRUE, head=TRUE, n=n)
@@ -322,65 +321,6 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
 }
 
-
-#' Converts \code{GRanges} to \code{data.table}
-#'
-#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
-#' @param x \code{GRanges} to convert
-#' @name gr2dt
-#' @export
-#'
-gr2dt  <- function(x)
-{
-    ## new approach just directly instantiating data table
-    cmd = 'data.frame(';
-    if (is(x, 'GRanges'))
-    {
-        ## as.data.table complains if duplicated row names
-        if (any(duplicated(names(x))))
-            names(x) <- NULL
-
-        was.gr = TRUE
-        f = c('seqnames', 'start', 'end', 'strand', 'width')
-        f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
-        cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
-        value.f = names(values(x))
-    }
-    else
-    {
-        was.gr = FALSE
-        value.f = names(x)
-    }
-
-    if (length(value.f)>0)
-    {
-        if (was.gr)
-            cmd = paste(cmd, ',', sep = '')
-        class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
-
-        .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
-        {
-            tmp1 = as.character(unlist(x))
-            tmp2 = rep(1:length(x), S4Vectors::elementLengths(x))
-            return(split(tmp1, tmp2))
-        }
-
-        ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
-        as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
-                       ifelse(grepl('Character', class.f), 'as.character',
-                       ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
-                       ifelse(grepl('StringSet$', class.f), 'as.character',
-                       ifelse(grepl('factor$', class.f), 'as.character',
-                       ifelse(grepl('List', class.f), 'as.list',
-                       ifelse(grepl('factor', class.f), 'as.character',
-                       ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
-        cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
-    }
-
-    cmd = paste(cmd, ')', sep = '')
-
-    return(data.table::as.data.table(eval(parse(text =cmd))))
-}
 
 #' @name wfplot
 #' @title Quick waterfall plot
@@ -7168,16 +7108,16 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
     if (span)
     {
         if (ignore.strand)
-            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
+            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
         else
-            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
+            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
     }
     else
     {
         if (ignore.strand)
-            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
+            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
         else
-            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
+            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
     }
 
     values(out) = input.meta[out$i, ]
@@ -7459,7 +7399,7 @@ setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%O%', function(x, ...) standardGeneric('%O%'))
 setMethod("%O%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
+    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov/width(x))
@@ -7479,7 +7419,7 @@ setMethod("%O%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%OO%', function(x, ...) standardGeneric('%OO%'))
 setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
+    ov = grdt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov/width(x))
@@ -7499,7 +7439,7 @@ setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%o%', function(x, ...) standardGeneric('%o%'))
 setMethod("%o%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
+    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov)
@@ -7520,7 +7460,7 @@ setMethod("%o%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%oo%', function(x, ...) standardGeneric('%oo%'))
 setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
+    ov = grdt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov)
@@ -7542,7 +7482,7 @@ setGeneric('%N%', function(x, ...) standardGeneric('%N%'))
 setMethod("%N%", signature(x = "GRanges"), function(x, y) {
               ov = gr.findoverlaps(x, y)
               if (length(ov)>0)
-                  return(gr2dt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
+                  return(grdt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
               else
                   return(rep(0, length(x)))
 })
@@ -7563,7 +7503,7 @@ setGeneric('%NN%', function(x, ...) standardGeneric('%NN%'))
 setMethod("%NN%", signature(x = "GRanges"), function(x, y) {
               ov = gr.findoverlaps(x, y, ignore.strand = TRUE)
               if (length(ov)>0)
-                  return(gr2dt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
+                  return(grdt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
               else
                   return(rep(0, length(x)))          
 })
