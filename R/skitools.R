@@ -6629,6 +6629,9 @@ gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'ch
     return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
 }
 
+if (FALSE)
+{
+
 #' More robust and faster implementation of GenomicRangs::setdiff
 #'
 #' Robust to common edge cases of setdiff(gr1, gr2)  where gr2 ranges are contained inside gr1's (yieldings
@@ -6663,7 +6666,7 @@ gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
     out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
     return(out)
 }
-
+}
 #' Convert data.table to GRanges
 #'
 #' Takes as input a data.table which must have the fields: start, end, strand, seqnames.
@@ -7144,6 +7147,9 @@ gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
     return(isdisc)
 }
 
+if (FALSE)
+{
+
 #' Minimal overlaps for GRanges/GRangesList
 #'
 #' Takes any number of GRanges or GRangesList and reduces them to the minimal
@@ -7199,7 +7205,7 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
                                         #return(sort(reduce(output)))
 }
 
-
+}
 #' Return windows with minimal coverage
 #'
 #' Takes a set of GRanges and removes any ranges that
@@ -7444,7 +7450,9 @@ setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
     return(x[gr.in(x, y, ignore.strand = FALSE)])
 })
 
+if(FALSE)
 
+{
 #' @name %O%
 #' @title gr.val shortcut to get fractional overlap of gr1 by gr2, ignoring strand
 #' @description
@@ -7464,6 +7472,10 @@ setMethod("%O%", signature(x = "GRanges"), function(x, y) {
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov/width(x))
 })
+}
+
+if(FALSE)
+{
 
 #' @name %OO%
 #' @title gr.val shortcut to get fractional overlap of gr1 by gr2, respecting strand
@@ -7484,7 +7496,11 @@ setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov/width(x))
 })
+}
 
+
+if(FALSE)
+{
 #' @name %o%
 #' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, ignoring strand
 #' @description
@@ -7504,7 +7520,10 @@ setMethod("%o%", signature(x = "GRanges"), function(x, y) {
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov)
 })
+}
 
+if(FALSE)
+{
 
 #' @name %oo%
 #' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, respecting strand
@@ -7525,7 +7544,10 @@ setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov)
 })
+}
 
+if(FALSE)
+{
 #' @name %N%
 #' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, ignoring strand
 #' @description
@@ -7546,7 +7568,10 @@ setMethod("%N%", signature(x = "GRanges"), function(x, y) {
               else
                   return(rep(0, length(x)))
 })
+}
 
+if(FALSE)
+{
 #' @name %NN%
 #' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, respecting strand
 #' @description
@@ -7567,7 +7592,7 @@ setMethod("%NN%", signature(x = "GRanges"), function(x, y) {
               else
                   return(rep(0, length(x)))          
 })
-
+}
 #' @name %_%
 #' @title setdiff shortcut (strand agnostic)
 #' @description
