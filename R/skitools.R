@@ -182,6 +182,34 @@ fready = function(..., pattern = "\\W+", sub = "_")
       return(tab)
   }
 
+
+
+################################
+#' @name dedup
+#' @title dedup
+#'
+#' @description
+#' relabels duplicates in a character vector with .1, .2, .3
+#' (where "." can be replaced by any user specified suffix)
+#'
+#' @param x input vector to dedup
+#' @param suffix suffix separator to use before adding integer for dups in x
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @author Marcin Imielinski
+#' @export
+################################
+dedup = function(x, suffix = '.')
+{
+  dup = duplicated(x);
+  udup = setdiff(unique(x[dup]), NA)
+  udup.ix = lapply(udup, function(y) which(x==y))
+  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+  out = x;
+  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+  return(out)  
+}
+
+
 #' @name qq_pval
 #' @title qq plot given input p values
 #' @param obs vector of pvalues to plot, names of obs can be intepreted as labels
@@ -3421,7 +3449,7 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 #' @author Marcin Imielinski
 #' @import ggplot2
 #' @export
-vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE, cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1)
+vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE, cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1)
     {
         # require(ggplot2)
         if (!is.factor(group))
@@ -4109,6 +4137,25 @@ more = function(x, grep = NULL)
 {
     if (is.null(grep))
         x = paste('more', paste(x, collapse = ' '))
+    else
+        x = paste('grep -H', grep, paste(x, collapse = ' '), ' | more')
+    system(x)
+}
+
+#' @name tailf
+#' @title tailf
+#'
+#' @description
+#' "tail -f" +/- grep vector of files
+#'
+#' @param x vector of iles
+#' @param grep string to grep in files (=NULL)
+#' @author Marcin Imielinski
+#' @export
+tailf = function(x, grep = NULL)
+{
+    if (is.null(grep))
+        x = paste('tail -f', paste(x, collapse = ' '))
     else
         x = paste('grep -H', grep, paste(x, collapse = ' '), ' | more')
     system(x)
@@ -5010,6 +5057,8 @@ discordant.pairs = function(pairs, inter.only = F, ## will only include interchr
 
   out = rep(NA, length(pairs))
   out[as.numeric(names(chr.l))] = tmp.out
+
+  return(out)
 }
 
 
@@ -5951,6 +6000,10 @@ igv = function(
     mac = !grepl('(^cga)|(node\\d+)', host), ##
     sort.locus = NULL,
     gsub.paths = list(
+        c('~/', '~/home/'),
+        c('/data/analysis/', '/analysis/'),
+        c('/data/research/mski_lab/data', '/data'),
+        c('/data/analysis/', '/analysis/'),
         c('/seq/picard_aggregation/', '/Volumes/seq_picard_aggregation/'),
         c('/xchip/singtex/', '/Volumes/xchip_singtex/'),
         c('/cga/meyerson/', '/Volumes/cga_meyerson/'),
@@ -5959,8 +6012,8 @@ igv = function(
         c('/xchip/cga/', '/Volumes/xchip_cga/'),
         c('/xchip/beroukhimlab/', '/Volumes/xchip_beroukhimlab/'),
         c('/cgaext/tcga/', '/Volumes/cgaext_tcga/'),
-        c('~/', '~/home/'),
-        c(Sys.getenv('HOME'), '~/home')),
+        c(Sys.getenv('HOME'), '~/home')
+        ),
     port = Sys.getenv('IGV_PORT')
 )
 {
@@ -6241,7 +6294,7 @@ igv.loci = function(mut, ## GRanges of loci
   }
 
 
-#' @name dcast.data.table2
+#' @name dcast2
 #' @title dcast.data.table but allows vector arguments for value.var,
 #' @description
 #' if value.var is a vector then will combine the right hand side column names with each element of value.var
@@ -6249,14 +6302,19 @@ igv.loci = function(mut, ## GRanges of loci
 #'
 #' @export
 #' @author Marcin Imielinski
-dcast.data.table2 = function(data, formula, ..., value.var = NULL, sep = '_')
+dcast2 = function(data, formula, ..., value.var = NULL, fun.aggregate = length, sep = '_')
     {
         terms = sapply(unlist(as.list(attr(terms(formula), "variables"))[-1]), as.character)
         if (is.null(value.var))
             value.var = setdiff(colnames(data), terms)
         dt = lapply(value.var, function(x)
             {
-                d = data.table::dcast.data.table(data, formula,  ..., value.var = x)
+                if (is.data.table(data))
+                    d = dcast.data.table(data, formula,..., fun.aggregate = fun.aggregate, value.var = x)
+                else
+                    {
+                        d = as.data.table(dcast(data, formula,  ..., fun.aggregate = fun.aggregate, value.var = x))                       
+                    }
                 new.cols = setdiff(colnames(d), key(d))
                 setnames(d, new.cols, paste(new.cols, x, sep = sep))
                 return(d)
@@ -7317,59 +7375,6 @@ setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
 })
 
 
-#' @name %+%
-#' @title Nudge GRanges right
-#' @description
-#' Operator to shift GRanges right "sh" bases
-#'
-#' @return shifted granges
-#' @rdname gr.nudge
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%+%', function(gr, ...) standardGeneric('%+%'))
-setMethod("%+%", signature(gr = "GRanges"), function(gr, sh) {
-    end(gr) = end(gr)+sh
-    start(gr) = start(gr)+sh
-    return(gr)
-})
-
-#' @name %-%
-#' @title Shift GRanges left
-#' @description
-#' Operator to shift GRanges left "sh" bases
-#'
-#' df %!% c('string.*to.*match', 'another.string.to.match')
-#'
-#' @return shifted granges
-#' @rdname gr.nudge
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%-%', function(gr, ...) standardGeneric('%-%'))
-setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
-    start(gr) = start(gr)-sh
-    end(gr) = end(gr)-sh
-    return(gr)
-})
-
-#' @name %&%
-#' @title subset x on y ranges wise ignoring strand
-#' @description
-#' shortcut for x[gr.in(x,y)]
-#'
-#' gr1 %&% gr2 returns the subsets of gr1 that overlaps gr2
-#'
-#' @return subset of gr1 that overlaps gr2
-#' @rdname gr.in
-#' @exportMethod %&%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
-setMethod("%&%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(x[gr.in(x, y)])
-})
-
 subset2 <- function(x, condition) {
     condition_call <- substitute(condition)
     r <- eval(condition_call, x)
@@ -8059,3 +8064,78 @@ standardize_segs = function(seg, chr = FALSE)
 
   return(seg)
 }
+
+
+#' @name qstat
+#' @title qstat
+#' @description
+#' 
+#' Tabulates cluster usage (qstat()) or if full = TRUE flag given will dump out
+#' all running jobs in a data.table
+#'
+#' 
+#' @export
+qstat = function(full = FALSE, numslots = TRUE)
+    {
+        nms = c('jobid','prior','ntckt','name','user','project','department','state','cpu','mem','io','tckts','ovrts','otckt','ftckt','stckt','share','queue','slots')
+        p = pipe('qstat -u "*" -ext')
+        tab = strsplit(readLines(p), '\\s+')
+        close(p)
+        iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>14
+        if (sum(iix)==0)
+            return(data.table())
+        tab = lapply(tab, function(x) x[1:length(nms)])
+        tmp = as.data.table(matrix(unlist(tab[iix]), ncol = length(nms), byrow = TRUE))       
+        setnames(tmp, nms)
+
+        if (!full)
+            {
+                states = unique(c('r', 'qw', sort(unique(tmp$state))))
+                tmp$state = factor(tmp$state, states)
+                if (numslots)
+                    melted = tmp[, sum(pmax(1, as.numeric(slots), na.rm = TRUE)), by = list(user, state)]
+                else
+                    melted = tmp[, length(name), by = list(user, state)]
+                whoami = readLines(pipe('whoami'))
+                out = dcast2(melted, user ~ state, value.var = "V1", fun.aggregate = sum)
+                setnames(out, gsub('_V1', '', names(out)))
+                jcount = rowSums(as.matrix(out[, -1, with = FALSE]))
+                out$user = factor(out$user, unique(c(whoami, out$user[order(-jcount)])))
+                setkey(out, user)
+                return(out)
+            }
+        else
+            return(tmp)
+    }
+
+
+
+#' @name qhost
+#' @title qstat
+#' @description
+#' 
+#' Tabulates per host cluster load
+#'
+#' 
+#' @export
+qhost = function(full = FALSE, numslots = TRUE)
+    {
+        nms = c('HOSTNAME','ARCH', 'NCPU' ,'NSOC', 'NCOR' ,'NTHR',  'LOAD' , 'MEMTOT'  ,'MEMUSE',  'SWAPTO',  'SWAPUS')
+        p = pipe('qhost')
+        tab = strsplit(readLines(p), '\\s+')
+        close(p)
+        iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>6
+        if (sum(iix)==0)
+            return(data.table())
+        tab = lapply(tab, function(x) x[1:length(nms)])
+        tmp = as.data.table(matrix(unlist(tab[iix][-c(1:2)]), ncol = length(nms), byrow = TRUE))
+        numnms = c('NCPU' ,'NSOC', 'NCOR' ,'LOAD', 'NTHR', 'SWAPTO',  'SWAPUS')
+        setnames(tmp, nms)
+        for (x in numnms)
+            tmp[[x]] = suppressWarnings(as.numeric(tmp[[x]]))
+        tmp$MEMUSE = suppressWarnings(pmax(as.numeric(gsub('G', '', tmp$MEMUSE)), 0, na.rm = TRUE))
+        tmp$MEMTOT = suppressWarnings(pmax(as.numeric(gsub('G', '', tmp$MEMTOT)), 0, na.rm = TRUE))
+        return(tmp)
+    }
+
+
