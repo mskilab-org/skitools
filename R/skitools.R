@@ -23,7 +23,6 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
-
 #
 # General utility functions
 #
@@ -55,6 +54,7 @@
         out <- head(out, n)
     out
 }
+
 
 ## shorthand listing largest objects in the workspace
 lsos <- function(..., n=10) {
@@ -350,6 +350,65 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
 }
 
+
+#' Converts \code{GRanges} to \code{data.table}
+#'
+#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
+#' @param x \code{GRanges} to convert
+#' @name gr2dt
+#' @export
+#'
+gr2dt  <- function(x)
+{
+    ## new approach just directly instantiating data table
+    cmd = 'data.frame(';
+    if (is(x, 'GRanges'))
+    {
+        ## as.data.table complains if duplicated row names
+        if (any(duplicated(names(x))))
+            names(x) <- NULL
+
+        was.gr = TRUE
+        f = c('seqnames', 'start', 'end', 'strand', 'width')
+        f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
+        cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
+        value.f = names(values(x))
+    }
+    else
+    {
+        was.gr = FALSE
+        value.f = names(x)
+    }
+
+    if (length(value.f)>0)
+    {
+        if (was.gr)
+            cmd = paste(cmd, ',', sep = '')
+        class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
+
+        .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
+        {
+            tmp1 = as.character(unlist(x))
+            tmp2 = rep(1:length(x), S4Vectors::elementLengths(x))
+            return(split(tmp1, tmp2))
+        }
+
+        ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
+        as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
+                       ifelse(grepl('Character', class.f), 'as.character',
+                       ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
+                       ifelse(grepl('StringSet$', class.f), 'as.character',
+                       ifelse(grepl('factor$', class.f), 'as.character',
+                       ifelse(grepl('List', class.f), 'as.list',
+                       ifelse(grepl('factor', class.f), 'as.character',
+                       ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
+        cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
+    }
+
+    cmd = paste(cmd, ')', sep = '')
+
+    return(data.table::as.data.table(eval(parse(text =cmd))))
+}
 
 #' @name wfplot
 #' @title Quick waterfall plot
@@ -982,63 +1041,6 @@ gr2gatk = function(gr, file, add.chr = F)
   return(0)
 }
 
-#' grdt
-#'
-#' Converts gr to data frame
-#'
-#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
-#' @param x \code{GRanges} to convert
-#' @name grl.unlist
-#' @export
-grdt = function(x)
-    {
-        ## new approach just directly instantiating data table
-        cmd = 'data.frame(';
-        if (is(x, 'GRanges'))
-            {
-                was.gr = TRUE
-                f = c('seqnames', 'start', 'end', 'strand', 'width')
-                f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
-                cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
-                value.f = names(values(x))
-            }
-        else
-            {
-                was.gr = FALSE
-                value.f = names(x)
-            }
-
-        if (length(value.f)>0)
-            {
-                if (was.gr)
-                    cmd = paste(cmd, ',', sep = '')
-                class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
-
-                .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
-                    {
-                        tmp1 = as.character(unlist(x))
-                        tmp2 = rep(1:length(x), elementLengths(x))
-                        return(split(tmp1, tmp2))
-                    }
-
-                ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
-                as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
-                    ifelse(grepl('Character', class.f), 'as.character',
-                           ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
-                                  ifelse(grepl('StringSet$', class.f), 'as.character',
-                                         ifelse(grepl('factor$', class.f), 'as.character',
-                                                ifelse(grepl('List', class.f), 'as.list',
-                                                       ifelse(grepl('factor', class.f), 'as.character',
-                                                              ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
-                cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
-            }
-
-        cmd = paste(cmd, ')', sep = '')
-
-                                        #      browser()
-        return(as.data.table(eval(parse(text =cmd))))
-    }
-
 #' gstring
 #'
 #' quick function to parse gr from character vector IGV / UCSC style strings of format gr1;gr2;gr3 where each gr is of format chr:start-end[+/-]
@@ -1115,7 +1117,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                         return (GRangesList())
 
                       ## fix mateids if not included
-                      if (!"MATEID"%in%colnames(mcols(vgr))) {
+                      if  (!"MATEID"%in% colnames(mcols(vgr))) {
                         nm <- vgr$MATEID <- names(vgr)
                         ix <- grepl("1$",nm)
                         vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
@@ -1149,38 +1151,58 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       alt <- sapply(vgr$ALT, function(x) x[1])
                       vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                       vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+                      shft = as.numeric(grepl('^[\\[\\]]', alt, perl = TRUE))
+                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr) + shft, sep = ''))
+                      
                       vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                       vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
+                      if (any(ix<- !(vgr$mateid %in% names(vgr))))
+                          {
+                              warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
+                              vgr$mateid[ix] = NA
+                          }
+                          
                       if (all(is.na(vgr$mateid)))
-                          if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                              }
-                          else if (!is.null(vgr$SCTG))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                                  require(igraph)
-                                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                          {
+                              if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+                                  {
+                                      warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                                      vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                                  }
 
-                                  if (any(duplicated(vgr$mateid)))
+                              if (any(ix<- !(vgr$mateid %in% names(vgr))))
+                                  {
+                                      warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
+                                      vgr$mateid[ix] = NA
+                                  }
+
+                              if (any(is.na(vgr$mateid)))                              
+                                  if (!is.null(vgr$SCTG))
                                       {
-                                          warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                                          bix = bix[!duplicated(vgr$mateid)]
-                                          vgr = vgr[!duplicated(vgr$mateid)]
+                                          warning('MATEID tag missing or malformed, guessing BND partner from coordinates and SCTG')
+                                          require(igraph)
+                                          vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                                          names(vgr) = paste(vgr$SCTG, vgr$coord, sep = '_')                                         
+                                          
+                                          if (any(duplicated(vgr$mateid)))
+                                          {
+                                              warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                                              bix = bix[!duplicated(vgr$mateid)]
+                                              vgr = vgr[!duplicated(vgr$mateid)]
+                                          }
                                       }
-                              }
-                          else
-                              stop('MATEID tag missing')
+                             
+                              if (is.null(vgr$mateid))
+                                  stop('MATEID tag missing')
+                          }
 
                       vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                       pix = which(!is.na(vgr$mix))
 
                       vgr.pair = vgr[pix]
+
 
                       if (length(vgr.pair)==0)
                           stop('No mates found despite nonzero number of BND rows in VCF')
@@ -1346,7 +1368,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
              
              if (is.character(rafile$str2) | is.factor(rafile$str2))
                  rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
-
              
              if (is.numeric(rafile$str1))
                  rafile$str1 = ifelse(rafile$str1>0, '+', '-')
@@ -1826,6 +1847,33 @@ set.comp = function(s1, s2)
     out[is.na(out)] = ''
     return(out)
   }
+
+
+
+################################
+#' @name dedup
+#' @title dedup
+#'
+#' @description
+#' relabels duplicates in a character vector with .1, .2, .3
+#' (where "." can be replaced by any user specified suffix)
+#'
+#' @param x input vector to dedup
+#' @param suffix suffix separator to use before adding integer for dups in x
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @author Marcin Imielinski
+#' @export
+################################
+dedup = function(x, suffix = '.')
+{
+  dup = duplicated(x);
+  udup = setdiff(unique(x[dup]), NA)
+  udup.ix = lapply(udup, function(y) which(x==y))
+  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+  out = x;
+  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+  return(out)  
+}
 
 
 
@@ -6639,6 +6687,9 @@ gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'ch
     return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
 }
 
+if (FALSE)
+{
+
 #' More robust and faster implementation of GenomicRangs::setdiff
 #'
 #' Robust to common edge cases of setdiff(gr1, gr2)  where gr2 ranges are contained inside gr1's (yieldings
@@ -6657,7 +6708,7 @@ gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
 {
     if (!is.null(by)) ## in this case need to be careful about setdiffing only within the "by" level
     {
-        tmp = grdt(subject)
+        tmp = gr2dt(subject)
         tmp$strand = factor(tmp$strand, c('+', '-', '*'))
         sl = seqlengths(subject)
         gp = seg2gr(tmp[, as.data.frame(gaps(IRanges(start, end), 1, sl[seqnames][1])), by = c('seqnames', 'strand', by)], seqinfo = seqinfo(subject))
@@ -6673,7 +6724,7 @@ gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
     out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
     return(out)
 }
-
+}
 #' Convert data.table to GRanges
 #'
 #' Takes as input a data.table which must have the fields: start, end, strand, seqnames.
@@ -7154,6 +7205,9 @@ gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
     return(isdisc)
 }
 
+if (FALSE)
+{
+
 #' Minimal overlaps for GRanges/GRangesList
 #'
 #' Takes any number of GRanges or GRangesList and reduces them to the minimal
@@ -7178,16 +7232,16 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
     if (span)
     {
         if (ignore.strand)
-            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
+            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
         else
-            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
+            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
     }
     else
     {
         if (ignore.strand)
-            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
+            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
         else
-            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
+            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
     }
 
     values(out) = input.meta[out$i, ]
@@ -7209,7 +7263,7 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
                                         #return(sort(reduce(output)))
 }
 
-
+}
 #' Return windows with minimal coverage
 #'
 #' Takes a set of GRanges and removes any ranges that
@@ -7401,7 +7455,9 @@ setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
     return(x[gr.in(x, y, ignore.strand = FALSE)])
 })
 
+if(FALSE)
 
+{
 #' @name %O%
 #' @title gr.val shortcut to get fractional overlap of gr1 by gr2, ignoring strand
 #' @description
@@ -7416,11 +7472,15 @@ setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%O%', function(x, ...) standardGeneric('%O%'))
 setMethod("%O%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
+    ov = gr2dt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov/width(x))
 })
+}
+
+if(FALSE)
+{
 
 #' @name %OO%
 #' @title gr.val shortcut to get fractional overlap of gr1 by gr2, respecting strand
@@ -7436,12 +7496,16 @@ setMethod("%O%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%OO%', function(x, ...) standardGeneric('%OO%'))
 setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
+    ov = gr2dt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov/width(x))
 })
+}
 
+
+if(FALSE)
+{
 #' @name %o%
 #' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, ignoring strand
 #' @description
@@ -7456,12 +7520,15 @@ setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%o%', function(x, ...) standardGeneric('%o%'))
 setMethod("%o%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
+    ov = gr2dt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov)
 })
+}
 
+if(FALSE)
+{
 
 #' @name %oo%
 #' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, respecting strand
@@ -7477,12 +7544,15 @@ setMethod("%o%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%oo%', function(x, ...) standardGeneric('%oo%'))
 setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
+    ov = gr2dt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
     x$width.ov = 0
     x$width.ov[ov$query.id] = ov$V1
     return(x$width.ov)
 })
+}
 
+if(FALSE)
+{
 #' @name %N%
 #' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, ignoring strand
 #' @description
@@ -7497,12 +7567,16 @@ setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%N%', function(x, ...) standardGeneric('%N%'))
 setMethod("%N%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , length(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
+              ov = gr.findoverlaps(x, y)
+              if (length(ov)>0)
+                  return(gr2dt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
+              else
+                  return(rep(0, length(x)))
 })
+}
 
+if(FALSE)
+{
 #' @name %NN%
 #' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, respecting strand
 #' @description
@@ -7517,12 +7591,13 @@ setMethod("%N%", signature(x = "GRanges"), function(x, y) {
 #' @author Marcin Imielinski
 setGeneric('%NN%', function(x, ...) standardGeneric('%NN%'))
 setMethod("%NN%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , length(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
+              ov = gr.findoverlaps(x, y, ignore.strand = TRUE)
+              if (length(ov)>0)
+                  return(gr2dt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
+              else
+                  return(rep(0, length(x)))          
 })
-
+}
 #' @name %_%
 #' @title setdiff shortcut (strand agnostic)
 #' @description
@@ -7601,155 +7676,6 @@ setMethod("%$$%", signature(x = "GRanges"), function(x, y) {
 })
 
 
-
-#' @name get_seq
-#' @title get_seq
-#' Retrieve genomic sequenes
-#'
-#' Wrapper around getSeq which does the "chr" and seqnames conversion if necessary
-#' also handles GRangesList queries
-#'
-#' @param hg A BSgenome or and ffTrack object with levels = c('A','T','G','C','N')
-#' @param gr GRanges object to define the ranges
-#' @param unlist logical whether to unlist the final output into a single DNAStringSet. Default TRUE
-#' @param mc.cores Optional multicore call. Default 1
-#' @param mc.chunks Optional define how to chunk the multicore call. Default mc.cores
-#' @param verbose Increase verbosity
-#' @return DNAStringSet of sequences
-#' @export
-get_seq = function(hg, gr, unlist = TRUE, mc.cores = 1, mc.chunks = mc.cores,
-    as.data.table = FALSE, verbose = FALSE)
-    {
-        if (inherits(gr, 'GRangesList'))
-            {
-                grl = gr;
-                old.names = names(grl);
-                gr = unlist(grl);
-                names(gr) = unlist(lapply(1:length(grl), function(x) rep(x, length(grl[[x]]))))
-                seq = get_seq(hg, gr, mc.cores = mc.cores, mc.chunks = mc.chunks, verbose = verbose)
-                cl = class(seq)
-                out = split(seq, names(gr))
-                out = out[order(as.numeric(names(out)))]
-                if (unlist)
-                    out = do.call('c', lapply(out, function(x) do.call(cl, list(unlist(x)))))
-                names(out) = names(grl)
-                return(out)
-            }
-        else
-            {
-                if (is(hg, 'ffTrack'))
-                    {
-                        if (!isClass('ffTrack'))
-                            stop('ffTrack library needs to be loaded')
-                        if (!all(sort(hg@.levels) == sort(c('A', 'T', 'G', 'C', 'N'))))
-                            cat("ffTrack not in correct format for get_seq, levels must contain only: 'A', 'T', 'G', 'C', 'N'\n")
-                    }
-                else ## only sub in 'chr' if hg is a BSenome
-                    if (!all(grepl('chr', as.character(seqnames(gr)))))
-                        gr = gr.chr(gr)
-
-                gr = gr.fix(gr, hg)
-                if (mc.cores>1)
-	            {
-                        ix = suppressWarnings(split(1:length(gr), 1:mc.chunks))
-
-                        if (is(hg, 'ffTrack'))
-                            {
-
-                                mcout <- mclapply(ix, function(x)
-                                    {
-                                        tmp = suppressWarnings(hg[gr[x]])
-                                        if (any(is.na(tmp)))
-                                            stop("ffTrack corrupt: has NA values, can't convert to DNAString")
-
-                                        if (!as.data.table) {
-                                            bst = DNAStringSet(sapply(split(tmp, as.vector(Rle(1:length(x), width(gr)[x]))), function(y) paste(y, collapse = '')))
-                                            names(bst) = names(gr)[x]
-                                        } else {
-                                            bst <- data.table(seq=sapply(split(tmp, as.vector(Rle(1:length(x), width(gr)[x]))), function(y) paste(y, collapse='')))
-                                            bst[, names:=names(gr)[x]]
-                                        }
-
-                                        if (any(strand(gr)[x]=='-'))
-                                            {
-                                                ix.tmp = as.logical(strand(gr)[x]=='-')
-                                                if (!as.data.table)
-                                                    bst[ix.tmp] = Biostrings::complement(bst[ix.tmp])
-                                                else
-                                                    bst$seq[ix.tmp] <- as.character(Biostrings::complement(DNAStringSet(bst$seq[ix.tmp])))
-                                            }
-
-                                        if (verbose)
-                                            cat('.')
-
-                                        return(bst)
-                                    }
-                                                , mc.cores = mc.cores)
-
-                                if (!as.data.table)
-                                    {
-                                        if (length(mcout)>1)
-                                            tmp = c(mcout[[1]], mcout[[2]])
-                                        out <- do.call('c', mcout)[order(unlist(ix))]
-                                    }
-                                else
-                                    out <- rbindlist(mcout)
-                            }
-                        else
-                            {
-                                out = do.call(c, mclapply(ix, function(x)
-                                    {
-                                        if (verbose)
-                                            cat('.')
-                                        return(getSeq(hg, gr[x]))
-                                    }
-                                   ,mc.cores = mc.cores))[order(unlist(ix))]
-                                if (verbose)
-                                    cat('\n')
-                            }
-                    }
-                else
-                    {
-                        if (is(hg, 'ffTrack'))
-                            {
-                                tmp = suppressWarnings(hg[gr])
-
-                                tmp[is.na(tmp)] = 'N'
-
-                                if (any(is.na(tmp)))
-                                    stop("ffTrack corrupt: has NA values, can't convert to DNAString")
-
-                                if (as.data.table) {
-                                    bst <- data.table(seq=sapply(split(tmp, as.vector(Rle(1:length(gr), width(gr)))), function(x) paste(x, collapse='')))
-                                    bst[, names:=names(gr)]
-                                } else {
-                                    bst = DNAStringSet(sapply(split(tmp, as.numeric(Rle(1:length(gr), width(gr)))), function(x) paste(x, collapse = '')))
-                                    names(bst) = names(gr)
-                                }
-
-                                if (any(as.character(strand(gr))=='-'))
-                                    {
-                                        ix = as.logical(strand(gr)=='-')
-                                        if (!as.data.table) {
-                                            bstc <- as.character(bst)
-                                            bstc[ix] <- as.character(Biostrings::complement(bst[ix]))
-                                            bst <- DNAStringSet(bstc)  ## BIZARRE bug with line below
-                                        #bst[ix] = Biostrings::complement(bst[ix])
-                                        } else {
-                                            bst$seq[ix] <- as.character(Biostrings::complement(DNAStringSet(bst$seq[ix])))
-                                        }
-                                    }
-
-                                return(bst)
-                            }
-                        else
-                            out = getSeq(hg, gr)
-                    }
-                return(out)
-            }
-    }
-
-
 #' @name %__%
 #' @title setdiff shortcut (respects strand)
 #' @description
@@ -7788,7 +7714,6 @@ setMethod("%||%", signature(x = "GRanges"), function(x, y) {
         y = parse.gr(y)
     return(reduce(grbind(x[, c()], y[, c()])))
 })
-
 
 
 ##################################
@@ -8137,5 +8062,4 @@ qhost = function(full = FALSE, numslots = TRUE)
         tmp$MEMTOT = suppressWarnings(pmax(as.numeric(gsub('G', '', tmp$MEMTOT)), 0, na.rm = TRUE))
         return(tmp)
     }
-
 
