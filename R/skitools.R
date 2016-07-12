@@ -1,4 +1,4 @@
-#############################################################################r
+############################################################################r
 ## Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
@@ -8,7 +8,7 @@
 ##
 ## New York Genome Center
 ## mimielinski@nygenome.org
-##ski
+##
 ## This program is free software: you can redistribute it and/or modify it
 ## under the terms of the GNU Lesser General Public License as published by
 ## the Free Software Foundation, either version 3 of the License, or
@@ -6049,6 +6049,7 @@ igv = function(
     sort.locus = NULL,
     gsub.paths = list(
         c('~/', '~/home/'),
+        c('/gpfs/internal/', '/internal/'),
         c('/data/analysis/', '/analysis/'),
         c('/data/research/mski_lab/data', '/data'),
         c('/data/analysis/', '/analysis/'),
@@ -6350,7 +6351,8 @@ igv.loci = function(mut, ## GRanges of loci
 #'
 #' @export
 #' @author Marcin Imielinski
-dcast2 = function(data, formula, ..., value.var = NULL, fun.aggregate = length, sep = '_')
+dcast2 = function(data, formula, ..., value.var = NULL,
+    fun.aggregate = function(x) if (length(x)<=1) x[1] else paste(x, collapse = ','), sep = '_')
     {
         terms = sapply(unlist(as.list(attr(terms(formula), "variables"))[-1]), as.character)
         if (is.null(value.var))
@@ -7205,8 +7207,6 @@ gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
     return(isdisc)
 }
 
-if (FALSE)
-{
 
 #' Minimal overlaps for GRanges/GRangesList
 #'
@@ -7263,7 +7263,7 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
                                         #return(sort(reduce(output)))
 }
 
-}
+
 #' Return windows with minimal coverage
 #'
 #' Takes a set of GRanges and removes any ranges that
@@ -7435,285 +7435,6 @@ subset2 <- function(x, condition) {
     browser()
     x[r, ]
 }
-
-#' @name %WW%
-#' @title subset x on y ranges wise obeying strand
-#' @description
-#' shortcut for x[gr.in(x,y, ignore.strand = FALSE)]
-#'
-#' gr1 %WW% gr2 returns the subsets of gr that overlaps gr2 not ignoring strand
-#'
-#' @return subset of gr1 that overlaps gr2
-#' @rdname gr.in
-#' @exportMethod %WW%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
-setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(x[gr.in(x, y, ignore.strand = FALSE)])
-})
-
-if(FALSE)
-
-{
-#' @name %O%
-#' @title gr.val shortcut to get fractional overlap of gr1 by gr2, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %O% gr2
-#'
-#' @return fractional overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %O%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%O%', function(x, ...) standardGeneric('%O%'))
-setMethod("%O%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov/width(x))
-})
-}
-
-if(FALSE)
-{
-
-#' @name %OO%
-#' @title gr.val shortcut to get fractional overlap of gr1 by gr2, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %OO% gr2
-#'
-#' @return fractional overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %OO%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%OO%', function(x, ...) standardGeneric('%OO%'))
-setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov/width(x))
-})
-}
-
-
-if(FALSE)
-{
-#' @name %o%
-#' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %o% gr2
-#'
-#' @return bases overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %o%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%o%', function(x, ...) standardGeneric('%o%'))
-setMethod("%o%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-}
-
-if(FALSE)
-{
-
-#' @name %oo%
-#' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %oo% gr2
-#'
-#' @return bases overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %oo%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%oo%', function(x, ...) standardGeneric('%oo%'))
-setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
-    ov = gr2dt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-}
-
-if(FALSE)
-{
-#' @name %N%
-#' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %N% gr2
-#'
-#' @return bases overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %N%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%N%', function(x, ...) standardGeneric('%N%'))
-setMethod("%N%", signature(x = "GRanges"), function(x, y) {
-              ov = gr.findoverlaps(x, y)
-              if (length(ov)>0)
-                  return(gr2dt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
-              else
-                  return(rep(0, length(x)))
-})
-}
-
-if(FALSE)
-{
-#' @name %NN%
-#' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %NN% gr2
-#'
-#' @return bases overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %N%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%NN%', function(x, ...) standardGeneric('%NN%'))
-setMethod("%NN%", signature(x = "GRanges"), function(x, y) {
-              ov = gr.findoverlaps(x, y, ignore.strand = TRUE)
-              if (length(ov)>0)
-                  return(gr2dt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
-              else
-                  return(rep(0, length(x)))          
-})
-}
-#' @name %_%
-#' @title setdiff shortcut (strand agnostic)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %_% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.setdiff
-#' @exportMethod %_%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%_%', function(x, ...) standardGeneric('%_%'))
-setMethod("%_%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    setdiff(gr.stripstrand(x[, c()]), gr.stripstrand(y[, c()]))
-})
-
-#' @name %**%
-#' @title gr.findoverlaps (respects strand)
-#' @description
-#' Shortcut for gr.findoverlaps
-#'
-#' gr1 %**% gr2
-#'
-#' @return new granges containing every pairwise intersection of ranges in gr1 and gr2 with a join of the corresponding metadata
-#' @rdname grfo
-#' @exportMethod %**%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%**%', function(x, ...) standardGeneric('%**%'))
-setMethod("%**%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    gr = gr.findoverlaps(x, y, qcol = names(values(x)), scol = names(values(y)), ignore.strand = FALSE)
-    return(gr)
-})
-
-#' @name %^^%
-#' @title gr.in shortcut (respects strand)
-#' @description
-#' Shortcut for gr.in
-#'
-#' gr1 %^^% gr2
-#'
-#' @return logical vector of length gr1 which is TRUE at entry i only if gr1[i] intersects at least one interval in gr2
-#' @rdname gr.in
-#' @exportMethod %^^%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%^^%', function(x, ...) standardGeneric('%^^%'))
-setMethod("%^^%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(gr.in(x, y, ignore.strand = FALSE))
-})
-
-#' @name %$$%
-#' @title gr.val shortcut to get mean values of subject "x" meta data fields in query "y" (respects strand)
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %$$% gr2
-#'
-#' @return gr1 with extra meta data fields populated from gr2
-#' @rdname gr.val
-#' @exportMethod %$$%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%$$%', function(x, ...) standardGeneric('%$$%'))
-setMethod("%$$%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(gr.val(x, y, val = names(values(y)), ignore.strand = FALSE))
-})
-
-
-#' @name %__%
-#' @title setdiff shortcut (respects strand)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %__% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.setdiff
-#' @exportMethod %__%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%__%', function(x, ...) standardGeneric('%__%'))
-setMethod("%__%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    setdiff(x[, c()], y[, c()])
-})
-
-
-#' @name gr.union.stranded
-#' @title setdiff shortcut (respects strand)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %||% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.union
-#' @exportMethod %||%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%||%', function(x, ...) standardGeneric('%||%'))
-setMethod("%||%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(reduce(grbind(x[, c()], y[, c()])))
-})
 
 
 ##################################
@@ -8021,7 +7742,9 @@ qstat = function(full = FALSE, numslots = TRUE)
                     melted = tmp[, sum(pmax(1, as.numeric(slots), na.rm = TRUE)), by = list(user, state)]
                 else
                     melted = tmp[, length(name), by = list(user, state)]
-                whoami = readLines(pipe('whoami'))
+                p = pipe('whoami')
+                whoami = readLines(p)
+                close(p)
                 out = dcast2(melted, user ~ state, value.var = "V1", fun.aggregate = sum)
                 setnames(out, gsub('_V1', '', names(out)))
                 jcount = rowSums(as.matrix(out[, -1, with = FALSE]))
@@ -8063,3 +7786,18 @@ qhost = function(full = FALSE, numslots = TRUE)
         return(tmp)
     }
 
+
+
+#' @name relib
+#' @title relib
+#' @description
+#' 
+#' Reload library
+#'
+#' 
+#' @export
+relib = function(lib = 'Flow')
+    {
+        detach(sprintf('package:%s', lib), force = TRUE)
+        library(lib)
+    }
