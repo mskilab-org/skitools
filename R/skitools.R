@@ -1,4 +1,4 @@
-#############################################################################r
+############################################################################r
 ## Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
@@ -8,7 +8,7 @@
 ##
 ## New York Genome Center
 ## mimielinski@nygenome.org
-##ski
+##
 ## This program is free software: you can redistribute it and/or modify it
 ## under the terms of the GNU Lesser General Public License as published by
 ## the Free Software Foundation, either version 3 of the License, or
@@ -54,6 +54,7 @@
         out <- head(out, n)
     out
 }
+
 
 ## shorthand listing largest objects in the workspace
 lsos <- function(..., n=10) {
@@ -180,6 +181,34 @@ fready = function(..., pattern = "\\W+", sub = "_")
       setnames(tab, dedup(gsub(pattern, sub, names(tab), perl = TRUE), suffix = '.'))
       return(tab)
   }
+
+
+
+################################
+#' @name dedup
+#' @title dedup
+#'
+#' @description
+#' relabels duplicates in a character vector with .1, .2, .3
+#' (where "." can be replaced by any user specified suffix)
+#'
+#' @param x input vector to dedup
+#' @param suffix suffix separator to use before adding integer for dups in x
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @author Marcin Imielinski
+#' @export
+################################
+dedup = function(x, suffix = '.')
+{
+  dup = duplicated(x);
+  udup = setdiff(unique(x[dup]), NA)
+  udup.ix = lapply(udup, function(y) which(x==y))
+  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+  out = x;
+  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+  return(out)  
+}
+
 
 #' @name qq_pval
 #' @title qq plot given input p values
@@ -321,6 +350,65 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
 }
 
+
+#' Converts \code{GRanges} to \code{data.table}
+#'
+#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
+#' @param x \code{GRanges} to convert
+#' @name gr2dt
+#' @export
+#'
+gr2dt  <- function(x)
+{
+    ## new approach just directly instantiating data table
+    cmd = 'data.frame(';
+    if (is(x, 'GRanges'))
+    {
+        ## as.data.table complains if duplicated row names
+        if (any(duplicated(names(x))))
+            names(x) <- NULL
+
+        was.gr = TRUE
+        f = c('seqnames', 'start', 'end', 'strand', 'width')
+        f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
+        cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
+        value.f = names(values(x))
+    }
+    else
+    {
+        was.gr = FALSE
+        value.f = names(x)
+    }
+
+    if (length(value.f)>0)
+    {
+        if (was.gr)
+            cmd = paste(cmd, ',', sep = '')
+        class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
+
+        .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
+        {
+            tmp1 = as.character(unlist(x))
+            tmp2 = rep(1:length(x), S4Vectors::elementLengths(x))
+            return(split(tmp1, tmp2))
+        }
+
+        ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
+        as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
+                       ifelse(grepl('Character', class.f), 'as.character',
+                       ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
+                       ifelse(grepl('StringSet$', class.f), 'as.character',
+                       ifelse(grepl('factor$', class.f), 'as.character',
+                       ifelse(grepl('List', class.f), 'as.list',
+                       ifelse(grepl('factor', class.f), 'as.character',
+                       ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
+        cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
+    }
+
+    cmd = paste(cmd, ')', sep = '')
+
+    return(data.table::as.data.table(eval(parse(text =cmd))))
+}
 
 #' @name wfplot
 #' @title Quick waterfall plot
@@ -952,63 +1040,6 @@ gr2gatk = function(gr, file, add.chr = F)
   writeLines(paste(sn, ':', start(gr), '-', end(gr), sep = ''), con = file)
   return(0)
 }
-
-#' grdt
-#'
-#' Converts gr to data frame
-#'
-#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
-#' @param x \code{GRanges} to convert
-#' @name grl.unlist
-#' @export
-grdt = function(x)
-    {
-        ## new approach just directly instantiating data table
-        cmd = 'data.frame(';
-        if (is(x, 'GRanges'))
-            {
-                was.gr = TRUE
-                f = c('seqnames', 'start', 'end', 'strand', 'width')
-                f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
-                cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
-                value.f = names(values(x))
-            }
-        else
-            {
-                was.gr = FALSE
-                value.f = names(x)
-            }
-
-        if (length(value.f)>0)
-            {
-                if (was.gr)
-                    cmd = paste(cmd, ',', sep = '')
-                class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
-
-                .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
-                    {
-                        tmp1 = as.character(unlist(x))
-                        tmp2 = rep(1:length(x), elementLengths(x))
-                        return(split(tmp1, tmp2))
-                    }
-
-                ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
-                as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
-                    ifelse(grepl('Character', class.f), 'as.character',
-                           ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
-                                  ifelse(grepl('StringSet$', class.f), 'as.character',
-                                         ifelse(grepl('factor$', class.f), 'as.character',
-                                                ifelse(grepl('List', class.f), 'as.list',
-                                                       ifelse(grepl('factor', class.f), 'as.character',
-                                                              ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
-                cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
-            }
-
-        cmd = paste(cmd, ')', sep = '')
-
-                                        #      browser()
-        return(as.data.table(eval(parse(text =cmd))))
-    }
 
 #' gstring
 #'
@@ -3466,7 +3497,7 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 #' @author Marcin Imielinski
 #' @import ggplot2
 #' @export
-vplot = function(y, group, facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE, cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1)
+vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE, cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1)
     {
         # require(ggplot2)
         if (!is.factor(group))
@@ -4154,6 +4185,25 @@ more = function(x, grep = NULL)
 {
     if (is.null(grep))
         x = paste('more', paste(x, collapse = ' '))
+    else
+        x = paste('grep -H', grep, paste(x, collapse = ' '), ' | more')
+    system(x)
+}
+
+#' @name tailf
+#' @title tailf
+#'
+#' @description
+#' "tail -f" +/- grep vector of files
+#'
+#' @param x vector of iles
+#' @param grep string to grep in files (=NULL)
+#' @author Marcin Imielinski
+#' @export
+tailf = function(x, grep = NULL)
+{
+    if (is.null(grep))
+        x = paste('tail -f', paste(x, collapse = ' '))
     else
         x = paste('grep -H', grep, paste(x, collapse = ' '), ' | more')
     system(x)
@@ -5055,6 +5105,8 @@ discordant.pairs = function(pairs, inter.only = F, ## will only include interchr
 
   out = rep(NA, length(pairs))
   out[as.numeric(names(chr.l))] = tmp.out
+
+  return(out)
 }
 
 
@@ -5996,6 +6048,11 @@ igv = function(
     mac = !grepl('(^cga)|(node\\d+)', host), ##
     sort.locus = NULL,
     gsub.paths = list(
+        c('~/', '~/home/'),
+        c('/gpfs/internal/', '/internal/'),
+        c('/data/analysis/', '/analysis/'),
+        c('/data/research/mski_lab/data', '/data'),
+        c('/data/analysis/', '/analysis/'),
         c('/seq/picard_aggregation/', '/Volumes/seq_picard_aggregation/'),
         c('/xchip/singtex/', '/Volumes/xchip_singtex/'),
         c('/cga/meyerson/', '/Volumes/cga_meyerson/'),
@@ -6004,8 +6061,8 @@ igv = function(
         c('/xchip/cga/', '/Volumes/xchip_cga/'),
         c('/xchip/beroukhimlab/', '/Volumes/xchip_beroukhimlab/'),
         c('/cgaext/tcga/', '/Volumes/cgaext_tcga/'),
-        c('~/', '~/home/'),
-        c(Sys.getenv('HOME'), '~/home')),
+        c(Sys.getenv('HOME'), '~/home')
+        ),
     port = Sys.getenv('IGV_PORT')
 )
 {
@@ -6286,7 +6343,7 @@ igv.loci = function(mut, ## GRanges of loci
   }
 
 
-#' @name dcast.data.table2
+#' @name dcast2
 #' @title dcast.data.table but allows vector arguments for value.var,
 #' @description
 #' if value.var is a vector then will combine the right hand side column names with each element of value.var
@@ -6294,14 +6351,20 @@ igv.loci = function(mut, ## GRanges of loci
 #'
 #' @export
 #' @author Marcin Imielinski
-dcast.data.table2 = function(data, formula, ..., value.var = NULL, sep = '_')
+dcast2 = function(data, formula, ..., value.var = NULL,
+    fun.aggregate = function(x) if (length(x)<=1) x[1] else paste(x, collapse = ','), sep = '_')
     {
         terms = sapply(unlist(as.list(attr(terms(formula), "variables"))[-1]), as.character)
         if (is.null(value.var))
             value.var = setdiff(colnames(data), terms)
         dt = lapply(value.var, function(x)
             {
-                d = data.table::dcast.data.table(data, formula,  ..., value.var = x)
+                if (is.data.table(data))
+                    d = dcast.data.table(data, formula,..., fun.aggregate = fun.aggregate, value.var = x)
+                else
+                    {
+                        d = as.data.table(dcast(data, formula,  ..., fun.aggregate = fun.aggregate, value.var = x))                       
+                    }
                 new.cols = setdiff(colnames(d), key(d))
                 setnames(d, new.cols, paste(new.cols, x, sep = sep))
                 return(d)
@@ -6626,6 +6689,9 @@ gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'ch
     return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
 }
 
+if (FALSE)
+{
+
 #' More robust and faster implementation of GenomicRangs::setdiff
 #'
 #' Robust to common edge cases of setdiff(gr1, gr2)  where gr2 ranges are contained inside gr1's (yieldings
@@ -6644,7 +6710,7 @@ gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
 {
     if (!is.null(by)) ## in this case need to be careful about setdiffing only within the "by" level
     {
-        tmp = grdt(subject)
+        tmp = gr2dt(subject)
         tmp$strand = factor(tmp$strand, c('+', '-', '*'))
         sl = seqlengths(subject)
         gp = seg2gr(tmp[, as.data.frame(gaps(IRanges(start, end), 1, sl[seqnames][1])), by = c('seqnames', 'strand', by)], seqinfo = seqinfo(subject))
@@ -6660,7 +6726,7 @@ gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
     out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
     return(out)
 }
-
+}
 #' Convert data.table to GRanges
 #'
 #' Takes as input a data.table which must have the fields: start, end, strand, seqnames.
@@ -7141,6 +7207,7 @@ gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
     return(isdisc)
 }
 
+
 #' Minimal overlaps for GRanges/GRangesList
 #'
 #' Takes any number of GRanges or GRangesList and reduces them to the minimal
@@ -7165,16 +7232,16 @@ gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
     if (span)
     {
         if (ignore.strand)
-            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
+            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
         else
-            out = seg2gr(grdt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
+            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
     }
     else
     {
         if (ignore.strand)
-            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
+            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
         else
-            out = seg2gr(grdt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
+            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
     }
 
     values(out) = input.meta[out$i, ]
@@ -7362,325 +7429,12 @@ setMethod("%|%", signature(gr = "GRanges"), function(gr, df) {
 })
 
 
-#' @name %+%
-#' @title Nudge GRanges right
-#' @description
-#' Operator to shift GRanges right "sh" bases
-#'
-#' @return shifted granges
-#' @rdname gr.nudge
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%+%', function(gr, ...) standardGeneric('%+%'))
-setMethod("%+%", signature(gr = "GRanges"), function(gr, sh) {
-    end(gr) = end(gr)+sh
-    start(gr) = start(gr)+sh
-    return(gr)
-})
-
-#' @name %-%
-#' @title Shift GRanges left
-#' @description
-#' Operator to shift GRanges left "sh" bases
-#'
-#' df %!% c('string.*to.*match', 'another.string.to.match')
-#'
-#' @return shifted granges
-#' @rdname gr.nudge
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%-%', function(gr, ...) standardGeneric('%-%'))
-setMethod("%-%", signature(gr = "GRanges"), function(gr, sh) {
-    start(gr) = start(gr)-sh
-    end(gr) = end(gr)-sh
-    return(gr)
-})
-
-#' @name %&%
-#' @title subset x on y ranges wise ignoring strand
-#' @description
-#' shortcut for x[gr.in(x,y)]
-#'
-#' gr1 %&% gr2 returns the subsets of gr1 that overlaps gr2
-#'
-#' @return subset of gr1 that overlaps gr2
-#' @rdname gr.in
-#' @exportMethod %&%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
-setMethod("%&%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(x[gr.in(x, y)])
-})
-
 subset2 <- function(x, condition) {
     condition_call <- substitute(condition)
     r <- eval(condition_call, x)
     browser()
     x[r, ]
 }
-
-#' @name %WW%
-#' @title subset x on y ranges wise obeying strand
-#' @description
-#' shortcut for x[gr.in(x,y, ignore.strand = FALSE)]
-#'
-#' gr1 %WW% gr2 returns the subsets of gr that overlaps gr2 not ignoring strand
-#'
-#' @return subset of gr1 that overlaps gr2
-#' @rdname gr.in
-#' @exportMethod %WW%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%WW%', function(x, ...) standardGeneric('%WW%'))
-setMethod("%WW%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(x[gr.in(x, y, ignore.strand = FALSE)])
-})
-
-
-#' @name %O%
-#' @title gr.val shortcut to get fractional overlap of gr1 by gr2, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %O% gr2
-#'
-#' @return fractional overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %O%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%O%', function(x, ...) standardGeneric('%O%'))
-setMethod("%O%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov/width(x))
-})
-
-#' @name %OO%
-#' @title gr.val shortcut to get fractional overlap of gr1 by gr2, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %OO% gr2
-#'
-#' @return fractional overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %OO%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%OO%', function(x, ...) standardGeneric('%OO%'))
-setMethod("%OO%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y), ignore.strand = FALSE))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov/width(x))
-})
-
-#' @name %o%
-#' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %o% gr2
-#'
-#' @return bases overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %o%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%o%', function(x, ...) standardGeneric('%o%'))
-setMethod("%o%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, reduce(y)))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-
-
-#' @name %oo%
-#' @title gr.val shortcut to total per interval width of overlap of gr1 with gr2, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %oo% gr2
-#'
-#' @return bases overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %oo%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%oo%', function(x, ...) standardGeneric('%oo%'))
-setMethod("%oo%", signature(x = "GRanges"), function(x, y) {
-    ov = grdt(gr.findoverlaps(x, y, ignore.strand = FALSE))[ , sum(width), keyby = query.id]
-    x$width.ov = 0
-    x$width.ov[ov$query.id] = ov$V1
-    return(x$width.ov)
-})
-
-#' @name %N%
-#' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, ignoring strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %N% gr2
-#'
-#' @return bases overlap of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %N%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%N%', function(x, ...) standardGeneric('%N%'))
-setMethod("%N%", signature(x = "GRanges"), function(x, y) {
-              ov = gr.findoverlaps(x, y)
-              if (length(ov)>0)
-                  return(grdt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
-              else
-                  return(rep(0, length(x)))
-})
-
-#' @name %NN%
-#' @title gr.val shortcut to get total numbers of intervals in gr2 overlapping with each interval in  gr1, respecting strand
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %NN% gr2
-#'
-#' @return bases overlap  of gr1 with gr2
-#' @rdname gr.val
-#' @exportMethod %N%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%NN%', function(x, ...) standardGeneric('%NN%'))
-setMethod("%NN%", signature(x = "GRanges"), function(x, y) {
-              ov = gr.findoverlaps(x, y, ignore.strand = TRUE)
-              if (length(ov)>0)
-                  return(grdt(ov)[ , length(width), keyby = query.id][list(1:length(x)), V1])
-              else
-                  return(rep(0, length(x)))          
-})
-
-#' @name %_%
-#' @title setdiff shortcut (strand agnostic)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %_% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.setdiff
-#' @exportMethod %_%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%_%', function(x, ...) standardGeneric('%_%'))
-setMethod("%_%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    setdiff(gr.stripstrand(x[, c()]), gr.stripstrand(y[, c()]))
-})
-
-#' @name %**%
-#' @title gr.findoverlaps (respects strand)
-#' @description
-#' Shortcut for gr.findoverlaps
-#'
-#' gr1 %**% gr2
-#'
-#' @return new granges containing every pairwise intersection of ranges in gr1 and gr2 with a join of the corresponding metadata
-#' @rdname grfo
-#' @exportMethod %**%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%**%', function(x, ...) standardGeneric('%**%'))
-setMethod("%**%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    gr = gr.findoverlaps(x, y, qcol = names(values(x)), scol = names(values(y)), ignore.strand = FALSE)
-    return(gr)
-})
-
-#' @name %^^%
-#' @title gr.in shortcut (respects strand)
-#' @description
-#' Shortcut for gr.in
-#'
-#' gr1 %^^% gr2
-#'
-#' @return logical vector of length gr1 which is TRUE at entry i only if gr1[i] intersects at least one interval in gr2
-#' @rdname gr.in
-#' @exportMethod %^^%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%^^%', function(x, ...) standardGeneric('%^^%'))
-setMethod("%^^%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(gr.in(x, y, ignore.strand = FALSE))
-})
-
-#' @name %$$%
-#' @title gr.val shortcut to get mean values of subject "x" meta data fields in query "y" (respects strand)
-#' @description
-#' Shortcut for gr.val (using val = names(values(y)))
-#'
-#' gr1 %$$% gr2
-#'
-#' @return gr1 with extra meta data fields populated from gr2
-#' @rdname gr.val
-#' @exportMethod %$$%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%$$%', function(x, ...) standardGeneric('%$$%'))
-setMethod("%$$%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(gr.val(x, y, val = names(values(y)), ignore.strand = FALSE))
-})
-
-
-#' @name %__%
-#' @title setdiff shortcut (respects strand)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %__% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.setdiff
-#' @exportMethod %__%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%__%', function(x, ...) standardGeneric('%__%'))
-setMethod("%__%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    setdiff(x[, c()], y[, c()])
-})
-
-
-#' @name gr.union.stranded
-#' @title setdiff shortcut (respects strand)
-#' @description
-#' Shortcut for setdiff
-#'
-#' gr1 %||% gr2
-#'
-#' @return granges representing setdiff of input interval
-#' @rdname gr.union
-#' @exportMethod %||%
-#' @export
-#' @author Marcin Imielinski
-setGeneric('%||%', function(x, ...) standardGeneric('%||%'))
-setMethod("%||%", signature(x = "GRanges"), function(x, y) {
-    if (is.character(y))
-        y = parse.gr(y)
-    return(reduce(grbind(x[, c()], y[, c()])))
-})
 
 
 ##################################
@@ -7957,30 +7711,93 @@ standardize_segs = function(seg, chr = FALSE)
   return(seg)
 }
 
-#' gr.match
-#'
-#' Faster implementation of GRanges match (uses gr.findoverlaps)
-#' returns indices of query in subject or NA if none found
-#' ... = additional args for findOverlaps (IRanges version)
-#' @name gr.match
-#' @export
-gr.match = function(query, subject, max.slice = Inf, verbose = FALSE, mc.cores = 1, ...)
-  {
-      if (length(query)>max.slice)
-          {
-              verbose = TRUE
-              ix.l = split(1:length(query), ceiling(as.numeric((1:length(query)/max.slice))))
-              return(do.call('c', mclapply(ix.l, function(ix) {
-                  if (verbose)
-                      cat(sprintf('Processing %s to %s\n', min(ix), max(ix)))                
-                  gr.match(query[ix, ], subject, verbose = TRUE, ...)
-              }, mc.cores = mc.cores)))
-          }
-      
-    tmp = gr.findoverlaps(query, subject, ...)
-    tmp = tmp[!duplicated(tmp$query.id)]
-    out = rep(NA, length(query))
-    out[tmp$query.id] = tmp$subject.id
-    return(out)    
-   }
 
+#' @name qstat
+#' @title qstat
+#' @description
+#' 
+#' Tabulates cluster usage (qstat()) or if full = TRUE flag given will dump out
+#' all running jobs in a data.table
+#'
+#' 
+#' @export
+qstat = function(full = FALSE, numslots = TRUE)
+    {
+        nms = c('jobid','prior','ntckt','name','user','project','department','state','cpu','mem','io','tckts','ovrts','otckt','ftckt','stckt','share','queue','slots')
+        p = pipe('qstat -u "*" -ext')
+        tab = strsplit(readLines(p), '\\s+')
+        close(p)
+        iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>14
+        if (sum(iix)==0)
+            return(data.table())
+        tab = lapply(tab, function(x) x[1:length(nms)])
+        tmp = as.data.table(matrix(unlist(tab[iix]), ncol = length(nms), byrow = TRUE))       
+        setnames(tmp, nms)
+
+        if (!full)
+            {
+                states = unique(c('r', 'qw', sort(unique(tmp$state))))
+                tmp$state = factor(tmp$state, states)
+                if (numslots)
+                    melted = tmp[, sum(pmax(1, as.numeric(slots), na.rm = TRUE)), by = list(user, state)]
+                else
+                    melted = tmp[, length(name), by = list(user, state)]
+                p = pipe('whoami')
+                whoami = readLines(p)
+                close(p)
+                out = dcast2(melted, user ~ state, value.var = "V1", fun.aggregate = sum)
+                setnames(out, gsub('_V1', '', names(out)))
+                jcount = rowSums(as.matrix(out[, -1, with = FALSE]))
+                out$user = factor(out$user, unique(c(whoami, out$user[order(-jcount)])))
+                setkey(out, user)
+                return(out)
+            }
+        else
+            return(tmp)
+    }
+
+
+
+#' @name qhost
+#' @title qstat
+#' @description
+#' 
+#' Tabulates per host cluster load
+#'
+#' 
+#' @export
+qhost = function(full = FALSE, numslots = TRUE)
+    {
+        nms = c('HOSTNAME','ARCH', 'NCPU' ,'NSOC', 'NCOR' ,'NTHR',  'LOAD' , 'MEMTOT'  ,'MEMUSE',  'SWAPTO',  'SWAPUS')
+        p = pipe('qhost')
+        tab = strsplit(readLines(p), '\\s+')
+        close(p)
+        iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>6
+        if (sum(iix)==0)
+            return(data.table())
+        tab = lapply(tab, function(x) x[1:length(nms)])
+        tmp = as.data.table(matrix(unlist(tab[iix][-c(1:2)]), ncol = length(nms), byrow = TRUE))
+        numnms = c('NCPU' ,'NSOC', 'NCOR' ,'LOAD', 'NTHR', 'SWAPTO',  'SWAPUS')
+        setnames(tmp, nms)
+        for (x in numnms)
+            tmp[[x]] = suppressWarnings(as.numeric(tmp[[x]]))
+        tmp$MEMUSE = suppressWarnings(pmax(as.numeric(gsub('G', '', tmp$MEMUSE)), 0, na.rm = TRUE))
+        tmp$MEMTOT = suppressWarnings(pmax(as.numeric(gsub('G', '', tmp$MEMTOT)), 0, na.rm = TRUE))
+        return(tmp)
+    }
+
+
+
+#' @name relib
+#' @title relib
+#' @description
+#' 
+#' Reload library
+#'
+#' 
+#' @export
+relib = function(lib = 'Flow')
+    {
+        detach(sprintf('package:%s', lib), force = TRUE)
+        library(lib)
+    }

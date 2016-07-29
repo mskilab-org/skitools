@@ -28,6 +28,7 @@ Depends:
     gUtils,
     ggplot2,
     data.table,
+    reshape2, 
     igraph
 Suggests:
     testthat,
