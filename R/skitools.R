@@ -3286,6 +3286,35 @@ ppdf = function(expr, filename = 'plot.pdf', height = 10, width = 10, cex = 1, t
   }
 
 
+
+#' @name wij
+#' @title wij
+#'
+#' @description
+#'
+#' Evaluates output of htmlwidget generating expression (e.g. via highcharter) and send to filename in predefined WIDGET.DIR
+#' by default plot.html
+#'
+#' @export
+wij = function(expr, filename = 'plot.html')
+    {
+        DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
+        if (nchar(DEFAULT.OUTDIR)==0)
+            DEFAULT.OUTDIR = normalizePath('~/public_html/')
+        
+        if (!grepl('^[~/]', filename))
+            filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
+        
+        if (!file.exists(file.dir(filename)))
+            system(paste('mkdir -p', file.dir(filename)))
+        
+        cat('rendering to', filename, '\n')
+        widg = eval(expr)
+        htmlwidgets::saveWidget(widg, paste(filename), selfcontained = FALSE)  
+    }
+
+
+
 ###################################
 #' @name plop
 #' @title plop
@@ -3758,12 +3787,29 @@ mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T
     
     chunks = chunk(1, length(maf), chunk.size)
 
-    if (is.null(maf$Tumor_Seq_Allele1))
-      maf$Tumor_Seq_Allele1 = maf$alt
+        
+        if (is.null(maf$Tumor_Seq_Allele1))
+            maf$Tumor_Seq_Allele1 = maf$alt
+        
+        if (is.null(maf$Tumor_Seq_Allele1))
+            maf$Tumor_Seq_Allele1 = maf$ALT
 
-    if (is.null(maf$Tumor_Seq_Allele2))
-      maf$Reference_Allele = maf$ref
-    
+        if (is.null(maf$Reference_Allele))
+            maf$Reference_Allele = maf$ref
+        
+        if (is.null(maf$Reference_Allele))
+            maf$Reference_Allele = maf$REF
+
+        if (!all(is.character(maf$Tumor_Seq_Allele1)))
+            maf$Tumor_Seq_Allele1 = sapply(maf$Tumor_Seq_Allele1, function(x) as.character(x)[1])
+        
+        if (!all(is.character(maf$Reference_Allele)))
+            maf$Reference_Allele = as.character(maf$Reference_Allele)
+            
+            
+        if (is.null(maf$Reference_Allele) | is.null(maf$Tumor_Seq_Allele1))
+            stop("Can't find variant columns in input granges, please check input to make sure it either has standard VCF ALT / REF columns or MAF file columns specifying alt and ref allele")
+            
     maf$alt.count.t =  maf$ref.count.t = NA
 
     if (!is.null(norm.bam))
@@ -3774,9 +3820,8 @@ mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T
 
     if (is.data.frame(maf))
       maf = seg2gr(maf)
-    
     tmp = do.call('rbind',
-        mclapply(1:nrow(chunks), function(i)
+      mclapply(1:nrow(chunks), function(i)
             {
                 if (verbose)
                     cat('Starting chunk ', chunks[i, 1], ' to ', chunks[i, 2], '\n')
@@ -3817,8 +3862,6 @@ mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T
                  }
                return(out)               
             }, mc.cores = mc.cores))
-
-    
 
     maf$alt.count.t = tmp[,1]
     maf$ref.count.t = tmp[,2]
@@ -7725,7 +7768,7 @@ qstat = function(full = FALSE, numslots = TRUE)
     {
         nms = c('jobid','prior','ntckt','name','user','project','department','state','cpu','mem','io','tckts','ovrts','otckt','ftckt','stckt','share','queue','slots')
         p = pipe('qstat -u "*" -ext')
-        tab = strsplit(readLines(p), '\\s+')
+        tab = strsplit(str_trim(readLines(p)), '\\s+')
         close(p)
         iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>14
         if (sum(iix)==0)
@@ -7787,6 +7830,20 @@ qhost = function(full = FALSE, numslots = TRUE)
     }
 
 
+#' @name ddd
+#' @title ddd
+#' @description
+#' 
+#' shortcut to gr2dt
+#'
+#' @export
+ddd = function(x)
+    {
+        if (is.data.frame(x))
+            as.data.table(x)
+        else
+            gr2dt(x)
+    }
 
 #' @name relib
 #' @title relib
@@ -7798,6 +7855,605 @@ qhost = function(full = FALSE, numslots = TRUE)
 #' @export
 relib = function(lib = 'Flow')
     {
-        detach(sprintf('package:%s', lib), force = TRUE)
-        library(lib)
+        if (sprintf("package:%s", lib) %in% search())
+            {
+                txt = sprintf("detach('package:%s', force = TRUE)", lib)
+                eval(parse(text = txt))
+            }
+        txt = sprintf("library(%s)", lib)
+        eval(parse(text = txt))
     }
+
+
+
+#' @name chron
+#' @title chron
+#' @description
+#'
+#' Repeat a command periodically, e.g. every 10 seconds
+#' 
+#' @export
+chron = function(expr, period = 5)
+    {
+        while (TRUE)
+            {
+                print(eval(expr))
+                Sys.sleep(period)
+            }
+    }
+
+#' @name queues
+#' @title queues
+#' @description
+#' Lists all available queues
+queues = function()
+    {
+        p = pipe('qconf -sql ')
+        out = readLines(p)
+        close(p)
+        return(out)
+    }
+
+
+#####################################
+#' @name heatmap.plus
+#' @title heatmap.plus
+#' @description
+#' 
+#' Additional features:
+#'    allows several label tracks on top, bottom, left, and right, with separate top and bottom legend frames tohouse each
+#'    allows use of coloredData in tracks
+#'
+#' @export
+###################################
+heatmap.plus = function (x, Rowv = NULL, Colv = if (symm) "Rowv" else NULL,
+  bar = FALSE, ## if TRUE will draw barplot for central panel instead of heatmap
+  show.rdend = TRUE, # show row dendogram flag
+  show.cdend = TRUE,  # show column dendrogram flag
+  # these next four args can be coloredData or list of coloredData with category labels
+  # for each column / row data point.  If named will be indexed by corresponding row/column names in X
+  # otherwise they will be indexed in order.  These args can alternatively can be vector or list of vectors (which
+  # will be mapped to default colormaps)
+  topColAttr = NULL, # see above
+  bottomColAttr = NULL, # ...
+  leftRowAttr = NULL, # ...
+  rightRowAttr = NULL, # ...
+  leg.args = NULL,  ## legend will be populated by color mappings from coloredData and additional args (excluding position) here
+  dim.heatmap = c(4, 4), ## use this to make heatmap tall or fat (instead of margins arg)
+  distfun = dist, hclustfun = hclust,
+  reorderfun = function(d, w) reorder(d, w),
+  add.expr,  
+  symm = FALSE,
+  revC = identical(Colv, "Rowv"), scale = c("row", "column", "none"), na.rm = TRUE,
+  margins = c(1, 1), 
+  cexRow = 0.2 +  1/log10(nr), cexCol = 0.2 + 1/log10(nc), labRow = NULL,
+  add.grid = F,
+  col.grid = 'gray',
+  lwd.grid = 1,
+  size.legend.panel = 0.4,
+  size.feature.panel = 0.2,
+  col = topo.colors(100),
+  optimal.leaf = T,
+  return.clust = F,    
+  labCol = NULL, main = NULL, xlab = NULL, ylab = NULL, keep.dendro = FALSE, las.col = 2,
+  verbose = getOption("verbose"), ...) 
+{
+  require(cba)
+  hcr = hcc = NULL
+
+  ### set up top and bottom color palettes
+  if (!is.null(topColAttr) | !is.null(bottomColAttr) | !is.null(leftRowAttr) | !is.null(rightRowAttr))
+    {
+      require(RColorBrewer)
+      
+      brewer.palettes = brewer.pal.info
+      brewer.palettes = brewer.palettes[order(brewer.palettes$category), ]
+  
+      if (!is.null(topColAttr) & !is.list(topColAttr))
+        topColAttr = list(topColAttr)
+      
+      if (!is.null(bottomColAttr) & !is.list(bottomColAttr))
+        bottomColAttr = list(bottomColAttr)
+      
+      if (!is.null(leftRowAttr) & !is.list(leftRowAttr))
+        leftRowAttr = list(leftRowAttr)
+      
+      if (!is.null(rightRowAttr) & !is.list(rightRowAttr))
+        rightRowAttr = list(rightRowAttr)
+
+      last.palette = 0;
+
+      .convert.to.cData = function(x) {        
+        if (!is.null(x) & class(x) != 'coloredData')
+          {
+            x = as.vector(x);
+            last.palette <<- last.palette + 1;
+            if (is.factor(x))
+              uval = levels(x)
+            else
+              uval = unique(x)
+            cmap = brewer.pal(min(brewer.palettes[last.palette, 'maxcolors'], length(uval)), rownames(brewer.palettes)[last.palette])
+
+            if (length(uval)>length(cmap))
+              {
+                warning('Number of colors exceeded for colormap: duplicate colors will be created. ')
+                cmap = cmap[((1:length(uval))%%length(cmap))+1]  ## we will repeat colors if the number of unique items is larger than the colormap
+              }
+            names(cmap) = uval;
+            return(coloredData(data = x, colormap = cmap))
+          }
+        else
+          return(x)
+      }
+      topColAttr = lapply(topColAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
+      bottomColAttr = lapply(bottomColAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
+      leftRowAttr = lapply(leftRowAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
+      bottomColAttr = lapply(bottomColAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes      
+    }
+
+  if (!is.null(colnames(x)))
+    colNames = colnames(x)
+  else
+    colNames = 1:ncol(x)
+  
+  if (!is.null(rownames(x)))
+    rowNames = rownames(x)
+  else
+    rowNames = 1:nrow(x)
+   
+    scale <- if (symm && missing(scale)) 
+        "none"
+    else match.arg(scale)
+    if (length(di <- dim(x)) != 2 || !is.numeric(x)) 
+        stop("'x' must be a numeric matrix")
+    nr <- di[1L]
+    nc <- di[2L]
+    if (nr <= 1 || nc <= 1) 
+        stop("'x' must have at least 2 rows and 2 columns")
+    if (!is.numeric(margins) || length(margins) != 2L) 
+        stop("'margins' must be a numeric vector of length 2")
+    doRdend <- !identical(Rowv, NA)
+    doCdend <- !identical(Colv, NA)
+    if (!doRdend && identical(Colv, "Rowv")) 
+        doCdend <- FALSE
+    if (is.null(Rowv)) 
+        Rowv <- rowMeans(x, na.rm = na.rm)
+    if (is.null(Colv)) 
+        Colv <- colMeans(x, na.rm = na.rm)
+    if (doRdend) {
+        if (inherits(Rowv, "dendrogram")) 
+            ddr <- Rowv
+        else {
+            d = distfun(x);
+            hcr = hclustfun(d);
+            
+            if (optimal.leaf) ## MARCIN ADDED
+            {
+              tmp <- order.optimal(d, hcr$merge)
+              hcr$order = tmp$order;
+              hcr$merge = tmp$merge;
+              ddr <- as.dendrogram(hcr)
+            }
+          else
+            {
+              ddr <- as.dendrogram(hcr)
+              if (!is.logical(Rowv) || Rowv) 
+                ddr <- reorderfun(ddr, Rowv)
+            }
+        }
+        if (nr != length(rowInd <- order.dendrogram(ddr))) 
+            stop("row dendrogram ordering gave index of wrong length")
+    }
+    else rowInd <- 1L:nr
+    if (doCdend) {
+        if (inherits(Colv, "dendrogram")) 
+            ddc <- Colv
+        else if (identical(Colv, "Rowv")) {
+            if (nr != nc) 
+                stop("Colv = \"Rowv\" but nrow(x) != ncol(x)")
+            ddc <- ddr
+        }
+        else {
+          d = distfun(if (symm) x else t(x));
+          hcc = hclustfun(d);
+            
+          if (optimal.leaf) ## MARCIN ADDED
+            {
+              tmp <- order.optimal(d, hcc$merge)
+              hcc$order = tmp$order;
+              hcc$merge = tmp$merge;
+              ddc <- as.dendrogram(hcc)
+            }
+          else
+            {
+              ddc <- as.dendrogram(hcc)
+              if (!is.logical(Colv) || Colv) 
+                ddc <- reorderfun(ddc, Colv)
+            }
+        }
+        if (nc != length(colInd <- order.dendrogram(ddc))) 
+          stop("column dendrogram ordering gave index of wrong length")
+      }
+    else colInd <- 1L:nc
+    x <- x[rowInd, colInd]
+    labRow <- if (is.null(labRow)) 
+        if (is.null(rownames(x))) 
+            (1L:nr)[rowInd]
+        else rownames(x)
+    else labRow[rowInd]
+    labCol <- if (is.null(labCol)) 
+        if (is.null(colnames(x))) 
+            (1L:nc)[colInd]
+        else colnames(x)
+    else labCol[colInd]
+    if (scale == "row") {
+        x <- sweep(x, 1L, rowMeans(x, na.rm = na.rm), check.margin = FALSE)
+        sx <- apply(x, 1L, sd, na.rm = na.rm)
+        x <- sweep(x, 1L, sx, "/", check.margin = FALSE)
+    }
+    else if (scale == "column") {
+        x <- sweep(x, 2L, colMeans(x, na.rm = na.rm), check.margin = FALSE)
+        sx <- apply(x, 2L, sd, na.rm = na.rm)
+        x <- sweep(x, 2L, sx, "/", check.margin = FALSE)
+    }
+    lmat <- rbind(c(NA, 3), 2:1)
+    lwid <- c(if (doRdend) 1 else 0.05, dim.heatmap[1])
+    lhei <- c((if (doCdend) 1 else 0.05) + if (!is.null(main)) 0.2 else 0, 
+        dim.heatmap[2])
+  
+  ## COL LABEL LAYOUTS  
+  col.panel.height = size.feature.panel;
+  row.panel.width = size.feature.panel;
+  core.panel.ind = c(2,2);
+  
+  if (!is.null(topColAttr))  ## add to top
+    lapply(topColAttr, function(x)
+           {
+             lmat <<- rbind(lmat[1, ]+1, c(NA, 1), lmat[2:nrow(lmat), ]+1)             
+             lhei <<- c(lhei[1L], col.panel.height, lhei[2:length(lhei)])
+             core.panel.ind[1] <<- core.panel.ind[1]+1
+           })
+
+  if (!is.null(bottomColAttr)) # add to bottom
+    lapply(bottomColAttr, function(x)
+           {
+             lmat <<- rbind(lmat+1, c(NA, 1))
+             lhei <<- c(lhei, col.panel.height)
+           })
+
+  ## ROW LABEL LAYOUTS
+  if (!is.null(leftRowAttr))
+    lapply(leftRowAttr, function(x)
+           {             
+             lmat <<- cbind(lmat[, 1] + 1, c(rep(NA, core.panel.ind[1]-1),  1, rep(NA, nrow(lmat)-core.panel.ind[1])), lmat[, 2:ncol(lmat)] + 1)
+             lwid <<- c(lwid[1L], row.panel.width, lwid[2L])
+             core.panel.ind[2] <<- core.panel.ind[2]+1;
+           })
+
+  if (!is.null(rightRowAttr))
+    lapply(rightRowAttr, function(x)
+           {
+             lmat <<- cbind(lmat + 1, c(rep(NA, core.panel.ind[1]-1),  1, rep(NA, nrow(lmat)-core.panel.ind[1])))
+             lwid <<- c(lwid, row.panel.width)
+           })
+
+  ## ADD ROW COL LEGEND PANELS
+
+  # top legend panel
+  new.row = rep(NA, ncol(lmat)); new.row[core.panel.ind[2]] = max(lmat, na.rm = T)+1;
+  core.panel.ind[1] = core.panel.ind[1]+1
+  lhei = c(size.legend.panel, lhei)
+  lmat = rbind(new.row, lmat)
+  
+  # bottom legend panel
+  new.row = rep(NA, ncol(lmat)); new.row[core.panel.ind[2]] = max(lmat, na.rm = T)+1;
+  lmat = rbind(lmat, new.row)  
+  lhei = c(lhei, size.legend.panel)
+  
+  # left legend panel
+  new.col = rep(NA, nrow(lmat)); new.col[core.panel.ind[1]] = max(lmat, na.rm = T)+1;
+  core.panel.ind[2] = core.panel.ind[2]+1
+  lmat = cbind(new.col, lmat)
+  lwid = c(size.legend.panel, lwid)
+  
+  # right legend panel
+  new.col = rep(NA, nrow(lmat)); new.col[core.panel.ind[1]] = max(lmat, na.rm = T)+1;
+  lmat = cbind(lmat, new.col)
+  lwid = c(lwid, size.legend.panel)
+ 
+  lmat[is.na(lmat)] <- 0
+  if (verbose) {
+    cat("layout: widths = ", lwid, ", heights = ", lhei, 
+        "; lmat=\n")
+    print(lmat)
+    }
+  op <- par(no.readonly = TRUE)
+  on.exit(par(op))
+
+  ## LAYOUT 
+  layout(lmat, widths = lwid, heights = lhei, respect = TRUE) 
+
+  if (verbose)
+    print(lmat)
+  
+  pad.feature.panel = 0.1
+  
+  ## DRAW ROW LABEL PANELS
+  if (!is.null(rowAttr <- c(leftRowAttr, rightRowAttr)))
+    if (length(rowAttr)>0)
+      lapply(rev(rowAttr), function(x)
+             {
+               if (is.null(x)) return
+               par(mar = c(margins[1L]/2, pad.feature.panel, margins[1L]/2, pad.feature.panel))
+               if (is.null(names(getData(x)))) ## we assume attributes are ordered
+                 image(1, 1:nr, z = rbind(1L:nr), col = getColors(x)[rowInd], axes = FALSE, xlab = "", ylab = "")
+               else   ## otherwise will use attribute names to properly order (assuming that data rownames are specified)r
+                 image(1, 1:nr, z = rbind(1L:nr), col = getColors(x)[rowNames[rowInd]], axes = FALSE, xlab = "", ylab = "")
+             })
+  
+  ## DRAW COLUMN LABEL PANELS 
+  if (!is.null(colAttr <- c(topColAttr, bottomColAttr)))
+    if (length(colAttr)>0)
+      lapply(rev(colAttr), function(x)
+             {
+               if (is.null(x)) return
+               par(mar = c(pad.feature.panel, margins[2L]/2, pad.feature.panel, margins[2L]/2))               
+               if (is.null(names(getData(x)))) ## we assume attributes are ordered
+                 image(1:nc, 1, z = cbind(1L:nc), col = getColors(x)[colInd], axes = FALSE, xlab = "", ylab = "")
+               else ## otherwise will use attribute names to properly order (assuming that data colnames are specified)
+                 image(1:nc, 1, z = cbind(1L:nc), col = getColors(x)[colNames[colInd]], axes = FALSE, xlab = "", ylab = "")
+             })  
+  
+  par(mar = c(margins[1L]/2, margins[2L]/2, margins[1L]/2, margins[2L]/2))
+  if (!symm || scale != "none") 
+    x <- t(x)
+  if (revC) {
+    iy <- nr:1
+    if (doRdend) 
+      ddr <- rev(ddr)
+    x <- x[, iy]
+  }
+  else iy <- 1L:nr
+  
+ ## CENTRAL PANEL (heatmap)
+  xlim = 0.5 + c(0, nc);
+  ylim = 0.5 + c(0, nr);
+  
+  if (bar)
+    {
+      plot.blank()
+      par(usr = c(0, nc, 0, max(rowSums(x))))
+      barplot(t(x), axes = FALSE, xlab = "", ylab = "", col = col[rowInd], space = 0, names.arg = rep('', nc), add = T)
+
+      if (las.col == 2)
+      axis(1, (1L:nc)-0.5, labels = labCol, las = las.col, line = -0.5, tick = 0, cex.axis = cexCol)
+    else
+      axis(1, (1L:nc)-0.5, labels = labCol, las = las.col, padj = 1, line = -0.5, tick = 0, cex.axis = cexCol)
+
+    }
+  else
+    {
+      image(1L:nc, 1L:nr, x, xlim = xlim, ylim = ylim, axes = FALSE, xlab = "", ylab = "", col = col, ...)
+      
+      if (las.col == 2)
+      axis(1, 1L:nc, labels = labCol, las = las.col, line = -0.5, tick = 0, cex.axis = cexCol)
+    else
+      axis(1, 1L:nc, labels = labCol, las = las.col, padj = 1, line = -0.5, tick = 0, cex.axis = cexCol)
+
+    }
+  
+  if (add.grid)
+    {
+       segments(-.5 + 1:(nc+1), -.5, -.5 + 1:(nc+1), .5 + nr, col= col.grid, lwd=lwd.grid)
+       segments(-.5, -.5 + 1:(nr+1), .5 + nc, -.5 + 1:(nr+1), col= col.grid, lwd= lwd.grid)          
+     }
+  
+    if (!is.null(xlab)) 
+        mtext(xlab, side = 1, line = margins[1L] - 1.25)
+
+  
+   axis(4, iy, labels = labRow, las = 2, line = -0.5, tick = 0, cex.axis = cexRow)
+    if (!is.null(ylab)) 
+        mtext(ylab, side = 4, line = margins[2L] - 1.25)
+    if (!missing(add.expr)) 
+        eval(substitute(add.expr))
+
+  ## LEFT DENDROGRAM
+  par(mar = c(margins[1L]/2, 0, margins[1L]/2, 0))
+    if (doRdend & show.rdend)
+        plot(ddr, horiz = TRUE, axes = FALSE, yaxs = "i", leaflab = "none")
+    else
+      if (!is.null(rownames(x)))
+        {
+          plot.blank(ylim = ylim, xlim = c(0, 1))
+          text(rep(0.96, length(labRow)), (1:nr), labRow, srt = 0, adj = c(1, 0.5), cex = cexRow)
+        }
+      else
+        frame()
+    par(mar = c(0, 0, if (!is.null(main)) 1 else 0, margins[2L]))
+
+  ## TOP DENDROGRAM
+  par(mar = c(0, margins[2L]/2, 0, margins[2L]/2))
+    if (doCdend & show.cdend) 
+        plot(ddc, axes = FALSE, xaxs = "i", leaflab = "none")
+    else
+      if (!is.null(colnames(x)))
+        {
+          plot.blank(xlim = xlim, ylim = c(0, 1))
+          par(usr = c(xlim, 0, 1))
+          text((1:nc), rep(0.04, length(labCol)), labCol, srt = 90, adj = c(0, 0.5), cex = cexCol)
+        }
+      else
+        frame()
+  
+    if (!is.null(main)) {
+        par(xpd = NA)
+        title(main, cex.main = 1.5 * op[["cex.main"]])
+    }
+
+  ### LEGENDS
+
+  # set defaults
+  if (is.null(leg.args$y)) leg.args$y = 0.5;
+  if (is.null(leg.args$x)) leg.args$x = 0.5;
+  if (is.null(leg.args$adj)) leg.args$adj = c(0, 0.5);
+  if (is.null(leg.args$xjust)) leg.args$xjust = 0.5;
+  if (is.null(leg.args$yjust)) leg.args$yjust = 0.5;
+  
+  ## TOP
+  par(mar = c(1,0,0,0))
+  par(xpd = NA);
+  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
+  if (length(topColAttr)>0)
+    {
+      these.leg.args = lapply(1:length(topColAttr),  function(x) {
+        out = leg.args;
+        out$x = x/(length(topColAttr)+1)
+        out$legend = names(getColormap(topColAttr[[x]]))
+        out$fill = getColormap(topColAttr[[x]])
+        return(out)
+      })
+      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
+    }
+
+  ## BOTTOM
+  par(mar = c(0,0,1,0))
+  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
+  if (length(bottomColAttr)>0)
+    {
+      these.leg.args = lapply(1:length(bottomColAttr),  function(x) {
+        out = leg.args;
+        out$x = x/(length(bottomColAttr)+1)
+        out$legend = names(getColormap(bottomColAttr[[x]]))
+        out$fill = getColormap(bottomColAttr[[x]])
+        return(out)
+      })
+      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
+    }                       
+
+  ## LEFT
+  par(mar = c(0,0,0,1))
+  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
+  if (length(leftRowAttr)>0)
+    {
+      these.leg.args = lapply(1:length(leftRowAttr),  function(x) {
+        out = leg.args;
+        out$y = x/(length(leftRowAttr)+1)
+        out$legend = names(getColormap(leftRowAttr[[x]]))
+        out$fill = getColormap(leftRowAttr[[x]])
+        return(out)
+      })
+      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
+    }
+
+  ## RIGHT
+  par(mar = c(0,1,0,0))
+  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
+  if (length(rightRowAttr)>0)
+    {
+      these.leg.args = lapply(1:length(rightRowAttr),  function(x) {
+        out = leg.args;
+        out$y = x/(length(rightRowAttr)+1)
+        out$legend = names(getColormap(rightRowAttr[[x]]))
+        out$fill = getColormap(rightRowAttr[[x]])
+        return(out)
+      })
+      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
+    }                       
+  
+  invisible(list(rowInd = rowInd, colInd = colInd, Rowv = if (keep.dendro && 
+                                                     doRdend) ddr, Colv = if (keep.dendro && doCdend) ddc))
+  
+  if (return.clust)
+    return(list(row = hcr, col = hcc))
+}
+
+
+#' @name coloredData
+#' @rdname coloredData
+#' 
+#' @description
+#' S4 class for data with colors used by heatmap.plus
+#'
+#' simple object with data (e.g. vector or matrix of categorical, real numbers) + a colormap
+#'
+#'  colormap is a (named) vector mapping factor levels / unique values in data into colors,
+#'  or otherwise assigning a color range to numeric data.
+#'
+#' @exportClass coloredData
+#' @author Marcin Imielinski
+setClass('coloredData', representation(data = 'array', colormap = 'vector', type = 'character', data.names = 'character'),
+         prototype(data = matrix(NA), colormap = NA, type = '', data.names = NULL)
+         )
+setMethod('initialize', 'coloredData', function(.Object, data, colormap, upright = T)
+         {
+           .Object = callNextMethod()
+           .Object@type = class(data)
+
+           if (!is.vector(colormap) | !any(!is.na(colormap)))
+             stop('colormap must be a vector with non NA entries')
+           
+           .Object@colormap = colormap
+           if (is.vector(data) & !is.list(data))
+             {
+               if (!is.null(names(data)))
+                 .Object@data.names = names(data)
+               if (upright)               
+                 data = array(data, dim = c(length(data), 1), dimnames = list(names(data), NULL))
+               else
+                 data = array(data, dim = c(1, length(data)), dimnames = list(NULL, names(data)))
+             }
+           else if (is.matrix(data))
+               data = array(as.vector(data), dim = dim(data), dimnames = dimnames(data))
+           else if (!is.array(data))
+             stop('Only vectors, matrices, and arrays supported')
+           .Object@data = data
+           if (!is.numeric(.Object@data)) {
+             if (is.factor(.Object@data))
+               uval = levels(.Object@data)
+             else if (is.character(.Object@data))
+               uval = unique(.Object@data)
+             else
+               uval = NULL;
+             
+             if (!is.null(uval))
+               {             
+                 if (is.null(names(.Object@colormap)))
+                   {
+                     ix = 1:min(length(uval), length(.Object@colormap))              
+                     names(.Object@colormap)[ix] = uval[ix]
+                   }
+                 if (length(leftover <- setdiff(uval, c(NA, names(.Object@colormap))))>0)
+                   warning(sprintf('The following factors are unmapped in the colormap: %s.', paste(leftover, collapse = ",")))
+               }
+           } 
+           .Object
+       })
+
+setGeneric('getColormap', function(.Object) standardGeneric('getColormap'))
+setGeneric('getData', function(.Object) standardGeneric('getData'))
+setGeneric('getColors', function(.Object) standardGeneric('getColors'))
+setMethod('getColormap', signature('coloredData'), function(.Object) .Object@colormap)
+setMethod('getColors', signature('coloredData'), function(.Object)
+          {
+            dat = getData(.Object);
+            cmap = getColormap(.Object);
+            dat[1:length(dat)] = cmap[dat];
+            return(dat)
+          })
+setMethod('getData', signature(.Object = 'coloredData'), function(.Object)
+          {
+            out = as(.Object@data, .Object@type)
+            if (!is.null(.Object@data.names))
+              names(out) = .Object@data.names
+            return(out)
+        })
+
+#' @name coloredData
+#' @title coloredData
+#' @description
+#'
+#' Instantiate coloredData
+#' 
+#' @export
+coloredData = function(data, colormap, upright = T) new('coloredData', data = data, colormap = colormap, upright = upright)
