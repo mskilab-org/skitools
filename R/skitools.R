@@ -3296,7 +3296,7 @@ ppdf = function(expr, filename = 'plot.pdf', height = 10, width = 10, cex = 1, t
 #' by default plot.html
 #'
 #' @export
-wij = function(expr, filename = 'plot.html')
+wij = function(expr, filename = 'plot.html', zoom = NULL)
     {
         DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
         if (nchar(DEFAULT.OUTDIR)==0)
@@ -3310,6 +3310,14 @@ wij = function(expr, filename = 'plot.html')
         
         cat('rendering to', filename, '\n')
         widg = eval(expr)
+
+        if (!is.null(zoom))
+            {
+                if (is.logical(zoom))
+                    zoom = 'x'
+                widg = widg %>% hc_chart(zoomType = zoom)
+            }
+            
         htmlwidgets::saveWidget(widg, paste(filename), selfcontained = FALSE)  
     }
 
