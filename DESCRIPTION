@@ -18,7 +18,8 @@ Imports:
     reshape2,		
     IRanges,		
     tools,		
-    Biostrings,		
+    Biostrings,
+    DT,
     GenomeInfoDb	
 Depends:
     R (>= 3.1.0),

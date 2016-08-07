@@ -1,4 +1,3 @@
-############################################################################r
 ## Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
@@ -21,7 +20,6 @@
 
 ## You should have received a copy of the GNU Lesser General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
-###############################################################################
 
 #
 # General utility functions
@@ -1451,13 +1449,15 @@ write.htab = function(tab, file = NULL,
     row.colors = c('lightgray', 'white'), # alternating colors to shade data rows
     header.colors = c('#4A4A4A', 'white'), # two element vector specifying background and text colors for header row, respectively,
     data.size = 15, # font size in px for data, title, and footer
+    dt = TRUE,
     title.size = 15, footer.size = 20, header.size = round(1.1*data.size))
   {
 
 
     # require(hwriter)
     # require(gplots)
-
+      
+      
     if (!is.data.frame(tab))
       tab = as.data.frame(tab)
 
@@ -1477,55 +1477,53 @@ write.htab = function(tab, file = NULL,
                 file = '~/public_html/htab.html'
         }
 
-    for (nm in names(tab))
-        tab[[nm]] = as.character(tab[[nm]])
-    tab[is.na(tab)] = '';
-    tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
 
-    if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
-      for (i in which(lix))
-        tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
+    if (dt)
+        {
+            wij(DT::datatable(tab,
+                              options = list(
+                                  pageLength = 100),
+                              rownames = row.names), file)
+        }
+    else
+        {
+            
+            for (nm in names(tab))
+                tab[[nm]] = as.character(tab[[nm]])
+            tab[is.na(tab)] = '';
+            tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
+            
+            if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
+                for (i in which(lix))
+                    tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
 
-    dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
-    p = hwriter::openPage(file, link.css = 'hwriter.css')
-    if (!is.null(title))
-      hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
+            dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
+            p = hwriter::openPage(file, link.css = 'hwriter.css')
+            if (!is.null(title))
+                hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
 
-    row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
-    names(row.bgcolor) = rownames(tab)
-    if (!is.null(highlight))
-      row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
+            row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
+            names(row.bgcolor) = rownames(tab)
+            if (!is.null(highlight))
+                row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
 
-    row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
+            row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
 
-#    if (row.names)
-      col.bgcolor = gplots::col2hex(header.colors[1])
+                                        #    if (row.names)
+            col.bgcolor = gplots::col2hex(header.colors[1])
 
-    col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
+            col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
 
-    row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
-    names(row.style) = rownames(tab)
-    row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
+            row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
+            names(row.style) = rownames(tab)
+            row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
 
-    hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
-           row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
-    if (!is.null(footer))
-      hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
-    hwriter::closePage(p)
-  }
-
-###############
-# writecols
-#
-# Takes character vector and dumps into k delimited columns
-###############
-writeCols = function(v, k = 3, sep = "\t", file = "")
-  {
-    rows = ceiling(length(v)/k)
-    out = matrix(ncol = k, nrow = rows, byrow = TRUE)
-    out[1:length(v)] = v;
-    out[is.na(out)] = "";
-    write.table(as.data.frame(out), file = file, sep = sep, quote = F, row.names = F, col.names = F)
+            hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
+                            row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
+            if (!is.null(footer))
+                hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
+            hwriter::closePage(p)
+        }
   }
 
 #' @name col.scale
@@ -3296,8 +3294,11 @@ ppdf = function(expr, filename = 'plot.pdf', height = 10, width = 10, cex = 1, t
 #' by default plot.html
 #'
 #' @export
-wij = function(expr, filename = 'plot.html', zoom = NULL)
+wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1)
     {
+        if (length(cex)==1)
+            cex = rep(cex,2)
+
         DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
         if (nchar(DEFAULT.OUTDIR)==0)
             DEFAULT.OUTDIR = normalizePath('~/public_html/')
@@ -3311,6 +3312,25 @@ wij = function(expr, filename = 'plot.html', zoom = NULL)
         cat('rendering to', filename, '\n')
         widg = eval(expr)
 
+        toWidget <- function(x) {
+            htmlwidgets::createWidget(
+                name = "plotly",
+                x = plotly_build(x),
+                width = cex[1]*1000,
+                height = cex[2]*1000,
+                htmlwidgets::sizingPolicy(
+                    padding = 5, 
+                    browser.fill = TRUE
+                    )
+                )
+        }
+        
+        if (!any(class(widg)=='htmlwidgets'))
+            if (inherits(widg, 'plotly_hash'))
+                widg = toWidget(widg)
+            else
+                stop('expression does not produce valid htmlwidget object')
+
         if (!is.null(zoom))
             {
                 if (is.logical(zoom))
@@ -3322,6 +3342,69 @@ wij = function(expr, filename = 'plot.html', zoom = NULL)
     }
 
 
+#' @name sortable
+#' @title sortable
+#' @description
+#'
+#' dumps sortable list for manual sorting
+#' into list.html (in public_html by default)
+#'
+#' @export
+sortable = function(x, filename = 'list.html', title = NULL)
+    {
+        
+        DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
+        if (nchar(DEFAULT.OUTDIR)==0)
+            DEFAULT.OUTDIR = normalizePath('~/public_html/')
+        
+        if (!grepl('^[~/]', filename))
+            filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
+        
+        if (!file.exists(file.dir(filename)))
+            system(paste('mkdir -p', file.dir(filename)))
+        
+        cat('dropping list to', filename, '\n')
+        head1 = '<!doctype html>
+  <html lang="en">
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jQuery UI Sortable - Default functionality</title>
+  <link rel="stylesheet"
+	href="//code.jquery.com/ui/1.12.0/themes/base/jquery-ui.css">
+  <link rel="stylesheet" href="/resources/demos/style.css">
+  <style>
+  #sortable { list-style-type: none; margin: 0; padding: 0; width:
+  60%; }
+  #sortable li { margin: 0 3px 3px 3px; padding: 0.4em; padding-left:
+  1.5em; font-size: 1.4em; height: 18px; }
+  #sortable li span { position: absolute; margin-left: -1.3em; }
+  </style>
+  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js"></script>
+  <script>
+  $( function() {
+    $( "#sortable" ).sortable();
+    $( "#sortable" ).disableSelection();
+  } );
+  </script>
+</head>
+<body>'
+
+        head2 = c('<h1>', title, '</h1>', '<ul id="sortable">')
+            
+            if (length(x)>0)
+          middle = sapply(x, function(y) sprintf('  <li class="ui-state-default"><span class="ui-icon
+  ui-icon-arrowthick-2-n-s"></span>%s</li>', y))
+      else
+          middle = c()
+     
+     tail = '</ul> 
+</body>
+</html>
+'
+     writeLines(c(head1, head2, middle, tail), filename)
+    }
 
 ###################################
 #' @name plop
@@ -7414,7 +7497,7 @@ ra.setdiff <- function(ra1, ra2, ...) {
 #' @name ra.union
 #' @export
 ra.union <- function(ra1, ra2, ...)
-    return(ra1[unique(ra.overlaps(ra1, ra2, ...)[, 'ra1.ix'])])
+    rebturn(ra1[unique(ra.overlaps(ra1, ra2, ...)[, 'ra1.ix'])])
 
 #' gr.all
 #'
