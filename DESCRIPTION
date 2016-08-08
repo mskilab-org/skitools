@@ -29,6 +29,7 @@ Depends:
     devtools,
     gUtils,
     ggplot2,
+    plotly,
     data.table,
     reshape2, 
     igraph

@@ -3597,6 +3597,22 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
             }
     }
 
+
+#' @name phist
+#' @title phist
+#'
+#' @description
+#' Quick plotlyhistogram
+#'
+#' @author Marcin Imielinski
+#' @import plotly
+#' @export
+phist = function(expr, data = data.frame())
+    {
+        plot_ly(data = data, x = expr, type = 'histogram')
+    }
+    
+
 #' @name vplot
 #' @title vplot
 #'
@@ -3621,7 +3637,14 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 #' @author Marcin Imielinski
 #' @import ggplot2
 #' @export
-vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE, cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1)
+vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL,
+    stat = "ydensity",
+    position = "dodge",
+    trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
+    scatter = FALSE,
+    text = NULL,
+    cex.scatter = 1,
+    col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = TRUE)
     {
         # require(ggplot2)
         if (!is.factor(group))
@@ -3687,16 +3710,35 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
             {
                 if (dot)
                     {
-                        g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+                        if (is.null(text))
+                            g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+                        else
+                            g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group, text = text), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
                     }
                 else
                     {
-                        if (is.null(col.scatter))
-                            g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                        if (is.null(text))
+                            {
+                                if (is.null(col.scatter))
+                                    g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                                else
+                                    g = g + geom_jitter(data = dat, fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
+
+                            }
                         else
-                            g = g + geom_jitter(data = dat, fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
+                            {
+                                if (is.null(col.scatter))
+                                    g = g + geom_jitter(data = dat, mapping = aes(fill = group, text = text), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                                else
+                                    g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
+                            }
                     }
+
+                    
             }
+
+
+
         if (log)
             {
                 if (!is.null(ylim))
@@ -3752,7 +3794,10 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
                     }
             }
 
-        print(g)
+        if (plotly)
+            return(ggplotly(g))
+        else
+            print(g)
 
         'voila'
     }
