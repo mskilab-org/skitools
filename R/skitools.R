@@ -2010,10 +2010,14 @@ tabstring = function(tab, sep = ', ', sep2 = '_', dt = FALSE)
 #' @author Marcin Imielinski
 #' @export
 ####################
-dfstring = function(df, oneline = TRUE,  sep1 = '; ', sep2 = ', ')
-    {
+dfstring = function(df, oneline = TRUE,  binary = FALSE, sep1 = '; ', sep2 = ', ')
+    {        
         if (!class(df)[1]=='data.frame')
             df = as.data.frame(df)
+
+        if (binary)
+            return(structure(apply(as.matrix(df), 1, function(x) paste(names(df)[which(as.logical(x))], collapse = sep1)), names = rownames(df)))
+            
 
         df = as.list(df)
 
@@ -3325,7 +3329,7 @@ wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1)
                 )
         }
         
-        if (!any(class(widg)=='htmlwidgets'))
+        if (!inherits(widg, 'htmlwidget'))
             if (inherits(widg, 'plotly_hash'))
                 widg = toWidget(widg)
             else
