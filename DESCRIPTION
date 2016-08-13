@@ -32,7 +32,6 @@ Depends:
     plotly,
     data.table,
     reshape2, 
-    igraph
 Suggests:
     testthat,
     parallel,

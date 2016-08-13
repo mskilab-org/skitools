@@ -3598,6 +3598,7 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
     }
 
 
+
 #' @name phist
 #' @title phist
 #'
@@ -3607,11 +3608,11 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 #' @author Marcin Imielinski
 #' @import plotly
 #' @export
-phist = function(expr, data = data.frame())
+phist = function(expr, data = data.frame(), ...)
     {
-        plot_ly(data = data, x = expr, type = 'histogram')
+        plot_ly(data = data, x = eval(expr), type = 'histogram', ...)
     }
-    
+
 
 #' @name vplot
 #' @title vplot
@@ -3733,7 +3734,6 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
                                     g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
                             }
                     }
-
                     
             }
 
@@ -4383,14 +4383,44 @@ more = function(x, grep = NULL)
 #' @param grep string to grep in files (=NULL)
 #' @author Marcin Imielinski
 #' @export
-tailf = function(x, grep = NULL)
+tailf = function(x, n = NULL, grep = NULL)
 {
-    if (is.null(grep))
+    if (is.null(n))
         x = paste('tail -f', paste(x, collapse = ' '))
     else
-        x = paste('grep -H', grep, paste(x, collapse = ' '), ' | more')
+        x = paste('tail -n', n, paste(x, collapse = ' '))
+    
+    if (!is.null(grep))
+        x = paste(x, '| grep -H', grep, ' | more')
+    
     system(x)
 }
+
+
+#' @name headf
+#' @title headf
+#'
+#' @description
+#' "head" +/- grep vector of files
+#'
+#' @param x vector of iles
+#' @param grep string to grep in files (=NULL)
+#' @author Marcin Imielinski
+#' @export
+headf = function(x, n = 5, grep = NULL)
+{
+    
+    if (is.null(n))
+        x = paste('head -f', paste(x, collapse = ' '))
+    else
+        x = paste('head -n', n, paste(x, collapse = ' '))
+
+    if (!is.null(grep))
+        x = paste(x, '| grep -H', grep, ' | more')
+    
+    system(x)
+}
+
 
 
 ##  __       __   ______   ________          __                          __
@@ -8597,3 +8627,18 @@ setMethod('getData', signature(.Object = 'coloredData'), function(.Object)
 #' 
 #' @export
 coloredData = function(data, colormap, upright = T) new('coloredData', data = data, colormap = colormap, upright = upright)
+
+
+#' @name loud
+#' @title loud
+#' @description
+#'
+#' Runs a system command but prints a message with the output
+#' 
+#' @export
+loud = function(x)
+    {
+        message(x)
+        system(x)
+        cat('')
+    }
