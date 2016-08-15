@@ -1,4 +1,4 @@
-## Marcin Imielinski
+### Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
 ##
@@ -2067,361 +2067,361 @@ levapply = function(x, by, FUN = 'order')
   }
 
 
-####################
-#' @name cytoscape
-#' @title cytoscape
-#'
-#' @description
-#' shortcut to connect to local cytoscape instance running on LOCAL.COMPUTER (unix environment variable) via RPC call
-#'
-#' graph must be igraph, or adjacency matrixx
-#'
-#' @param graph igraph or adjacency matrix
-#' @param sessionName character name of cytoscape session to open on local computer
-#' @param host character name of host on which cytoscape is running (=Sys.getenv('LOCAL.COMPUTER'))
-#' @param port integer port on which cytoscape is running (=9000)
-#' @param display logical flag whether to display graph locally (=TRUE)
-#' @param layout character specifying layout to display as (=degree-circle)
-#' @param verbose logical vector whether to use verbose output
-#' @param ... additional arguments to new.CytoscapeWindow
-#' @export
-#' @author Marcin Imielinski
-#' @importFrom igraph V E E<- get.edgelist list.edge.attributes get.edge.attribute get.vertex.attribute
-cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOCAL.COMPUTER'), port = 9000, display = T, layout = 'degree-circle', verbose = T, ...)
-  {
-    # require(RCytoscape)
-    # require(igraph)
+## ####################
+## #' @name cytoscape
+## #' @title cytoscape
+## #'
+## #' @description
+## #' shortcut to connect to local cytoscape instance running on LOCAL.COMPUTER (unix environment variable) via RPC call
+## #'
+## #' graph must be igraph, or adjacency matrixx
+## #'
+## #' @param graph igraph or adjacency matrix
+## #' @param sessionName character name of cytoscape session to open on local computer
+## #' @param host character name of host on which cytoscape is running (=Sys.getenv('LOCAL.COMPUTER'))
+## #' @param port integer port on which cytoscape is running (=9000)
+## #' @param display logical flag whether to display graph locally (=TRUE)
+## #' @param layout character specifying layout to display as (=degree-circle)
+## #' @param verbose logical vector whether to use verbose output
+## #' @param ... additional arguments to new.CytoscapeWindow
+## #' @export
+## #' @author Marcin Imielinski
+## #' #@importFrom igraph V E E<- get.edgelist list.edge.attributes get.edge.attribute get.vertex.attribute
+## cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOCAL.COMPUTER'), port = 9000, display = T, layout = 'degree-circle', verbose = T, ...)
+##   {
+##     # require(RCytoscape)
+##     # require(igraph)
 
-    if (is(graph, 'matrix'))
-      graph = igraph::graph.adjacency(graph, weighted = 'weight');
+##     if (is(graph, 'matrix'))
+##       graph = igraph::graph.adjacency(graph, weighted = 'weight');
 
-    if (is(graph, 'igraph'))
-      {
-        if (!is.null(E(graph)$weight))
-          E(graph)$weight = 1
+##     if (is(graph, 'igraph'))
+##       {
+##         if (!is.null(E(graph)$weight))
+##           E(graph)$weight = 1
 
-        if (!is.null(E(graph)$arrow.shape))
-          E(graph)$arrow.shape = 'ARROW'
+##         if (!is.null(E(graph)$arrow.shape))
+##           E(graph)$arrow.shape = 'ARROW'
 
-        graph.nel = igraph2graph(graph)
-      }
+##         graph.nel = igraph2graph(graph)
+##       }
 
-    cw = RCytoscape::new.CytoscapeWindow(sessionName, host = host, rpcPort = port, graph = graph.nel,  ...)
+##     cw = RCytoscape::new.CytoscapeWindow(sessionName, host = host, rpcPort = port, graph = graph.nel,  ...)
 
-    if (display)
-      {
-      RCytoscape::displayGraph(cw)
-      RCytoscape::setDefaultBackgroundColor(cw, gplots::col2hex('white'))
+##     if (display)
+##       {
+##       RCytoscape::displayGraph(cw)
+##       RCytoscape::setDefaultBackgroundColor(cw, gplots::col2hex('white'))
 
-        eG = paste(igraph::get.edgelist(graph)[,1], get.edgelist(graph)[,2], sep = '~')
-        ceG = RCytoscape::cy2.edge.names(cw@graph)
+##         eG = paste(igraph::get.edgelist(graph)[,1], get.edgelist(graph)[,2], sep = '~')
+##         ceG = RCytoscape::cy2.edge.names(cw@graph)
 
-        if (verbose)
-          cat('Setting line styles\n')
+##         if (verbose)
+##           cat('Setting line styles\n')
 
-        if ('line.style' %in% igraph::list.edge.attributes(graph))
-          {
-            uls = setdiff(E(graph)$line.style, NA)
-            RCytoscape::setEdgeLineStyleRule(cw, 'line.style', uls, uls)
-          }
+##         if ('line.style' %in% igraph::list.edge.attributes(graph))
+##           {
+##             uls = setdiff(E(graph)$line.style, NA)
+##             RCytoscape::setEdgeLineStyleRule(cw, 'line.style', uls, uls)
+##           }
 
-        if (verbose)
-          cat('Setting arrow shape\n')
+##         if (verbose)
+##           cat('Setting arrow shape\n')
 
-        if (igraph::is.directed(graph))
-          if ('arrow.shape' %in% igraph::list.edge.attributes(graph))
-            RCytoscape::setEdgeTargetArrowRule(cw, 'arrow.shape', unique(E(graph)$arrow.shape), unique(E(graph)$arrow.shape))
+##         if (igraph::is.directed(graph))
+##           if ('arrow.shape' %in% igraph::list.edge.attributes(graph))
+##             RCytoscape::setEdgeTargetArrowRule(cw, 'arrow.shape', unique(E(graph)$arrow.shape), unique(E(graph)$arrow.shape))
 
-        if (verbose)
-          cat('Setting edge color\n')
+##         if (verbose)
+##           cat('Setting edge color\n')
 
-        if ('col' %in% igraph::list.edge.attributes(graph))
-          {
-            uc = setdiff(unique(E(graph)$col), NA);
-            RCytoscape::setEdgeColorRule(cw, 'col', uc, uc, mode = 'lookup')
-          }
+##         if ('col' %in% igraph::list.edge.attributes(graph))
+##           {
+##             uc = setdiff(unique(E(graph)$col), NA);
+##             RCytoscape::setEdgeColorRule(cw, 'col', uc, uc, mode = 'lookup')
+##           }
 
-        if (verbose)
-          cat('Setting edge width\n')
+##         if (verbose)
+##           cat('Setting edge width\n')
 
-        if ('width' %in% igraph::list.edge.attributes(graph))
-          {
-            uw = setdiff(igraph::E(graph)$width, NA)
-            RCytoscape::setEdgeLineWidthRule(cw, 'width', as.character(uw), uw)
-          }
+##         if ('width' %in% igraph::list.edge.attributes(graph))
+##           {
+##             uw = setdiff(igraph::E(graph)$width, NA)
+##             RCytoscape::setEdgeLineWidthRule(cw, 'width', as.character(uw), uw)
+##           }
 
-        if (verbose)
-          cat('Setting node size\n')
+##         if (verbose)
+##           cat('Setting node size\n')
 
-        if ('size' %in% igraph::list.vertex.attributes(graph))
-          {
-            us = setdiff(unique(igraph::V(graph)$size), NA)
-            RCytoscape::setNodeSizeRule(cw, 'size', us, us, mode = 'lookup')
-          }
+##         if ('size' %in% igraph::list.vertex.attributes(graph))
+##           {
+##             us = setdiff(unique(igraph::V(graph)$size), NA)
+##             RCytoscape::setNodeSizeRule(cw, 'size', us, us, mode = 'lookup')
+##           }
 
-        if (verbose)
-          cat('Setting node color\n')
+##         if (verbose)
+##           cat('Setting node color\n')
 
-        if ('col' %in% igraph::list.vertex.attributes(graph))
-          {
-            uc = setdiff(unique(igraph::V(graph)$col), NA)
-            RCytoscape::setNodeColorRule(cw, 'col', uc, uc, mode = 'lookup')
-          }
+##         if ('col' %in% igraph::list.vertex.attributes(graph))
+##           {
+##             uc = setdiff(unique(igraph::V(graph)$col), NA)
+##             RCytoscape::setNodeColorRule(cw, 'col', uc, uc, mode = 'lookup')
+##           }
 
-        if (verbose)
-          cat('Setting node labels\n')
+##         if (verbose)
+##           cat('Setting node labels\n')
 
-        if ('label' %in% igraph::list.vertex.attributes(graph))
-          RCytoscape::setNodeLabelRule(cw, 'label')
+##         if ('label' %in% igraph::list.vertex.attributes(graph))
+##           RCytoscape::setNodeLabelRule(cw, 'label')
 
-        if (verbose)
-          cat('Setting node shapes\n')
+##         if (verbose)
+##           cat('Setting node shapes\n')
 
-        if ('shape' %in% igraph::list.vertex.attributes(graph))
-          {
-            us = setdiff(unique(V(graph)$shape), NA)
-            RCytoscape::setNodeShapeRule(cw, 'shape', us, us, default = 'ELLIPSE')
-          }
+##         if ('shape' %in% igraph::list.vertex.attributes(graph))
+##           {
+##             us = setdiff(unique(V(graph)$shape), NA)
+##             RCytoscape::setNodeShapeRule(cw, 'shape', us, us, default = 'ELLIPSE')
+##           }
 
-        if (verbose)
-          cat('Setting node width\n')
+##         if (verbose)
+##           cat('Setting node width\n')
 
-        if ('border.width' %in% igraph::list.vertex.attributes(graph))
-          {
-            ubw = setdiff(unique(V(graph)$border.width), NA)
-            RCytoscape::setNodeBorderWidthRule(cw, 'border.width', ubw, ubw)
-          }
+##         if ('border.width' %in% igraph::list.vertex.attributes(graph))
+##           {
+##             ubw = setdiff(unique(V(graph)$border.width), NA)
+##             RCytoscape::setNodeBorderWidthRule(cw, 'border.width', ubw, ubw)
+##           }
 
-        if (all(c('x', 'y') %in% igraph::list.vertex.attributes(graph)))
-          {
-            good.ix = !is.na(V(graph)$x) & !is.na(V(graph)$y)
-            if (any(good.ix))
-              RCytoscape::setNodePosition(cw, V(graph)$name[good.ix], V(graph)$x[good.ix], V(graph)$y[good.ix])
-          }
-        else
-          RCytoscape::layoutNetwork(cw, layout)
-
-
-        RCytoscape::redraw(cw)
-      }
-
-    return(cw)
-  }
+##         if (all(c('x', 'y') %in% igraph::list.vertex.attributes(graph)))
+##           {
+##             good.ix = !is.na(V(graph)$x) & !is.na(V(graph)$y)
+##             if (any(good.ix))
+##               RCytoscape::setNodePosition(cw, V(graph)$name[good.ix], V(graph)$x[good.ix], V(graph)$y[good.ix])
+##           }
+##         else
+##           RCytoscape::layoutNetwork(cw, layout)
 
 
-####################
-#' @name igraph2graph
-#' @title igraph2graph
-#'
-#' @description
-#' Converts igraph object into janky graphNEL object (for visualization in cytoscape)
-#' and populates all edge features both via the edgeL and as NodeAttributes for visualization
-#' in cytoscape
-#'
-#' @importFrom graph edgeData<- nodeData<-
-#' @param g igraph object
-#' @author Marcin Imielinski
-#' @export
-#' @return graph object
-igraph2graph = function(g)
-  {
-    # require(igraph)
-    # require(graph)
-    # require(RCytoscape)
+##         RCytoscape::redraw(cw)
+##       }
 
-    if (class(V) != 'function' | class(E) != 'function')
-      stop('Namespace conflict - either V() or E() no longer mapping to igraph functions')
+##     return(cw)
+##   }
 
-    if (!is.null(V(g)$name))
-      node.labels = V(g)$name
-    else
-      node.labels = as.character(V(g));
 
-    edge.df = structure(as.data.frame(get.edgelist(g), stringsAsFactors = F), names = c('vertices', 'edges'))
-    if (length(igraph::list.edge.attributes(g))>0)
-      {
-        tmp = do.call('cbind', lapply(igraph::list.edge.attributes(g), function(x) get.edge.attribute(g, x)))
-        colnames(tmp) = igraph::list.edge.attributes(g)
-        edge.df = cbind(edge.df, as.data.frame(tmp, stringsAsFactors = F))
-      }
-    if (!is.null(edge.df$weights))
-      edge.df$weights = as.numeric(edge.df$weights)
-    edge.df[is.na(edge.df)] = "NA"
-    edge.df[,1] = as.character(edge.df[,1])
-    edge.df[,2] = as.character(edge.df[,2])
+## ####################
+## #' @name igraph2graph
+## #' @title igraph2graph
+## #'
+## #' @description
+## #' Converts igraph object into janky graphNEL object (for visualization in cytoscape)
+## #' and populates all edge features both via the edgeL and as NodeAttributes for visualization
+## #' in cytoscape
+## #'
+## #' #@importFrom graph edgeData<- nodeData<-
+## #' @param g igraph object
+## #' @author Marcin Imielinski
+## #' @export
+## #' @return graph object
+## igraph2graph = function(g)
+##   {
+##     # require(igraph)
+##     # require(graph)
+##     # require(RCytoscape)
 
-    vertex.df = data.frame(vertices = node.labels, stringsAsFactors = F)
-    if (length(igraph::list.vertex.attributes(g))>0)
-      {
-        tmp = do.call('cbind', lapply(igraph::list.vertex.attributes(g), function(x) get.vertex.attribute(g, x)))
-        colnames(tmp) = igraph::list.vertex.attributes(g)
-        vertex.df = cbind(vertex.df, as.data.frame(tmp, stringsAsFactors = F))
-      }
+##     if (class(V) != 'function' | class(E) != 'function')
+##       stop('Namespace conflict - either V() or E() no longer mapping to igraph functions')
 
-    ## have to reciprocate edges in undirected otherwise graphNEL will barf
-    if (!igraph::is.directed(g))
-      {
-        edge.df.rev = edge.df;
-        tmp.col = edge.df[,2]
-        edge.df.rev[,2] = edge.df.rev[,1]
-        edge.df.rev[,1] = tmp.col;
-        edge.df = rbind(edge.df, edge.df.rev)
-      }
+##     if (!is.null(V(g)$name))
+##       node.labels = V(g)$name
+##     else
+##       node.labels = as.character(V(g));
 
-    edgeL = lapply(split(edge.df, edge.df$vertices), as.list)[node.labels]
-    names(edgeL) = node.labels;
+##     edge.df = structure(as.data.frame(get.edgelist(g), stringsAsFactors = F), names = c('vertices', 'edges'))
+##     if (length(igraph::list.edge.attributes(g))>0)
+##       {
+##         tmp = do.call('cbind', lapply(igraph::list.edge.attributes(g), function(x) get.edge.attribute(g, x)))
+##         colnames(tmp) = igraph::list.edge.attributes(g)
+##         edge.df = cbind(edge.df, as.data.frame(tmp, stringsAsFactors = F))
+##       }
+##     if (!is.null(edge.df$weights))
+##       edge.df$weights = as.numeric(edge.df$weights)
+##     edge.df[is.na(edge.df)] = "NA"
+##     edge.df[,1] = as.character(edge.df[,1])
+##     edge.df[,2] = as.character(edge.df[,2])
 
-    ## retarded GraphNEL object format necessitates these gymnastics
-    null.vert = sapply(edgeL, is.null)
-    blank.edge.item = list(structure(rep(list(c()), length(igraph::list.edge.attributes(g))+1), names = c('edges', igraph::list.edge.attributes(g))))
-    edgeL[null.vert] = blank.edge.item
-    edgemode = c('undirected', 'directed')[1 + igraph::is.directed(g)]
+##     vertex.df = data.frame(vertices = node.labels, stringsAsFactors = F)
+##     if (length(igraph::list.vertex.attributes(g))>0)
+##       {
+##         tmp = do.call('cbind', lapply(igraph::list.vertex.attributes(g), function(x) get.vertex.attribute(g, x)))
+##         colnames(tmp) = igraph::list.vertex.attributes(g)
+##         vertex.df = cbind(vertex.df, as.data.frame(tmp, stringsAsFactors = F))
+##       }
 
-    out.g = new('graphNEL', node.labels, edgeL, edgemode = edgemode)
+##     ## have to reciprocate edges in undirected otherwise graphNEL will barf
+##     if (!igraph::is.directed(g))
+##       {
+##         edge.df.rev = edge.df;
+##         tmp.col = edge.df[,2]
+##         edge.df.rev[,2] = edge.df.rev[,1]
+##         edge.df.rev[,1] = tmp.col;
+##         edge.df = rbind(edge.df, edge.df.rev)
+##       }
 
-    ## populate edge and node attribute for RCytoscape to access
-    if (ncol(edge.df)>2)
-      {
-        attr.cols = names(edge.df)[3:ncol(edge.df)]
-        for (attr in attr.cols)
-          {
-            if (is.numeric(edge.df[, attr]))
-              out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'numeric', NA)
-            else if (is.integer(edge.df[, attr]))
-              out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'integer', NA)
-            else
-              {
-                cast.numeric = suppressWarnings(as.numeric(edge.df[, attr]))
-                cast.character = edge.df[, attr]
+##     edgeL = lapply(split(edge.df, edge.df$vertices), as.list)[node.labels]
+##     names(edgeL) = node.labels;
 
-                if (any(is.na(cast.numeric) & cast.character != "NA"))
-                  {
-                    edge.df[, attr] = as.character(edge.df[, attr])
-                    out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'char', '')
-                  }
-                else
-                  {
-                    cast.numeric[is.na(cast.numeric)] = 0
-                    edge.df[, attr] = cast.numeric
-                    out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'numeric', '')
-                  }
-              }
-            edgeData(out.g, edge.df[,1], edge.df[,2], attr) = edge.df[,attr]
-          }
-      }
+##     ## retarded GraphNEL object format necessitates these gymnastics
+##     null.vert = sapply(edgeL, is.null)
+##     blank.edge.item = list(structure(rep(list(c()), length(igraph::list.edge.attributes(g))+1), names = c('edges', igraph::list.edge.attributes(g))))
+##     edgeL[null.vert] = blank.edge.item
+##     edgemode = c('undirected', 'directed')[1 + igraph::is.directed(g)]
 
-    if (ncol(vertex.df)>1)
-      {
-        attr.cols = names(vertex.df)[2:ncol(vertex.df)]
-        for (attr in attr.cols)
-          {
-            if (is.numeric(vertex.df[, attr]))
-              out.g = RCytoscape::initNodeAttribute(out.g, attr, 'numeric', NA)
-            else if (is.integer(vertex.df[, attr]))
-              out.g = RCytoscape::initNodeAttribute(out.g, attr, 'integer', NA)
-            else
-              {
-                cast.numeric = suppressWarnings(as.numeric(vertex.df[, attr]))
-                cast.character = suppressWarnings(as.character(vertex.df[, attr]))
-                if (any(setdiff(is.na(cast.numeric) & cast.character != "NA", NA)))
-                  {
-                    vertex.df[, attr] = as.character(vertex.df[, attr])
-                    out.g = RCytoscape::initNodeAttribute(out.g, attr, 'char', '')
-                  }
-                else
-                  {
-                    cast.numeric[is.na(cast.numeric)] = 0
-                    vertex.df[, attr] = cast.numeric
-                    out.g = RCytoscape::initNodeAttribute(out.g, attr, 'char', '')
-                  }
-              }
-            nodeData(out.g, vertex.df[,1], attr) = vertex.df[,attr]
-          }
-      }
+##     out.g = new('graphNEL', node.labels, edgeL, edgemode = edgemode)
 
-    return(out.g)
-  }
+##     ## populate edge and node attribute for RCytoscape to access
+##     if (ncol(edge.df)>2)
+##       {
+##         attr.cols = names(edge.df)[3:ncol(edge.df)]
+##         for (attr in attr.cols)
+##           {
+##             if (is.numeric(edge.df[, attr]))
+##               out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'numeric', NA)
+##             else if (is.integer(edge.df[, attr]))
+##               out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'integer', NA)
+##             else
+##               {
+##                 cast.numeric = suppressWarnings(as.numeric(edge.df[, attr]))
+##                 cast.character = edge.df[, attr]
 
-#' @name cyto2igraph
-#' @title cyto2igraph
-#'
-#' @description
-#' Pulls graph in CytoscapeWindow "cw" and returns as igraph object
-#'
-#' @param cw CytoscapeWindow object to grab from (see Rcytoscape)
-#' @author Marcin Imielinski
-#' @return igraph object
-#' @export
-cyto2igraph = function(cw)
-{
-  node.attr = RCytoscape::getAllNodeAttributes(cw)
-  edge.attr = RCytoscape::getAllEdgeAttributes(cw)
-  directed = graph::edgemode(cw@graph) == 'directed'
+##                 if (any(is.na(cast.numeric) & cast.character != "NA"))
+##                   {
+##                     edge.df[, attr] = as.character(edge.df[, attr])
+##                     out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'char', '')
+##                   }
+##                 else
+##                   {
+##                     cast.numeric[is.na(cast.numeric)] = 0
+##                     edge.df[, attr] = cast.numeric
+##                     out.g = RCytoscape::initEdgeAttribute(out.g, attr, 'numeric', '')
+##                   }
+##               }
+##             edgeData(out.g, edge.df[,1], edge.df[,2], attr) = edge.df[,attr]
+##           }
+##       }
 
-  edge.df = cbind(from = edge.attr$source, to = edge.attr$target,
-    edge.attr[, setdiff(names(edge.attr), c('source', 'target'))])
+##     if (ncol(vertex.df)>1)
+##       {
+##         attr.cols = names(vertex.df)[2:ncol(vertex.df)]
+##         for (attr in attr.cols)
+##           {
+##             if (is.numeric(vertex.df[, attr]))
+##               out.g = RCytoscape::initNodeAttribute(out.g, attr, 'numeric', NA)
+##             else if (is.integer(vertex.df[, attr]))
+##               out.g = RCytoscape::initNodeAttribute(out.g, attr, 'integer', NA)
+##             else
+##               {
+##                 cast.numeric = suppressWarnings(as.numeric(vertex.df[, attr]))
+##                 cast.character = suppressWarnings(as.character(vertex.df[, attr]))
+##                 if (any(setdiff(is.na(cast.numeric) & cast.character != "NA", NA)))
+##                   {
+##                     vertex.df[, attr] = as.character(vertex.df[, attr])
+##                     out.g = RCytoscape::initNodeAttribute(out.g, attr, 'char', '')
+##                   }
+##                 else
+##                   {
+##                     cast.numeric[is.na(cast.numeric)] = 0
+##                     vertex.df[, attr] = cast.numeric
+##                     out.g = RCytoscape::initNodeAttribute(out.g, attr, 'char', '')
+##                   }
+##               }
+##             nodeData(out.g, vertex.df[,1], attr) = vertex.df[,attr]
+##           }
+##       }
 
-  if ('name' %in% node.attr)
-    node.df = node.attr[, c('name', setdiff(names(node.attr), 'name'))]
-  else
-    node.df = cbind(name = rownames(node.attr), node.attr)
+##     return(out.g)
+##   }
 
-  return(igraph::graph.data.frame(edge.df, directed = directed, vertices = node.df))
-}
+## #' @name cyto2igraph
+## #' @title cyto2igraph
+## #'
+## #' @description
+## #' Pulls graph in CytoscapeWindow "cw" and returns as igraph object
+## #'
+## #' @param cw CytoscapeWindow object to grab from (see Rcytoscape)
+## #' @author Marcin Imielinski
+## #' @return igraph object
+## #' @export
+## cyto2igraph = function(cw)
+## {
+##   node.attr = RCytoscape::getAllNodeAttributes(cw)
+##   edge.attr = RCytoscape::getAllEdgeAttributes(cw)
+##   directed = graph::edgemode(cw@graph) == 'directed'
 
-#' @name brewer.master
-#' @title brewer.master
-#'
-#' @description
-#' Makes a lot of brewer colors using an "inexhaustible" brewer palette ie will not complain if number of colors requested is too high.
-#'
-#' Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
-#'
-#' @param n TODO
-#' @param palette character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)
-#' @return length(n) character vector of colors
-#' @author Marcin Imielinski
-#' @export
-brewer.master = function(n, palette = 'Accent')
-{
-  # library(RColorBrewer)
-  palettes = list(
-    sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
-    diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
-    qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
-  );
+##   edge.df = cbind(from = edge.attr$source, to = edge.attr$target,
+##     edge.attr[, setdiff(names(edge.attr), c('source', 'target'))])
 
-  palettes = unlist(palettes);
-  names(palettes) = gsub('\\w+\\.', '', names(palettes))
+##   if ('name' %in% node.attr)
+##     node.df = node.attr[, c('name', setdiff(names(node.attr), 'name'))]
+##   else
+##     node.df = cbind(name = rownames(node.attr), node.attr)
 
-  if (palette %in% names(palettes))
-    i = match(palette, names(palettes))
-  else
-    i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
+##   return(igraph::graph.data.frame(edge.df, directed = directed, vertices = node.df))
+## }
 
-  col = c();
-  col.remain = n;
+## #' @name brewer.master
+## #' @title brewer.master
+## #'
+## #' @description
+## #' Makes a lot of brewer colors using an "inexhaustible" brewer palette ie will not complain if number of colors requested is too high.
+## #'
+## #' Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
+## #'
+## #' @param n TODO
+## #' @param palette character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)
+## #' @return length(n) character vector of colors
+## #' @author Marcin Imielinski
+## #' @export
+## brewer.master = function(n, palette = 'Accent')
+## {
+##   # library(RColorBrewer)
+##   palettes = list(
+##     sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
+##     diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
+##     qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
+##   );
 
-  while (col.remain > 0)
-    {
-      if (col.remain > palettes[i])
-        {
-          next.n = palettes[i]
-          col.remain = col.remain-next.n;
-        }
-      else
-        {
-          next.n = col.remain
-          col.remain = 0;
-        }
+##   palettes = unlist(palettes);
+##   names(palettes) = gsub('\\w+\\.', '', names(palettes))
 
-      col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
-      i = ((i) %% length(palettes))+1
-    }
+##   if (palette %in% names(palettes))
+##     i = match(palette, names(palettes))
+##   else
+##     i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
 
-  col = col[1:n]
-  return(col)
-}
+##   col = c();
+##   col.remain = n;
+
+##   while (col.remain > 0)
+##     {
+##       if (col.remain > palettes[i])
+##         {
+##           next.n = palettes[i]
+##           col.remain = col.remain-next.n;
+##         }
+##       else
+##         {
+##           next.n = col.remain
+##           col.remain = 0;
+##         }
+
+##       col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
+##       i = ((i) %% length(palettes))+1
+##     }
+
+##   col = col[1:n]
+##   return(col)
+## }
 
 #' @name charToDec
 #' @title charToDec
