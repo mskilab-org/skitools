@@ -12,8 +12,6 @@ Imports:
     plotrix,
     S4Vectors,
     RColorBrewer,
-    RCytoscape,
-    graph,
     methods,		
     reshape2,		
     IRanges,		
