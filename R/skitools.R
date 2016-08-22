@@ -219,133 +219,344 @@ dedup = function(x, suffix = '.')
 #' @param conf.lines logical, optional, whether to draw 95 percent confidence interval lines around x-y line
 #' @param max numeric, optional, threshold to max the input p values
 #' @param label character vector, optional specifying which data points to label (obs vector has to be named, for this to work)
-#' @author Marcin Imielinski, Eran Hodis
+#' @param plotly toggles between creating a pdf (FALSE) or an interactive html widget (TRUE)
+#' @param annotations named list of vectors containing information to present as hover text (html widget), must be in same order as obs input 
+#' @param gradient named list that contains one vector that color codes points based on value, must bein same order as obs input 
+#' @param titleText title for plotly (html) graph only
+#' @author Marcin Imielinski, Eran Hodis, Zoran Gajic
 #' @export
-qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=T, max=NULL, qvalues=NULL, label = NULL,
-    subsample = NA, ...)
+qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=T, max=NULL, qvalues=NULL, label = NULL, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
 {
-    is.exp.null = is.null(exp)
+    if(!(plotly)){
+        is.exp.null = is.null(exp)
 
-    if (is.null(col))
-        col = rep('black', length(obs))
+        if (is.null(col))
+            col = rep('black', length(obs))
 
-    ix1 = !is.na(obs)
-    if (!is.null(exp))
-        if (length(exp) != length(obs))
-            stop('length of exp must be = length(obs)')
+        ix1 = !is.na(obs)
+        if (!is.null(exp))
+            if (length(exp) != length(obs))
+                stop('length of exp must be = length(obs)')
+            else
+                ix1 = ix1 & !is.na(exp)
+
+        if (is.null(highlight))
+            highlight = rep(FALSE, length(obs))
+        else if (is.logical(highlight))
+            {
+                if (length(highlight) != length(obs))
+                    stop('highlight must be either logical vector of same length as obs or a vector of indices')
+            }
         else
-            ix1 = ix1 & !is.na(exp)
+            highlight = 1:length(obs) %in% highlight
 
-    if (is.null(highlight))
-        highlight = rep(FALSE, length(obs))
-    else if (is.logical(highlight))
-        {
-            if (length(highlight) != length(obs))
-                stop('highlight must be either logical vector of same length as obs or a vector of indices')
+        obs = -log10(obs[ix1])
+        col = col[ix1]
+
+        highlight = highlight[ix1]
+        if (!is.null(exp))
+            exp = -log10(exp[ix1])
+
+        ix2 = !is.infinite(obs)
+        if (!is.null(exp))
+            ix2 = ix2 &  !is.infinite(exp)
+
+        obs = obs[ix2]
+        col = col[ix2]
+
+        highlight = highlight[ix2]
+        if (!is.null(exp))
+            exp = exp[ix2]
+
+        N <- length(obs)
+        ## create the null distribution
+        ## (-log10 of the uniform)
+
+        if (is.null(exp))
+            exp <- -log(1:N/N,10)
+        else
+            exp = sort(exp)
+
+        if (is.null(max))
+            max <- max(obs,exp) + 0.5
+        else
+            max <- max
+
+        if (is.exp.null)
+            {
+                tmp.exp = rev(seq(0, 7, 0.01))
+                ix = 10^(-tmp.exp)*N
+                c95 <-  qbeta(0.975,ix,N-ix+1)
+                c05 <-  qbeta(0.025,ix,N-ix+1)
+
+                if (conf.lines){
+                    ## plot the two confidence lines
+                    plot(tmp.exp, -log(c95,10), ylim=c(0,max), xlim=c(0,max), type="l", axes=FALSE, xlab="", ylab="")
+                    par(new=T)
+                    plot(tmp.exp, -log(c05,10), ylim=c(0,max), xlim=c(0,max), type="l", axes=FALSE, xlab="", ylab="")
+                    par(new=T)
+
+                    p1 <- rep(tmp.exp[1], 2)
+                    p2 <- c(-log(c95,10)[1], -log(c05,10)[1])
+
+                    lines(x=p1, y=p2)
+                    x.coords <- c(tmp.exp,rev(tmp.exp))
+                    y.coords <- c(-log(c95,10),rev(-log(c05,10)))
+                    polygon(x.coords, y.coords, col='light gray', border=NA)
+                    par(new=T)
+                }
+            }
+
+        ord = order(obs)
+
+                                        #colors = vector(mode = "character", length = length(obs)); colors[] = "black";
+
+        colors = col
+        colors[highlight] = "red";
+
+        dat = data.table(x = sort(exp), y = obs[ord], colors = colors[ord], pch = pch, cex = cex)
+        if (!is.null(names(obs)))
+            {
+                names = names(obs[ord])
+                setkey(dat, names)
+            }
+
+        if (nrow(dat)>1e5) ## rough guide to subsmapling the lower p value part of the plot
+            subsample = 5e4/nrow(dat)
+
+        if (is.na(subsample[1]))
+            dat[, plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max), col = colors, ylim = c(0, max), pch=pch, cex=cex, bg=col.bg, ...)]
+        else
+            {
+                subsample = pmin(pmax(0, subsample[1]), 1)
+                dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max), col = colors, ylim = c(0, max), pch=pch, cex=cex, bg=col.bg, ...)]
+            }
+
+        if (!is.null(label))
+            {
+                if (length(label)>0)
+                    if (is.null(key(dat)))
+                        warning('Need to provide names to input vector to draw labels')
+                    else
+                        dat[list(label), text(x, y, labels=label, pos=3)];
+            }
+
+        lines(x=c(0, max), y = c(0, max), col = "black", lwd = lwd);
+
+        if (!is.na(subsample))
+            dat = dat[sample(nrow(dat), subsample*nrow(dat)), ]
+
+        lambda = lm(y ~ x-1, dat)$coefficients;
+
+        lines(x=c(0, max), y = c(0, lambda*max), col = "red", lty = 2, lwd = lwd);
+        legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
+    }
+
+    else{
+
+        if(length(annotations) < 1){
+            hover <- do.call(cbind.data.frame, list(p = obs))
         }
-    else
-        highlight = 1:length(obs) %in% highlight
+        else{
+            hover <- do.call(cbind.data.frame, list(annotations, p = obs))
+        }    
+        hover <- as.data.table(hover)
 
-    obs = -log10(obs[ix1])
-    col = col[ix1]
-
-    highlight = highlight[ix1]
-    if (!is.null(exp))
-        exp = -log10(exp[ix1])
-
-    ix2 = !is.infinite(obs)
-    if (!is.null(exp))
-        ix2 = ix2 &  !is.infinite(exp)
-
-    obs = obs[ix2]
-    col = col[ix2]
-
-    highlight = highlight[ix2]
-    if (!is.null(exp))
-        exp = exp[ix2]
-
-    N <- length(obs)
-    ## create the null distribution
-    ## (-log10 of the uniform)
-
-    if (is.null(exp))
-        exp <- -log(1:N/N,10)
-    else
-        exp = sort(exp)
-
-    if (is.null(max))
-        max <- max(obs,exp) + 0.5
-    else
-        max <- max
-
-    if (is.exp.null)
-        {
+        
+        is.exp.null = is.null(exp)
+        if (is.null(col)) 
+            col = "black"
+        ix1 = !is.na(hover$p)
+        if (!is.null(exp)) 
+            if (length(exp) != length(hover$p)) 
+                stop("length of exp must be = length(hover$obs)")
+            else ix1 = ix1 & !is.na(exp)
+        if (is.null(highlight)) 
+            highlight = rep(FALSE, length(hover$p))
+        else if (is.logical(highlight)) {
+            if (length(highlight) != length(hover$p)) 
+                stop("highlight must be either logical vector of same length as obs or a vector of indices")
+        }
+        else highlight = 1:length(hover$p) %in% highlight
+        hover$obs = -log10(hover$p[ix1])
+        hover = hover[ix1]
+        highlight = highlight[ix1]
+        if (!is.null(exp)) 
+            exp = -log10(exp[ix1])
+        ix2 = !is.infinite(hover$obs)
+        if (!is.null(exp)) 
+            ix2 = ix2 & !is.infinite(exp)
+        hover = hover[ix2]
+        highlight = highlight[ix2]
+        if (!is.null(exp)) 
+            exp = exp[ix2]
+        N <- length(hover$obs)
+        if (is.null(exp)) 
+            exp <- -log(1:N/N, 10)
+        else exp = sort(exp)
+        if (is.null(max)) 
+            max <- max(hover$obs, exp) + 0.5
+        else max <- max
+        if (is.exp.null) {
             tmp.exp = rev(seq(0, 7, 0.01))
-            ix = 10^(-tmp.exp)*N
-            c95 <-  qbeta(0.975,ix,N-ix+1)
-            c05 <-  qbeta(0.025,ix,N-ix+1)
+            ix = 10^(-tmp.exp) * N
+            c95 <- qbeta(0.975, ix, N - ix + 1)
+            c05 <- qbeta(0.025, ix, N - ix + 1)
+            if (FALSE) {   ##Don't need if not using conf.line (might put this in the future)
+                plot(tmp.exp, -log(c95, 10), ylim = c(0, max), xlim = c(0, max),
+                type = "l", axes = FALSE, xlab = "", ylab = "")
 
-            if (conf.lines){
-                ## plot the two confidence lines
-                plot(tmp.exp, -log(c95,10), ylim=c(0,max), xlim=c(0,max), type="l", axes=FALSE, xlab="", ylab="")
-                par(new=T)
-                plot(tmp.exp, -log(c05,10), ylim=c(0,max), xlim=c(0,max), type="l", axes=FALSE, xlab="", ylab="")
-                par(new=T)
+                par(new = T)
+                plot(tmp.exp, -log(c05, 10), ylim = c(0, max), xlim = c(0, max),
+                type = "l", axes = FALSE, xlab = "", ylab = "")
 
+                par(new = T)
                 p1 <- rep(tmp.exp[1], 2)
-                p2 <- c(-log(c95,10)[1], -log(c05,10)[1])
+                p2 <- c(-log(c95, 10)[1], -log(c05, 10)[1])
+                lines(x = p1, y = p2)
+                x.coords <- c(tmp.exp, rev(tmp.exp))
+                y.coords <- c(-log(c95, 10), rev(-log(c05, 10)))
+                polygon(x.coords, y.coords, col = "light gray", border = NA)
+                par(new = T)
+            }
+        }
+                                  
+        #creating the ploting data.table (dat) and organizing the annotations to create hover text
+        ord = order(hover$obs)
+        hover = hover[ord]
+        dat = hover
+        hover$obs = NULL
 
-                lines(x=p1, y=p2)
-                x.coords <- c(tmp.exp,rev(tmp.exp))
-                y.coords <- c(-log(c95,10),rev(-log(c05,10)))
-                polygon(x.coords, y.coords, col='light gray', border=NA)
-                par(new=T)
+        #Creating the hover text
+        if(length(colnames(hover)) > 1){                                   
+            annotation_names  = sapply(colnames(hover), paste0, " : ")
+            annotation_names_wLineBreak  = paste("<br>", annotation_names[2:length(annotation_names)],
+            sep = "")
+            annotation_names = c(annotation_names[1], annotation_names_wLineBreak)
+        }
+        else{
+            annotation_names  = sapply(colnames(hover), paste0, " : ")
+        }
+
+        #Checking if there is a gradient and if so adding it to the plotting data.table (dat)
+        gradient_control = FALSE
+        if(length(gradient )!= 0){    
+            dat$grad = gradient[[1]][ord]
+            gradient_control = TRUE
+        }
+        else {   
+            dat$grad = c()
+        }
+        
+        
+        dat$x = sort(exp)
+        dat$y = dat$obs    
+        
+        #declare so we can use in If statement
+        p = NULL    
+
+        #hacky subsampling but works really well, just maxing out the number of points at 8k
+        #and removing the extra from the non-sig
+        #(looks to be -logp of 2.6 here can make this more dynamic later )
+
+        if (nrow(dat) <=  8000){
+
+            dat4 = dat
+            dat4$obs = NULL
+            dat4$x = NULL
+            dat4$y = NULL
+            dat4$grad = NULL
+            
+            trans = t(dat4)
+            hover_text = c()
+            for (i in 1:dim(trans)[2]){
+                outstr = paste(c(rbind(annotation_names, trans[,i])), sep = "", collapse = "")
+                hover_text = c(hover_text,outstr)
+            }
+
+            if(gradient_control){
+                dat[, p <- plot_ly(data = dat, x=x, y=y, text = hover_text, color = grad,
+                                   marker = list(colorbar = list(title = names(gradient[1]))),
+                                   mode = "markers",type = 'scatter')
+                    %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                               yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+            }
+            else{
+                dat[, p <- plot_ly(data = dat, x=x, y=y, text = hover_text,
+                                   mode = "markers",type = 'scatter')
+                    %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                               yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
         }
 
-    ord = order(obs)
 
-    #colors = vector(mode = "character", length = length(obs)); colors[] = "black";
+        else {
+                                    
+            dat$ID = c(1:nrow(dat))
+            dat2 = dat[ y < 2.6,]
+            dat3 = as.data.frame(dat2)
+            dat3 = as.data.table(dat3[ sample(nrow(dat3), min(4000,nrow(dat3))), ])
+            dat2 = rbind(dat3,dat[!(ID%in%dat2$ID),])
+            dat2$ID = NULL
+            
+            dat4 = dat2
+            dat4$obs = NULL
+            dat4$x = NULL
+            dat4$y = NULL
+            dat4$grad = NULL
 
-    colors = col
-    colors[highlight] = "red";
-
-    dat = data.table(x = sort(exp), y = obs[ord], colors = colors[ord], pch = pch, cex = cex)
-    if (!is.null(names(obs)))
-        {
-            names = names(obs[ord])
-            setkey(dat, names)
+            trans = t(dat4)
+            hover_text = c()
+            for (i in 1:dim(trans)[2]){
+                outstr = paste(c(rbind(annotation_names, trans[,i])), sep = "", collapse = "")
+                hover_text = c(hover_text,outstr)
+            }
+            
+            if(gradient_control){
+                dat2[, p <- plot_ly(data = dat2, x=x, y=y, text = hover_text, color = grad,
+                                    marker = list(colorbar = list(title = names(gradient[1]))),
+                                    mode = "markers",type = 'scatter')
+                     %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                                yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+            }
+            else{
+                dat2[, p <- plot_ly(data = dat2, x=x, y=y, text = hover_text,
+                                    mode = "markers",type = 'scatter')
+                     %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                                yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+            }
+            
         }
 
-    if (nrow(dat)>1e5) ## rough guide to subsmapling the lower p value part of the plot
-        subsample = 5e4/nrow(dat)
+        #Calculating lambda, Note that this is using the whole data set not the subsampled one
+        lambda = lm(y ~ x - 1, dat)$coefficients
+        lambda_max = max*as.numeric(lambda)
 
-    if (is.na(subsample[1]))
-        dat[, plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max), col = colors, ylim = c(0, max), pch=pch, cex=cex, bg=col.bg, ...)]
-    else
-        {
-            subsample = pmin(pmax(0, subsample[1]), 1)
-            dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max), col = colors, ylim = c(0, max), pch=pch, cex=cex, bg=col.bg, ...)]
-        }
-
-    if (!is.null(label))
-        {
-            if (length(label)>0)
-                if (is.null(key(dat)))
-                    warning('Need to provide names to input vector to draw labels')
-                else
-                    dat[list(label), text(x, y, labels=label, pos=3)];
-        }
-
-    lines(x=c(0, max), y = c(0, max), col = "black", lwd = lwd);
-
-    if (!is.na(subsample))
-        dat = dat[sample(nrow(dat), subsample*nrow(dat)), ]
-
-    lambda = lm(y ~ x-1, dat)$coefficients;
-
-    lines(x=c(0, max), y = c(0, lambda*max), col = "red", lty = 2, lwd = lwd);
-    legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
+        
+        ##adding shapes (lines) + title  note that html <b></b> style is used for mods and plotting lines
+        ##is done by specifying two points on the line (x0/y0 and x1/y1) 
+        p <- layout(p,title = sprintf("<b>%s</b>" ,titleText),titlefont = list(size = 24),
+                    shapes = list(list(type = "line",line = list(color = 'black'),
+                    x0 = 0, x1  = max, xref = "x", y0 = 0, y1 = max,yref ="y"),
+                    list( type = "line", line = list(color = "red"),
+                    x0 = 0, x1 = max, xref = "x", y0 = 0, y1 = lambda_max, yref = "y")),
+                    annotations = list(
+                        x = (0.9 * max),
+                        y = (0.03 * max),
+                        text = paste("lambda =",sprintf("%.2f", signif(lambda,3)), collapse = " "),
+                        font = list(
+                            color = "red",
+                            size = 20
+                            ),
+                        showarrow = FALSE,
+                        xref = "x",
+                        yref = "y"
+                        ),
+                    margin = list(
+                        t = 100
+                        
+                        ))
+    }
 }
 
 
