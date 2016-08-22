@@ -345,7 +345,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     lambda = lm(y ~ x-1, dat)$coefficients;
 
     lines(x=c(0, max), y = c(0, lambda*max), col = "red", lty = 2, lwd = lwd);
-    legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
+    legend('bottomright',sprintf('lambda = \n%.2f', lambda), text.col='red', adj = c(0.5, 0), bty='n', cex = cex)
 }
 
 
@@ -1654,6 +1654,8 @@ write.htab = function(tab, file = NULL,
     header.colors = c('#4A4A4A', 'white'), # two element vector specifying background and text colors for header row, respectively,
     data.size = 15, # font size in px for data, title, and footer
     dt = TRUE,
+    force = FALSE, ## force filename argument
+    embed = FALSE,
     title.size = 15, footer.size = 20, header.size = round(1.1*data.size))
   {
 
@@ -1668,775 +1670,787 @@ write.htab = function(tab, file = NULL,
     if (is.null(rownames(tab)))
       row.names = F;
 
-    if (!is.null(file))
-        {
-            if (!grepl('(^~)|(^\\/)', file))
-                file = paste('~/public_html/', file, sep = '')
-        }
-    else
-        {
-            if (nchar(Sys.getenv('HTAB.PATH'))>0)
-                file = Sys.getenv('HTAB.PATH')
-            else
-                file = '~/public_html/htab.html'
-        }
+      if (!force)
+      {
+          if (!is.null(file))
+          {
+              if (!grepl('(^~)|(^\\/)', file))
+                  file = paste('~/public_html/', file, sep = '')
+          }
+          else
+          {
+              if (nchar(Sys.getenv('HTAB.PATH'))>0)
+                  file = Sys.getenv('HTAB.PATH')
+              else
+                  file = '~/public_html/htab.html'
+          }
+      }
 
+      if (nchar(file.dir(file))==0)
+          file = paste0('./', file)      
+      
+      if (!file.exists(file.dir(file)))
+          system(paste('mkdir -p', file.dir(file)))
 
-    if (dt)
-        {
-            wij(DT::datatable(tab,
-                              options = list(
-                                  pageLength = 100),
-                              rownames = row.names), file)
-        }
-    else
-        {
-            
-            for (nm in names(tab))
-                tab[[nm]] = as.character(tab[[nm]])
-            tab[is.na(tab)] = '';
-            tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
-            
-            if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
-                for (i in which(lix))
-                    tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
+      file = paste(normalizePath(file.dir(file)), file.name(file), sep = '/')
 
-            dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
-            p = hwriter::openPage(file, link.css = 'hwriter.css')
-            if (!is.null(title))
-                hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
+     if (dt)
+     {
+         wij(DT::datatable(tab,
+                           escape = FALSE,
+                           filter = 'top',
+                           options = list(
+                               pageLength = 100),
+                           rownames = row.names), file, embed = embed)
+     }
+     else
+     {
+         
+         for (nm in names(tab))
+             tab[[nm]] = as.character(tab[[nm]])
+         tab[is.na(tab)] = '';
+         tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
+         
+         if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
+             for (i in which(lix))
+                 tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
 
-            row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
-            names(row.bgcolor) = rownames(tab)
-            if (!is.null(highlight))
-                row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
+         dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
+         p = hwriter::openPage(file, link.css = 'hwriter.css')
+         if (!is.null(title))
+             hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
 
-            row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
+         row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
+         names(row.bgcolor) = rownames(tab)
+         if (!is.null(highlight))
+             row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
+
+         row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
 
                                         #    if (row.names)
-            col.bgcolor = gplots::col2hex(header.colors[1])
+         col.bgcolor = gplots::col2hex(header.colors[1])
 
-            col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
+         col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
 
-            row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
-            names(row.style) = rownames(tab)
-            row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
+         row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
+         names(row.style) = rownames(tab)
+         row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
 
-            hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
-                            row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
-            if (!is.null(footer))
-                hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
-            hwriter::closePage(p)
-        }
-  }
+         hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
+                         row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
+         if (!is.null(footer))
+             hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
+         hwriter::closePage(p)
+     }
+          }
 
-#' @name col.scale
-#' @title col.scale
-#'
-#' @description
-#' Assigns rgb colors to numeric data values in vector "x".. maps scalar values
-#' in val.range (default c(0,1)) to a linear color scale of between col.min (default white)
-#' and col.max (default black), each which are length 3 vectors or characters.  RGB values are scaled between 0 and 1.
-#'
-#' Values below and above val.min and val.max are mapped to col.max and col.max respectively
-#'
-#' @param x length n numeric or integer data to color
-#' @param val.range data range to assign to colors (= c(0,1))
-#' @param col.min character color to interpolate minimum value in val.range (='white')
-#' @param col.max character color interpolate maximum value in val.range (='black')
-#' @param na.col color to give to na.values (='white')
-#' @param invert logical flag whether to flip min and max (=FALSE)
-#' @author Marcin Imielinski
-#' @return length n vector of colors
-#' @export
-col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
-  invert = FALSE # if T flips rgb.min and rgb.max
-  )
-  {
-    if (!is.numeric(col.min))
-      if (is.character(col.min))
-        col.min = col2rgb(col.min)/255
-      else
-        error('Color should be either length 3 vector or character')
-
-    if (!is.numeric(col.max))
-      if (is.character(col.max))
-        col.max = col2rgb(col.max)/255
-      else
-        error('Color should be either length 3 vector or character')
-
-    col.min = as.numeric(col.min);
-    col.max = as.numeric(col.max);
-
-    x = (pmax(val.range[1], pmin(val.range[2], x))-val.range[1])/diff(val.range);
-    col.min = pmax(0, pmin(1, col.min))
-    col.max = pmax(0, pmin(1, col.max))
-
-    if (invert)
+      #' @name col.scale
+      #' @title col.scale
+      #'
+      #' @description
+      #' Assigns rgb colors to numeric data values in vector "x".. maps scalar values
+      #' in val.range (default c(0,1)) to a linear color scale of between col.min (default white)
+      #' and col.max (default black), each which are length 3 vectors or characters.  RGB values are scaled between 0 and 1.
+      #'
+      #' Values below and above val.min and val.max are mapped to col.max and col.max respectively
+      #'
+      #' @param x length n numeric or integer data to color
+      #' @param val.range data range to assign to colors (= c(0,1))
+      #' @param col.min character color to interpolate minimum value in val.range (='white')
+      #' @param col.max character color interpolate maximum value in val.range (='black')
+      #' @param na.col color to give to na.values (='white')
+      #' @param invert logical flag whether to flip min and max (=FALSE)
+      #' @author Marcin Imielinski
+      #' @return length n vector of colors
+      #' @export
+      col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
+                           invert = FALSE # if T flips rgb.min and rgb.max
+                           )
       {
-        tmp = col.max
-        col.max = col.min
-        col.min = tmp
+          if (!is.numeric(col.min))
+              if (is.character(col.min))
+                  col.min = col2rgb(col.min)/255
+              else
+                  error('Color should be either length 3 vector or character')
+
+          if (!is.numeric(col.max))
+              if (is.character(col.max))
+                  col.max = col2rgb(col.max)/255
+              else
+                  error('Color should be either length 3 vector or character')
+
+          col.min = as.numeric(col.min);
+          col.max = as.numeric(col.max);
+
+          x = (pmax(val.range[1], pmin(val.range[2], x))-val.range[1])/diff(val.range);
+          col.min = pmax(0, pmin(1, col.min))
+          col.max = pmax(0, pmin(1, col.max))
+
+          if (invert)
+          {
+              tmp = col.max
+              col.max = col.min
+              col.min = tmp
+          }
+
+          nna = !is.na(x);
+
+          out = rep(na.col, length(x))
+          out[nna] = rgb((col.max[1]-col.min[1])*x[nna] + col.min[1],
+          (col.max[2]-col.min[2])*x[nna] + col.min[2],
+          (col.max[3]-col.min[3])*x[nna] + col.min[3])
+
+          return(out)
       }
 
-    nna = !is.na(x);
-
-    out = rep(na.col, length(x))
-    out[nna] = rgb((col.max[1]-col.min[1])*x[nna] + col.min[1],
-        (col.max[2]-col.min[2])*x[nna] + col.min[2],
-        (col.max[3]-col.min[3])*x[nna] + col.min[3])
-
-    return(out)
-}
-
 ############################
-#' @name capitalize
-#' @title capitalize
-#' @description
-#' Capitalize first letter of each character element of vector "string"
-#'
-#' @param string character vector to capitalize
-#' @param un logical flag whether to uncapitalize (=FALSE)
-#' @return character vector of strings with capitalized values
-#' @export
+      #' @name capitalize
+      #' @title capitalize
+      #' @description
+      #' Capitalize first letter of each character element of vector "string"
+      #'
+      #' @param string character vector to capitalize
+      #' @param un logical flag whether to uncapitalize (=FALSE)
+      #' @return character vector of strings with capitalized values
+      #' @export
 ##############################
-capitalize = function(string, un = FALSE)
-{
-    if (!un)
+      capitalize = function(string, un = FALSE)
       {
-        capped <- grep("^[^A-Z].*$", string, perl = TRUE)
-        substr(string[capped], 1, 1) <- toupper(substr(string[capped],1, 1))
-      }
-    else
-      {
-        capped <- grep("^[A-Z].*$", string, perl = TRUE)
-        substr(string[capped], 1, 1) <- tolower(substr(string[capped],1, 1))
-      }
+          if (!un)
+          {
+              capped <- grep("^[^A-Z].*$", string, perl = TRUE)
+              substr(string[capped], 1, 1) <- toupper(substr(string[capped],1, 1))
+          }
+          else
+          {
+              capped <- grep("^[A-Z].*$", string, perl = TRUE)
+              substr(string[capped], 1, 1) <- tolower(substr(string[capped],1, 1))
+          }
 
-    return(string)
-}
+          return(string)
+      }
 
 ############################
-#' @name fisher.pairwise
-#' @title fisher.pairwise
-#' @description
-#' Performs fisher test on cols of matrix / df x vs cols of matrix / df y
-#'
-#' returns list with ncol(x) by ncol(y) matrices $p and $or denoting the p value and odds ratio of the result of the
-#' fisher test on col i of x and col j of y
-#'
-#' If y is not provided, will correlate rows of x with themselves.
-#'
-#' @param x n x k1 data frame of categorical data on k1 variables
-#' @param y n x k2 optional data frame of categorical data on k2 variables (= x)
-#' @return list with field $p and $or correspodning to k1 x k2 matrices of p values and odds ratios for each pair of tests
-#' @export
-#' @author Marcin Imielinski
+      #' @name fisher.pairwise
+      #' @title fisher.pairwise
+      #' @description
+      #' Performs fisher test on cols of matrix / df x vs cols of matrix / df y
+      #'
+      #' returns list with ncol(x) by ncol(y) matrices $p and $or denoting the p value and odds ratio of the result of the
+      #' fisher test on col i of x and col j of y
+      #'
+      #' If y is not provided, will correlate rows of x with themselves.
+      #'
+      #' @param x n x k1 data frame of categorical data on k1 variables
+      #' @param y n x k2 optional data frame of categorical data on k2 variables (= x)
+      #' @return list with field $p and $or correspodning to k1 x k2 matrices of p values and odds ratios for each pair of tests
+      #' @export
+      #' @author Marcin Imielinski
 #############################
-fisher.pairwise = function(x, y = x)
-  {
-    p = or = matrix(NA, nrow = ncol(x), ncol = ncol(y), dimnames = list(colnames(x), colnames(y)))
+      fisher.pairwise = function(x, y = x)
+      {
+          p = or = matrix(NA, nrow = ncol(x), ncol = ncol(y), dimnames = list(colnames(x), colnames(y)))
 
-    if (nrow(x) != nrow(y))
-      stop('x and y must have the same number of rows')
+          if (nrow(x) != nrow(y))
+              stop('x and y must have the same number of rows')
 
-    logical.x = which(sapply(1:ncol(x), function(i) is.logical(x[,i])))
-    logical.y = which(sapply(1:ncol(y), function(i) is.logical(y[,i])))
+          logical.x = which(sapply(1:ncol(x), function(i) is.logical(x[,i])))
+          logical.y = which(sapply(1:ncol(y), function(i) is.logical(y[,i])))
 
-    if (length(logical.x)==0 | length(logical.y)==0)
-      warning('No logical columns found')
+          if (length(logical.x)==0 | length(logical.y)==0)
+              warning('No logical columns found')
 
-    for (i in logical.x)
-          for (j in logical.y)
-            {
-              O = table(x[,i], y[,j])
-              if (min(dim(O))>1)
-                {
-                  res = fisher.test(O)
-                  or[i, j] = res$estimate
-                  p[i, j] = res$p.value
-                }
-            }
+          for (i in logical.x)
+              for (j in logical.y)
+              {
+                  O = table(x[,i], y[,j])
+                  if (min(dim(O))>1)
+                  {
+                      res = fisher.test(O)
+                      or[i, j] = res$estimate
+                      p[i, j] = res$p.value
+                  }
+              }
 
-    out = list(p = p, or = or)
-    return(out)
-  }
-
-
-################
-#' @name strsplit2
-#' @title strsplit2
-#'
-#' @description
-#' Strsplit when there are two layers of separators (sep1, sep2) and one needs to extract
-#' a collapsed vector of subitem j for all items i.
-#'
-#' Takes in a character vector and outputs a list of "separated" items
-#'
-#' @param x character vector
-#' @param sep1 character specifying first level separator (=',')
-#' @param sep2 character specifying second level separator (=' ')
-#' @param j integer specifying which subitem to keep (=1)
-#' @author Marcin Imielinski
-#' @export
-#' @return vector of values for subitem j
-################
-strsplit2 = function(x, sep1 = ",", sep2 = " ", j = 1)
-  {
-    return(lapply(strsplit(x, sep1), function(y) sapply(strsplit(y, sep2), function(z) z[[j]])))
-  }
+          out = list(p = p, or = or)
+          return(out)
+      }
 
 
 ################
-#' @name timestamp
-#' @title timestamp
-#'
-#' @description
-#' returns character time stamp
-#' @author Marcin Imielinski
-#' @export
+      #' @name strsplit2
+      #' @title strsplit2
+      #'
+      #' @description
+      #' Strsplit when there are two layers of separators (sep1, sep2) and one needs to extract
+      #' a collapsed vector of subitem j for all items i.
+      #'
+      #' Takes in a character vector and outputs a list of "separated" items
+      #'
+      #' @param x character vector
+      #' @param sep1 character specifying first level separator (=',')
+      #' @param sep2 character specifying second level separator (=' ')
+      #' @param j integer specifying which subitem to keep (=1)
+      #' @author Marcin Imielinski
+      #' @export
+      #' @return vector of values for subitem j
 ################
-timestamp = function()
-  {
-    return(gsub('[^\\d]', '', as.character(Sys.time()), perl = T))
-  }
+      strsplit2 = function(x, sep1 = ",", sep2 = " ", j = 1)
+      {
+          return(lapply(strsplit(x, sep1), function(y) sapply(strsplit(y, sep2), function(z) z[[j]])))
+      }
+
+
+################
+      #' @name timestamp
+      #' @title timestamp
+      #'
+      #' @description
+      #' returns character time stamp
+      #' @author Marcin Imielinski
+      #' @export
+################
+      timestamp = function()
+      {
+          return(gsub('[^\\d]', '', as.character(Sys.time()), perl = T))
+      }
 
 
 ###############
-#' @name img_link
-#' @title img_link
-#'
-#' @description
-#' Returns vector of html image links to files "file" with text "caption"
-#'
-#' if embed = T, then will make img link, and additional arguments may be supplied to image tag (eg height, width)
-#' @param file vector of (relative) image file paths to link to
-#' @param caption character vector of captions to add (= '')
-#' @param embed logical flag whether to imbed images instead of returning links (=FALSE)
-#' @param ... additional parameters to embed in tag (e.g. height and width)
-#' @return character vector of links (<a> tags) or image tags (<img> or <embed) to dump into an html document
-#' @author Marcin Imielinski
-#' @export
+      #' @name img_link
+      #' @title img_link
+      #'
+      #' @description
+      #' Returns vector of html image links to files "file" with text "caption"
+      #'
+      #' if embed = T, then will make img link, and additional arguments may be supplied to image tag (eg height, width)
+      #' @param file vector of (relative) image file paths to link to
+      #' @param caption character vector of captions to add (= '')
+      #' @param embed logical flag whether to imbed images instead of returning links (=FALSE)
+      #' @param ... additional parameters to embed in tag (e.g. height and width)
+      #' @return character vector of links (<a> tags) or image tags (<img> or <embed) to dump into an html document
+      #' @author Marcin Imielinski
+      #' @export
 ################
-img_link = function(file, caption = NULL, embed = F, ...) {
-	if (is.null(caption)) {
-		caption = ''
-	}
+      img_link = function(file, caption = NULL, embed = F, ...) {
+          if (is.null(caption)) {
+              caption = ''
+          }
 
-	if (!embed) {
-		return(paste('<a href = \"', file, '\">', caption, '</a>', sep = ''))
-	} else {
-		args = list(...);
-		if (length(args)>0) {
-			to.quote = is.numeric(unlist(args))+1
-			more.args = paste((paste(', ', names(args), " = ", c('\"', '')[to.quote], unlist(args), c('\"', '')[to.quote], sep = "")), collapse="")
-		} else {
-			more.args = ''
-		}
+          if (!embed) {
+              return(paste('<a href = \"', file, '\">', caption, '</a>', sep = ''))
+          } else {
+              args = list(...);
+              if (length(args)>0) {
+                  to.quote = is.numeric(unlist(args))+1
+                  more.args = paste((paste(', ', names(args), " = ", c('\"', '')[to.quote], unlist(args), c('\"', '')[to.quote], sep = "")), collapse="")
+              } else {
+                  more.args = ''
+              }
 
-		parts = strsplit(basename(file), "\\.")[[1]]
-		file.ext = parts[length(parts)]
-		if (file.ext == "tif") { # handles tif images which won't display in chrome with a regular img src tag
-			out = paste('<embed src = \"', file, '\", type = "image/tiff"', more.args, ' negative=yes>', sep = "")
-		} else {
-			out = paste('<img src = \"', file, '\", alt = \"', caption, '\"', more.args, '>', sep = "")
-		}
+              parts = strsplit(basename(file), "\\.")[[1]]
+              file.ext = parts[length(parts)]
+              if (file.ext == "tif") { # handles tif images which won't display in chrome with a regular img src tag
+                  out = paste('<embed src = \"', file, '\", type = "image/tiff"', more.args, ' negative=yes>', sep = "")
+              } else {
+                  out = paste('<img src = \"', file, '\", alt = \"', caption, '\"', more.args, '>', sep = "")
+              }
 
-		return(out)
-	}
-}
-
-#############
-#' @name img.html
-#' @title img.html
-#'
-#' @description
-#' takes img.paths and dumps out html with imgs +/- names
-#'
-#' can be dumped into a file for showing many images into a single page
-#' alternative to img_link for "embedding images"
-#'
-#' @param paths vector of (relative) paths to embed in html
-#' @param text optional text label to put above embedded images (default = names(paths))
-#' @return character vector of img tags
-#' @author Marcin Imielinski
-#' @export
-#############
-img.html = function(paths, text = names(paths), height = 1024, width = 768)
-    {
-        if (is.null(text))
-            text = ''
-
-        df = data.frame(paths = paths, text = text)
-        return(as.vector(rbind(ifelse(!is.na(df$text), paste("<p> <h1>", df$text, "</h1> <p> "), ""),
-            paste("<img src = '", df$paths, "' height = '", height, "' width = '", width, "'>", sep = ''))))
-    }
-
-#########
-#' @name html_link
-#' @title html_link
-#'
-#' @description
-#' returns text with html link
-#'
-#' @param href character vector of paths to link
-#' @param text text to display
-#' @return character vector of html link text
-#' @author Marcin Imielinski
-#' @export
-#########
-html_link = function(href, text = NULL)
-  {
-    if (is.null(text))
-      text = file.name(href)
-
-    return(mapply(function(x,y) html_tag('a', href = x,  text = y), href, text))
-  }
-
-
-#########
-#' @name html_tag
-#' @title html_tag
-#'
-#' @description
-#' makes a open and close html tag with optional text inside and optional (named) vector of name=value pairs contained inside of opening tag
-#'
-#' @param tag character vector of tags (without brackets)
-#' @param text text to put inside tags
-#' @param collapse how to collapse tags (=newline)
-#' @return character vector of html
-#' @author Marcin Imielinski
-#' @export
-#########
-html_tag = function(tag, text = NULL, collapse = '\n',  ...)
-  {
-    flags = unlist(list(...))
-
-    if (!is.null(flags))
-      {
-        if (is.null(names(flags)))
-          flag.str = ""
-        else
-          flag.str = paste(" ", paste(paste(names(flags), paste('"', flags, '"', sep = ""), sep = "=")), collapse = "")
+              return(out)
+          }
       }
-    else
-      flag.str = ""
 
-    return(paste(sprintf('<%s%s>', tag, flag.str), paste(text, collapse = collapse), sprintf('</%s>', tag), sep = collapse))
-  }
+#############
+      #' @name img.html
+      #' @title img.html
+      #'
+      #' @description
+      #' takes img.paths and dumps out html with imgs +/- names
+      #'
+      #' can be dumped into a file for showing many images into a single page
+      #' alternative to img_link for "embedding images"
+      #'
+      #' @param paths vector of (relative) paths to embed in html
+      #' @param text optional text label to put above embedded images (default = names(paths))
+      #' @return character vector of img tags
+      #' @author Marcin Imielinski
+      #' @export
+#############
+      img.html = function(paths, text = names(paths), height = 1024, width = 768)
+      {
+          if (is.null(text))
+              text = ''
+
+          df = data.frame(paths = paths, text = text)
+          return(as.vector(rbind(ifelse(!is.na(df$text), paste("<p> <h1>", df$text, "</h1> <p> "), ""),
+                                 paste("<img src = '", df$paths, "' height = '", height, "' width = '", width, "'>", sep = ''))))
+      }
+
+#########
+      #' @name html_link
+      #' @title html_link
+      #'
+      #' @description
+      #' returns text with html link
+      #'
+      #' @param href character vector of paths to link
+      #' @param text text to display
+      #' @return character vector of html link text
+      #' @author Marcin Imielinski
+      #' @export
+#########
+      html_link = function(href, text = NULL)
+      {
+          if (is.null(text))
+              text = file.name(href)
+
+          return(mapply(function(x,y) html_tag('a', href = x,  text = y), href, text))
+      }
+
+
+#########
+      #' @name html_tag
+      #' @title html_tag
+      #'
+      #' @description
+      #' makes a open and close html tag with optional text inside and optional (named) vector of name=value pairs contained inside of opening tag
+      #'
+      #' @param tag character vector of tags (without brackets)
+      #' @param text text to put inside tags
+      #' @param collapse how to collapse tags (=newline)
+      #' @return character vector of html
+      #' @author Marcin Imielinski
+      #' @export
+#########
+      html_tag = function(tag, text = NULL, collapse = '\n',  ...)
+      {
+          flags = unlist(list(...))
+
+          if (!is.null(flags))
+          {
+              if (is.null(names(flags)))
+                  flag.str = ""
+              else
+                  flag.str = paste(" ", paste(paste(names(flags), paste('"', flags, '"', sep = ""), sep = "=")), collapse = "")
+          }
+          else
+              flag.str = ""
+
+          return(paste(sprintf('<%s%s>', tag, flag.str), paste(text, collapse = collapse), sprintf('</%s>', tag), sep = collapse))
+      }
 
 
 ################
-#' @name set.comp
-#' @title set.comp
-#'
-#' @description
-#' Compares two sets and outputs data frame with "left", "middle", "right" members
-#'
-#'
-#' @author Bryan Hernandez
-#' @param s1 vector corresponding to "set 1"
-#' @param s2 vector corresponding to "set 2"
-#' @return list with fields $left, $middle, and $right corresponding to vectors that are in the left setdiff, intersection, right setdiff respectively
-#' @export
+      #' @name set.comp
+      #' @title set.comp
+      #'
+      #' @description
+      #' Compares two sets and outputs data frame with "left", "middle", "right" members
+      #'
+      #'
+      #' @author Bryan Hernandez
+      #' @param s1 vector corresponding to "set 1"
+      #' @param s2 vector corresponding to "set 2"
+      #' @return list with fields $left, $middle, and $right corresponding to vectors that are in the left setdiff, intersection, right setdiff respectively
+      #' @export
 ################
-set.comp = function(s1, s2)
-  {
-    universe = sort(union(s1, s2));
-    out = data.frame(stringsAsFactors = F)
-    tmp.comp = list(left = sort(setdiff(s1, s2)), middle = sort(intersect(s1, s2)), right = sort(setdiff(s2, s1)))
-    lapply(names(tmp.comp), function(x) out[1:length(tmp.comp[[x]]),x] <<- tmp.comp[[x]])
-    out[is.na(out)] = ''
-    return(out)
-  }
+      set.comp = function(s1, s2)
+      {
+          universe = sort(union(s1, s2));
+          out = data.frame(stringsAsFactors = F)
+          tmp.comp = list(left = sort(setdiff(s1, s2)), middle = sort(intersect(s1, s2)), right = sort(setdiff(s2, s1)))
+          lapply(names(tmp.comp), function(x) out[1:length(tmp.comp[[x]]),x] <<- tmp.comp[[x]])
+          out[is.na(out)] = ''
+          return(out)
+      }
 
 
 
 ################################
-#' @name dedup
-#' @title dedup
-#'
-#' @description
-#' relabels duplicates in a character vector with .1, .2, .3
-#' (where "." can be replaced by any user specified suffix)
-#'
-#' @param x input vector to dedup
-#' @param suffix suffix separator to use before adding integer for dups in x
-#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
-#' @author Marcin Imielinski
-#' @export
+      #' @name dedup
+      #' @title dedup
+      #'
+      #' @description
+      #' relabels duplicates in a character vector with .1, .2, .3
+      #' (where "." can be replaced by any user specified suffix)
+      #'
+      #' @param x input vector to dedup
+      #' @param suffix suffix separator to use before adding integer for dups in x
+      #' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+      #' @author Marcin Imielinski
+      #' @export
 ################################
-dedup = function(x, suffix = '.')
-{
-  dup = duplicated(x);
-  udup = setdiff(unique(x[dup]), NA)
-  udup.ix = lapply(udup, function(y) which(x==y))
-  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
-  out = x;
-  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
-  return(out)  
-}
+      dedup = function(x, suffix = '.')
+      {
+          dup = duplicated(x);
+          udup = setdiff(unique(x[dup]), NA)
+          udup.ix = lapply(udup, function(y) which(x==y))
+          udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+          out = x;
+          out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+          return(out)  
+      }
 
 
 
 ################################
-#' @name is.dup
-#' @title is.dup
-#'
-#' @description
-#' labels which vectors in x are part of a dup
-#' returns logical TRUE if vector is part of a dup
-#'
-#' Note: this is a twist on "duplicated" which only returns TRUE if a given element is a duplicate (i.e. duplicated ()  is FALSE
-#' for the original version for the duplicate, while is.dup() will be TRUE for that element)
-#'
-#' x can be vector or matrix
-#'
-#' @param x vector or matrix to check
-#' @return logical vector of length(x) or nrow(x)
-#' @author Marcin Imielinski
-#' @export
+      #' @name is.dup
+      #' @title is.dup
+      #'
+      #' @description
+      #' labels which vectors in x are part of a dup
+      #' returns logical TRUE if vector is part of a dup
+      #'
+      #' Note: this is a twist on "duplicated" which only returns TRUE if a given element is a duplicate (i.e. duplicated ()  is FALSE
+      #' for the original version for the duplicate, while is.dup() will be TRUE for that element)
+      #'
+      #' x can be vector or matrix
+      #'
+      #' @param x vector or matrix to check
+      #' @return logical vector of length(x) or nrow(x)
+      #' @author Marcin Imielinski
+      #' @export
 ################################
-is.dup = function(x)
-{
-    if (is.matrix(x))
-        x = as.data.frame(x)
+      is.dup = function(x)
+      {
+          if (is.matrix(x))
+              x = as.data.frame(x)
 
-    if (is.data.frame(x) | data.table::is.data.table(x))
-        {
-            tmp = x[[1]]
-            if (ncol(x)>1)
-                for (i in 2:ncol(x))
-                    tmp = paste(tmp, x[[i]], sep = '@!$!$!@')
-            x = tmp
-        }
+          if (is.data.frame(x) | data.table::is.data.table(x))
+          {
+              tmp = x[[1]]
+              if (ncol(x)>1)
+                  for (i in 2:ncol(x))
+                      tmp = paste(tmp, x[[i]], sep = '@!$!$!@')
+              x = tmp
+          }
 
-    d = duplicated(x)
-    return(x %in% x[d])
-}
+          d = duplicated(x)
+          return(x %in% x[d])
+      }
 
 
 ########################
-#' @name install.packages.bioc
-#' @title install.packages.bioc
-#'
-#' @description
-#' shortcut to install bioconductor packages
-#'
-#' @param pkg character vector of package names to install
-#' @author Marcin Imielinski
-#' @export
-install.packages.bioc = function(pkg)
-  {
-    source('http://bioconductor.org/biocLite.R')
-    sapply(pkg, biocLite)
-  }
+      #' @name install.packages.bioc
+      #' @title install.packages.bioc
+      #'
+      #' @description
+      #' shortcut to install bioconductor packages
+      #'
+      #' @param pkg character vector of package names to install
+      #' @author Marcin Imielinski
+      #' @export
+      install.packages.bioc = function(pkg)
+      {
+          source('http://bioconductor.org/biocLite.R')
+          sapply(pkg, biocLite)
+      }
 
 ##########################
-#' @name install.packages.github
-#' @title install.packages.github
-#'
-#' @description
-#' shortcut to install github packages
-#'
-#' @param pkg character vector of package names to install
-#' @author Marcin Imielinski
-#' @export
+      #' @name install.packages.github
+      #' @title install.packages.github
+      #'
+      #' @description
+      #' shortcut to install github packages
+      #'
+      #' @param pkg character vector of package names to install
+      #' @author Marcin Imielinski
+      #' @export
 ##########################
-install.packages.github = function(pkg, username, branch)
-  {
-    devtools::install_github(repo = pkg, username = username, branch = branch)
-}
+      install.packages.github = function(pkg, username, branch)
+      {
+          devtools::install_github(repo = pkg, username = username, branch = branch)
+      }
 
 ####################
-#' @name tabstring
-#' @title tabstring
-#'
-#' @description
-#' string representation of a named vector (ie the result of tab = table(x)
-#
-#' ie name1 (value1), name2 (value2), name3 (value3)
-#'
-#' @param tab "table" or any named(vector)
-#' @param sep separator to use between table elements
-#' @return character representation of table
-#' @export
-#' @author Marcin Imielinski
+      #' @name tabstring
+      #' @title tabstring
+      #'
+      #' @description
+      #' string representation of a named vector (ie the result of tab = table(x)
+                                        #
+      #' ie name1 (value1), name2 (value2), name3 (value3)
+      #'
+      #' @param tab "table" or any named(vector)
+      #' @param sep separator to use between table elements
+      #' @return character representation of table
+      #' @export
+      #' @author Marcin Imielinski
 ####################
-tabstring = function(tab, sep = ', ', sep2 = '_', dt = FALSE)
-    {
-        if (length(dim(tab))==1)
-            if (dt)
-                {
-                    tab = data.table(key = names(tab), count = as.numeric(tab))
-                    return(tab)
-                }
-            else
-                {
-                    return(paste(names(tab), '(', tab, ')', sep = '', collapse = sep))
-                }
+      tabstring = function(tab, sep = ', ', sep2 = '_', dt = FALSE)
+      {
+          if (length(dim(tab))==1)
+              if (dt)
+              {
+                  tab = data.table(key = names(tab), count = as.numeric(tab))
+                  return(tab)
+              }
+              else
+              {
+                  return(paste(names(tab), '(', tab, ')', sep = '', collapse = sep))
+              }
 
-        else
-            {
-                # library(reshape)
-                mtab = reshape2::melt(tab)
-                nm = apply(mtab, 1, function(x) paste(x[-length(x)], collapse = sep2))
-                if (dt)
-                    {
-                        tab = data.table(key = nm, count = mtab$value)
-                        setkey(tab, key)
-                        return(tab)
-                    }
-                else
-                    {
-                        tab = structure(mtab$value, names = nm)
-                        return(paste(names(tab), '(', tab, ')', sep = '', collapse = sep))
-                    }
+          else
+          {
+                                        # library(reshape)
+              mtab = reshape2::melt(tab)
+              nm = apply(mtab, 1, function(x) paste(x[-length(x)], collapse = sep2))
+              if (dt)
+              {
+                  tab = data.table(key = nm, count = mtab$value)
+                  setkey(tab, key)
+                  return(tab)
+              }
+              else
+              {
+                  tab = structure(mtab$value, names = nm)
+                  return(paste(names(tab), '(', tab, ')', sep = '', collapse = sep))
+              }
 
-            }
-    }
+          }
+      }
 
 
 ####################
-#' @name dfstring
-#' @title dfstring
-#'
-#' @description
-#' "tuple" style chraacter representation of a table, key name1 = value1, name2 = value2
-#' either as a single line or many lines
-#' useful for quick eyeballing of tabular data
-#'
-#' @param df data.frame input
-#' @param oneline logical flag whether to print on one line (=TRUE)
-#' @param sep1 first level separator (=;) i.e. between rows
-#' @param sep2 second level separator (=, ) i.e. between columns
-#' @return character vector of string representation
-#' @author Marcin Imielinski
-#' @export
+      #' @name dfstring
+      #' @title dfstring
+      #'
+      #' @description
+      #' "tuple" style chraacter representation of a table, key name1 = value1, name2 = value2
+      #' either as a single line or many lines
+      #' useful for quick eyeballing of tabular data
+      #'
+      #' @param df data.frame input
+      #' @param oneline logical flag whether to print on one line (=TRUE)
+      #' @param sep1 first level separator (=;) i.e. between rows
+      #' @param sep2 second level separator (=, ) i.e. between columns
+      #' @return character vector of string representation
+      #' @author Marcin Imielinski
+      #' @export
 ####################
-dfstring = function(df, oneline = TRUE,  binary = FALSE, sep1 = '; ', sep2 = ', ')
-    {        
-        if (!class(df)[1]=='data.frame')
-            df = as.data.frame(df)
+      dfstring = function(df, oneline = TRUE,  binary = FALSE, sep1 = '; ', sep2 = ', ')
+      {        
+          if (!class(df)[1]=='data.frame')
+              df = as.data.frame(df)
 
-        if (binary)
-            return(structure(apply(as.matrix(df), 1, function(x) paste(names(df)[which(as.logical(x))], collapse = sep1)), names = rownames(df)))
-            
+          if (binary)
+              return(structure(apply(as.matrix(df), 1, function(x) paste(names(df)[which(as.logical(x))], collapse = sep1)), names = rownames(df)))
+          
 
-        df = as.list(df)
+          df = as.list(df)
 
-        if (!oneline)
-            sep1 = NULL
+          if (!oneline)
+              sep1 = NULL
 
-        if (length(names(df))==0)
-            return('')
+          if (length(names(df))==0)
+              return('')
 
-        nm1 = nm2 = names(df)
-        nm1[1] = paste('(', nm1[1], sep = '')
-        ## paste inception YIKES
-        cmd = paste('paste(paste(', paste('paste("', nm1, '=", df$"', names(df), '", sep = "")', sep = '', collapse = ','),
-            ', sep = sep2), ")", sep = "", collapse = sep1)', sep = '')
-        return(eval(parse(text=cmd)))
-    }
+          nm1 = nm2 = names(df)
+          nm1[1] = paste('(', nm1[1], sep = '')
+          ## paste inception YIKES
+          cmd = paste('paste(paste(', paste('paste("', nm1, '=", df$"', names(df), '", sep = "")', sep = '', collapse = ','),
+                      ', sep = sep2), ")", sep = "", collapse = sep1)', sep = '')
+          return(eval(parse(text=cmd)))
+      }
 
 
 
 #############################
-#' @name levapply
-#' @title levapply
-#'
-#' @description
-#' Applies FUN locally to levels of x and returns vector of length()
-#' (eg can do a "local" order within levels)
-#'
-#' @param x input vector of data
-#' @param by length(x) vector of categorical labels
-#' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
-#' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
-#' @export
-#' @author Marcin Imielinski
+      #' @name levapply
+      #' @title levapply
+      #'
+      #' @description
+      #' Applies FUN locally to levels of x and returns vector of length()
+      #' (eg can do a "local" order within levels)
+      #'
+      #' @param x input vector of data
+      #' @param by length(x) vector of categorical labels
+      #' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
+      #' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
+      #' @export
+      #' @author Marcin Imielinski
 #############################
-levapply = function(x, by, FUN = 'order')
-  {
-    if (!is.list(by))
-      by = list(by)
+      levapply = function(x, by, FUN = 'order')
+      {
+          if (!is.list(by))
+              by = list(by)
 
-    f = factor(do.call('paste', c(list(sep = '|'), by)))
-    ixl = split(1:length(x), f);
-    ixv = lapply(ixl, function(y) x[y])
-    res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
-    out = rep(NA, length(x))
-    out[as.numeric(names(res))] = res;
-    return(out)
-  }
-
-
-## ####################
-## #' @name cytoscape
-## #' @title cytoscape
-## #'
-## #' @description
-## #' shortcut to connect to local cytoscape instance running on LOCAL.COMPUTER (unix environment variable) via RPC call
-## #'
-## #' graph must be igraph, or adjacency matrixx
-## #'
-## #' @param graph igraph or adjacency matrix
-## #' @param sessionName character name of cytoscape session to open on local computer
-## #' @param host character name of host on which cytoscape is running (=Sys.getenv('LOCAL.COMPUTER'))
-## #' @param port integer port on which cytoscape is running (=9000)
-## #' @param display logical flag whether to display graph locally (=TRUE)
-## #' @param layout character specifying layout to display as (=degree-circle)
-## #' @param verbose logical vector whether to use verbose output
-## #' @param ... additional arguments to new.CytoscapeWindow
-## #' @export
-## #' @author Marcin Imielinski
-## #' #@importFrom igraph V E E<- get.edgelist list.edge.attributes get.edge.attribute get.vertex.attribute
-## cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOCAL.COMPUTER'), port = 9000, display = T, layout = 'degree-circle', verbose = T, ...)
-##   {
-##     # require(RCytoscape)
-##     # require(igraph)
-
-##     if (is(graph, 'matrix'))
-##       graph = igraph::graph.adjacency(graph, weighted = 'weight');
-
-##     if (is(graph, 'igraph'))
-##       {
-##         if (!is.null(E(graph)$weight))
-##           E(graph)$weight = 1
-
-##         if (!is.null(E(graph)$arrow.shape))
-##           E(graph)$arrow.shape = 'ARROW'
-
-##         graph.nel = igraph2graph(graph)
-##       }
-
-##     cw = RCytoscape::new.CytoscapeWindow(sessionName, host = host, rpcPort = port, graph = graph.nel,  ...)
-
-##     if (display)
-##       {
-##       RCytoscape::displayGraph(cw)
-##       RCytoscape::setDefaultBackgroundColor(cw, gplots::col2hex('white'))
-
-##         eG = paste(igraph::get.edgelist(graph)[,1], get.edgelist(graph)[,2], sep = '~')
-##         ceG = RCytoscape::cy2.edge.names(cw@graph)
-
-##         if (verbose)
-##           cat('Setting line styles\n')
-
-##         if ('line.style' %in% igraph::list.edge.attributes(graph))
-##           {
-##             uls = setdiff(E(graph)$line.style, NA)
-##             RCytoscape::setEdgeLineStyleRule(cw, 'line.style', uls, uls)
-##           }
-
-##         if (verbose)
-##           cat('Setting arrow shape\n')
-
-##         if (igraph::is.directed(graph))
-##           if ('arrow.shape' %in% igraph::list.edge.attributes(graph))
-##             RCytoscape::setEdgeTargetArrowRule(cw, 'arrow.shape', unique(E(graph)$arrow.shape), unique(E(graph)$arrow.shape))
-
-##         if (verbose)
-##           cat('Setting edge color\n')
-
-##         if ('col' %in% igraph::list.edge.attributes(graph))
-##           {
-##             uc = setdiff(unique(E(graph)$col), NA);
-##             RCytoscape::setEdgeColorRule(cw, 'col', uc, uc, mode = 'lookup')
-##           }
-
-##         if (verbose)
-##           cat('Setting edge width\n')
-
-##         if ('width' %in% igraph::list.edge.attributes(graph))
-##           {
-##             uw = setdiff(igraph::E(graph)$width, NA)
-##             RCytoscape::setEdgeLineWidthRule(cw, 'width', as.character(uw), uw)
-##           }
-
-##         if (verbose)
-##           cat('Setting node size\n')
-
-##         if ('size' %in% igraph::list.vertex.attributes(graph))
-##           {
-##             us = setdiff(unique(igraph::V(graph)$size), NA)
-##             RCytoscape::setNodeSizeRule(cw, 'size', us, us, mode = 'lookup')
-##           }
-
-##         if (verbose)
-##           cat('Setting node color\n')
-
-##         if ('col' %in% igraph::list.vertex.attributes(graph))
-##           {
-##             uc = setdiff(unique(igraph::V(graph)$col), NA)
-##             RCytoscape::setNodeColorRule(cw, 'col', uc, uc, mode = 'lookup')
-##           }
-
-##         if (verbose)
-##           cat('Setting node labels\n')
-
-##         if ('label' %in% igraph::list.vertex.attributes(graph))
-##           RCytoscape::setNodeLabelRule(cw, 'label')
-
-##         if (verbose)
-##           cat('Setting node shapes\n')
-
-##         if ('shape' %in% igraph::list.vertex.attributes(graph))
-##           {
-##             us = setdiff(unique(V(graph)$shape), NA)
-##             RCytoscape::setNodeShapeRule(cw, 'shape', us, us, default = 'ELLIPSE')
-##           }
-
-##         if (verbose)
-##           cat('Setting node width\n')
-
-##         if ('border.width' %in% igraph::list.vertex.attributes(graph))
-##           {
-##             ubw = setdiff(unique(V(graph)$border.width), NA)
-##             RCytoscape::setNodeBorderWidthRule(cw, 'border.width', ubw, ubw)
-##           }
-
-##         if (all(c('x', 'y') %in% igraph::list.vertex.attributes(graph)))
-##           {
-##             good.ix = !is.na(V(graph)$x) & !is.na(V(graph)$y)
-##             if (any(good.ix))
-##               RCytoscape::setNodePosition(cw, V(graph)$name[good.ix], V(graph)$x[good.ix], V(graph)$y[good.ix])
-##           }
-##         else
-##           RCytoscape::layoutNetwork(cw, layout)
+          f = factor(do.call('paste', c(list(sep = '|'), by)))
+          ixl = split(1:length(x), f);
+          ixv = lapply(ixl, function(y) x[y])
+          res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
+          out = rep(NA, length(x))
+          out[as.numeric(names(res))] = res;
+          return(out)
+      }
 
 
-##         RCytoscape::redraw(cw)
-##       }
+      ## ####################
+      ## #' @name cytoscape
+      ## #' @title cytoscape
+      ## #'
+      ## #' @description
+      ## #' shortcut to connect to local cytoscape instance running on LOCAL.COMPUTER (unix environment variable) via RPC call
+      ## #'
+      ## #' graph must be igraph, or adjacency matrixx
+      ## #'
+      ## #' @param graph igraph or adjacency matrix
+      ## #' @param sessionName character name of cytoscape session to open on local computer
+      ## #' @param host character name of host on which cytoscape is running (=Sys.getenv('LOCAL.COMPUTER'))
+      ## #' @param port integer port on which cytoscape is running (=9000)
+      ## #' @param display logical flag whether to display graph locally (=TRUE)
+      ## #' @param layout character specifying layout to display as (=degree-circle)
+      ## #' @param verbose logical vector whether to use verbose output
+      ## #' @param ... additional arguments to new.CytoscapeWindow
+      ## #' @export
+      ## #' @author Marcin Imielinski
+      ## #' #@importFrom igraph V E E<- get.edgelist list.edge.attributes get.edge.attribute get.vertex.attribute
+      ## cytoscape = function(graph = NULL, sessionName = 'M-ski', host = Sys.getenv('LOCAL.COMPUTER'), port = 9000, display = T, layout = 'degree-circle', verbose = T, ...)
+      ##   {
+      ##     # require(RCytoscape)
+      ##     # require(igraph)
 
-##     return(cw)
-##   }
+      ##     if (is(graph, 'matrix'))
+      ##       graph = igraph::graph.adjacency(graph, weighted = 'weight');
+
+      ##     if (is(graph, 'igraph'))
+      ##       {
+      ##         if (!is.null(E(graph)$weight))
+      ##           E(graph)$weight = 1
+
+      ##         if (!is.null(E(graph)$arrow.shape))
+      ##           E(graph)$arrow.shape = 'ARROW'
+
+      ##         graph.nel = igraph2graph(graph)
+      ##       }
+
+      ##     cw = RCytoscape::new.CytoscapeWindow(sessionName, host = host, rpcPort = port, graph = graph.nel,  ...)
+
+      ##     if (display)
+      ##       {
+      ##       RCytoscape::displayGraph(cw)
+      ##       RCytoscape::setDefaultBackgroundColor(cw, gplots::col2hex('white'))
+
+      ##         eG = paste(igraph::get.edgelist(graph)[,1], get.edgelist(graph)[,2], sep = '~')
+      ##         ceG = RCytoscape::cy2.edge.names(cw@graph)
+
+      ##         if (verbose)
+      ##           cat('Setting line styles\n')
+
+      ##         if ('line.style' %in% igraph::list.edge.attributes(graph))
+      ##           {
+      ##             uls = setdiff(E(graph)$line.style, NA)
+      ##             RCytoscape::setEdgeLineStyleRule(cw, 'line.style', uls, uls)
+      ##           }
+
+      ##         if (verbose)
+      ##           cat('Setting arrow shape\n')
+
+      ##         if (igraph::is.directed(graph))
+      ##           if ('arrow.shape' %in% igraph::list.edge.attributes(graph))
+      ##             RCytoscape::setEdgeTargetArrowRule(cw, 'arrow.shape', unique(E(graph)$arrow.shape), unique(E(graph)$arrow.shape))
+
+      ##         if (verbose)
+      ##           cat('Setting edge color\n')
+
+      ##         if ('col' %in% igraph::list.edge.attributes(graph))
+      ##           {
+      ##             uc = setdiff(unique(E(graph)$col), NA);
+      ##             RCytoscape::setEdgeColorRule(cw, 'col', uc, uc, mode = 'lookup')
+      ##           }
+
+      ##         if (verbose)
+      ##           cat('Setting edge width\n')
+
+      ##         if ('width' %in% igraph::list.edge.attributes(graph))
+      ##           {
+      ##             uw = setdiff(igraph::E(graph)$width, NA)
+      ##             RCytoscape::setEdgeLineWidthRule(cw, 'width', as.character(uw), uw)
+      ##           }
+
+      ##         if (verbose)
+      ##           cat('Setting node size\n')
+
+      ##         if ('size' %in% igraph::list.vertex.attributes(graph))
+      ##           {
+      ##             us = setdiff(unique(igraph::V(graph)$size), NA)
+      ##             RCytoscape::setNodeSizeRule(cw, 'size', us, us, mode = 'lookup')
+      ##           }
+
+      ##         if (verbose)
+      ##           cat('Setting node color\n')
+
+      ##         if ('col' %in% igraph::list.vertex.attributes(graph))
+      ##           {
+      ##             uc = setdiff(unique(igraph::V(graph)$col), NA)
+      ##             RCytoscape::setNodeColorRule(cw, 'col', uc, uc, mode = 'lookup')
+      ##           }
+
+      ##         if (verbose)
+      ##           cat('Setting node labels\n')
+
+      ##         if ('label' %in% igraph::list.vertex.attributes(graph))
+      ##           RCytoscape::setNodeLabelRule(cw, 'label')
+
+      ##         if (verbose)
+      ##           cat('Setting node shapes\n')
+
+      ##         if ('shape' %in% igraph::list.vertex.attributes(graph))
+      ##           {
+      ##             us = setdiff(unique(V(graph)$shape), NA)
+      ##             RCytoscape::setNodeShapeRule(cw, 'shape', us, us, default = 'ELLIPSE')
+      ##           }
+
+      ##         if (verbose)
+      ##           cat('Setting node width\n')
+
+      ##         if ('border.width' %in% igraph::list.vertex.attributes(graph))
+      ##           {
+      ##             ubw = setdiff(unique(V(graph)$border.width), NA)
+      ##             RCytoscape::setNodeBorderWidthRule(cw, 'border.width', ubw, ubw)
+      ##           }
+
+      ##         if (all(c('x', 'y') %in% igraph::list.vertex.attributes(graph)))
+      ##           {
+      ##             good.ix = !is.na(V(graph)$x) & !is.na(V(graph)$y)
+      ##             if (any(good.ix))
+      ##               RCytoscape::setNodePosition(cw, V(graph)$name[good.ix], V(graph)$x[good.ix], V(graph)$y[good.ix])
+      ##           }
+      ##         else
+      ##           RCytoscape::layoutNetwork(cw, layout)
 
 
-## ####################
-## #' @name igraph2graph
-## #' @title igraph2graph
-## #'
-## #' @description
-## #' Converts igraph object into janky graphNEL object (for visualization in cytoscape)
-## #' and populates all edge features both via the edgeL and as NodeAttributes for visualization
-## #' in cytoscape
-## #'
-## #' #@importFrom graph edgeData<- nodeData<-
-## #' @param g igraph object
-## #' @author Marcin Imielinski
-## #' @export
-## #' @return graph object
-## igraph2graph = function(g)
-##   {
-##     # require(igraph)
-##     # require(graph)
-##     # require(RCytoscape)
+      ##         RCytoscape::redraw(cw)
+      ##       }
 
-##     if (class(V) != 'function' | class(E) != 'function')
-##       stop('Namespace conflict - either V() or E() no longer mapping to igraph functions')
+      ##     return(cw)
+      ##   }
 
-##     if (!is.null(V(g)$name))
+
+      ## ####################
+      ## #' @name igraph2graph
+      ## #' @title igraph2graph
+      ## #'
+      ## #' @description
+      ## #' Converts igraph object into janky graphNEL object (for visualization in cytoscape)
+      ## #' and populates all edge features both via the edgeL and as NodeAttributes for visualization
+      ## #' in cytoscape
+      ## #'
+      ## #' #@importFrom graph edgeData<- nodeData<-
+      ## #' @param g igraph object
+      ## #' @author Marcin Imielinski
+      ## #' @export
+      ## #' @return graph object
+      ## igraph2graph = function(g)
+      ##   {
+      ##     # require(igraph)
+      ##     # require(graph)
+      ##     # require(RCytoscape)
+
+      ##     if (class(V) != 'function' | class(E) != 'function')
+      ##       stop('Namespace conflict - either V() or E() no longer mapping to igraph functions')
+
+      ##     if (!is.null(V(g)$name))
 ##       node.labels = V(g)$name
 ##     else
 ##       node.labels = as.character(V(g));
@@ -3417,7 +3431,7 @@ ppng = function(expr, filename = 'plot.png', height = 1000, width = 1000, dim = 
     if (!file.exists(file.dir(filename)))
         system(paste('mkdir -p', file.dir(filename)))
 
-    cat('rendering to', filename, '\n')
+    message('rendering to ', filename, '\n')
     png(filename, height = height, width = width, pointsize = 12*cex.pointsize, ...)
 
     if (!is.null(dim))
@@ -3502,22 +3516,29 @@ ppdf = function(expr, filename = 'plot.pdf', height = 10, width = 10, cex = 1, t
 #' by default plot.html
 #'
 #' @export
-wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1)
+wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1, force = FALSE, quiet = FALSE, embed = FALSE)
     {
         if (length(cex)==1)
             cex = rep(cex,2)
 
-        DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
-        if (nchar(DEFAULT.OUTDIR)==0)
-            DEFAULT.OUTDIR = normalizePath('~/public_html/')
-        
-        if (!grepl('^[~/]', filename))
-            filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
+        if (!force)
+            {
+                DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
+                if (nchar(DEFAULT.OUTDIR)==0)
+                    DEFAULT.OUTDIR = normalizePath('~/public_html/')
+                
+                if (!grepl('^[~/]', filename))
+                    filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
+            }
+       
+        if (nchar(file.dir(filename))==0)
+          filename = paste0('./', filename)
         
         if (!file.exists(file.dir(filename)))
             system(paste('mkdir -p', file.dir(filename)))
-        
-        cat('rendering to', filename, '\n')
+
+        filename = paste(normalizePath(file.dir(filename)), file.name(filename), sep = '/')
+
         widg = eval(expr)
 
         toWidget <- function(x) {
@@ -3545,9 +3566,64 @@ wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1)
                     zoom = 'x'
                 widg = widg %>% hc_chart(zoomType = zoom)
             }
-            
+
+        if (embed)
+            return(widg)
+
+        if (quiet == FALSE)
+            message('rendering to ', filename)
         htmlwidgets::saveWidget(widg, paste(filename), selfcontained = FALSE)  
     }
+
+
+
+#' @name wijj
+#' @title wijj
+#'
+#' @description
+#'
+#' Embeds widget in jupyter notebook
+#'
+#' @export
+wijj = function (x, width = NULL, height = NULL, file = paste0("plotlyJupyterHTML/", 
+    digest::digest(Sys.time()), ".html")) 
+{
+    if (system.file(package = "IRdisplay") == "") {
+        warning("You need the IRdisplay package to use this function: \n", 
+            "devtools::install_github(c('IRkernel/repr', 'IRKernel/IRdisplay'))")
+        return(x)
+    }
+    l <- plotly_build(x)
+    src <- if (is.null(l$url)) {
+        dir <- dirname(file)
+        if (!dir.exists(dir)) 
+            dir.create(dir, recursive = TRUE)
+        owd <- setwd(dir)
+        on.exit(setwd(owd), add = TRUE)
+        htmlwidgets::saveWidget(as.widget(l), file = basename(file), selfcontained = FALSE)
+        file
+    }
+    else {
+        paste0(l$url, ".embed")
+    }
+
+    .fun = function (x, y) 
+    {
+        if (length(x) > 0 || is_blank(x)) 
+            x
+        else y
+    }
+
+    is_blank = function (x) 
+    {
+        inherits(x, "element_blank") && inherits(x, "element")
+    }
+   #     iframe <- plotly_iframe(src, width %||% l$width, height %||%   l$height)      
+    iframe <- plotly:::plotly_iframe(src, .fun(width, l$width), .fun(height, l$height))
+
+    get("display_html", envir = asNamespace("IRdisplay"))(iframe)
+}
+
 
 
 #' @name sortable
@@ -3632,7 +3708,7 @@ sortable = function(x, filename = 'list.html', title = NULL)
 #' @author Marcin Imielinski
 #' @export
 ###################################
-plop = function(fn, prefix = NULL)
+plop = function(fn, prefix = NULL, force = NULL)
   {
       if (is.list(fn))
           if (!is.data.frame(fn))
@@ -3665,13 +3741,22 @@ plop = function(fn, prefix = NULL)
       if (!file.exists(DEFAULT.OUTDIR))
           system(paste('mkdir -p', file.dir(filename)))
 
+      if (!is.null(force))
+          {
+              if (length(force)==1)
+                  force = rep(force, length(new.fn))
+              new.fn = force
+          }
+      
       new.fn = paste(DEFAULT.OUTDIR, new.fn, sep = '/')
 
       if (any(ix <- !file.exists(file.dir(new.fn))))
           sapply(new.fn[ix], function(x)
               system(paste('mkdir -p', file.dir(x))))
-
+      
       mapply(function(x, y) system(paste('cp', x, y)), fn, new.fn)
+
+
       return(new.fn)
   }
  
@@ -4079,7 +4164,7 @@ varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, ind
                         {
                             x$seq[cnames,,, drop = F]
                         })), c(1,3,2))
-            }
+                }
         }
     else
         {
@@ -4174,7 +4259,7 @@ mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T
                if (verbose)
                    now = Sys.time()
                
-               vc = varcount(bams, maf[ix], ...)
+                vc = varcount(bams, maf[ix], ...)
                
                if (verbose)
                  print(Sys.time() - now)
@@ -4203,7 +4288,7 @@ mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T
                      norm.count[cbind(match(maf$Tumor_Seq_Allele1[ix], rownames(norm.count)), 1:length(ix))],
                      norm.count[cbind(match(maf$Reference_Allele[ix], rownames(norm.count)), 1:length(ix))]
                      )
-                 }
+               }
                return(out)               
             }, mc.cores = mc.cores))
 
@@ -6465,7 +6550,7 @@ igv = function(
     mac = !grepl('(^cga)|(node\\d+)', host), ##
     sort.locus = NULL,
     gsub.paths = list(
-        c('~/', '~/home/'),
+        c('~/', '/home/'),
         c('/gpfs/internal/', '/internal/'),
         c('/data/analysis/', '/analysis/'),
         c('/data/research/mski_lab/data', '/data'),
@@ -6478,7 +6563,8 @@ igv = function(
         c('/xchip/cga/', '/Volumes/xchip_cga/'),
         c('/xchip/beroukhimlab/', '/Volumes/xchip_beroukhimlab/'),
         c('/cgaext/tcga/', '/Volumes/cgaext_tcga/'),
-        c(Sys.getenv('HOME'), '~/home')
+        c(Sys.getenv('HOME'), 'HOME')
+#paste0('/Users/', strsplit(Sys.getenv('HOME'), '/')[[1]][5], '/home'))
         ),
     port = Sys.getenv('IGV_PORT')
 )
@@ -6531,11 +6617,14 @@ igv = function(
                                 for (g in gsub.paths)
                                     {
                                         new.paths = gsub(gsub('([^\\w])', '\\\\\\1', g[1], perl = TRUE), g[2], new.paths)
+                                      
                                     }
                             }
 
-                        for (p in new.paths)
+                        for (p in new.paths){
                             igv.cmd(paste(c('load', p), collapse = ' '), con)
+           
+        }
                     }
                 else
                     warning('paths input must be character vector or list')
@@ -8057,6 +8146,7 @@ lighten = function(col, f)
 #' Shortcut for making blank plot with no axes
 #' @author Marcin Imielinski
 #' @keywords internal
+#' @export
 plot.blank = function(xlim = c(0, 1), ylim = c(0,1), xlab = "", ylab = "", axes = F, bg.col = "white", ...)
 {
   par(bg = bg.col)
@@ -8173,6 +8263,20 @@ qstat = function(full = FALSE, numslots = TRUE)
             return(tmp)
     }
 
+#' @name queues
+#' @title queues
+#' @description
+#' 
+#' list queues
+#'
+#' @export
+queues = function()
+    {
+        p = pipe('qconf -sql')
+        ln = readLines(p)
+        close(p)
+        return(ln)
+    }
 
 
 #' @name qhost
@@ -8850,3 +8954,194 @@ loud = function(x)
         system(x)
         cat('')
     }
+
+
+#' @name camerplot
+#' @title cameraplot
+#' @description
+#' plots the results of CAMERA in limma package 
+#' @export
+#' @param camera.res output of camera from limma
+#' @param voom.res output of voom from limma
+#' @param gene.sets gene set input to camera (named list of indices into the voom.res gene expression matrix)
+#' @param design design matrix input to camera
+#' @param max.genes max genes to draw in "leading edge" of gene set
+#' @param min.corr minimal abs(correlation) value for leading edge definition
+#' @param cex.space  label spacing expansion factor (use if labels get too crowded
+#' @param cex.slab  set label cex
+#' @param cex.glab  gene label cex
+#' @param lwd.notch  notch thickness
+#' @param text.shift  amount to shift text from notches (>0, <1)
+#' @param text.shift  minimal distance between labels
+#' @param height.wf height of the topmost correlation waterfall plot
+#' @param col.axis axis color character
+#' @param col.ramp ramp from lowest to highest expression to phenotype correlation (default blue, red)
+#' @importFrom stringr str_trim
+#' @author Marcin Imielinski
+cameraplot = function(camera.res, gene.sets, voom.res, design,
+    title = 'Camera Gene set notch plot',
+    cex.space = 1,
+    col.axis = alpha('gray20', 0.8),
+    col.ramp = c('blue', 'red'),
+    cex.slab = 1,
+    cex.glab = 1,
+    lwd.notch = 1,
+    tick.w = 0.1,
+    max.genes = 10,
+    text.shift = 0.5,
+    height.wf = 0.1,
+    min.corr = 0.1,
+    min.dist = 10,
+    max.gene.sets= 20,
+    gtext.shift = 0.2)
+    {
+
+        if (height.wf>1 | height.wf<0)
+            {
+                warning('Waterfall height should be between 0 and 1, defaulting to 0.2')
+                height.wf = 0.2
+            }
+        
+        if (nrow(camera.res)>max.gene.sets)
+            {
+                warning(sprintf('Entered %s gene sets .. only will plot the %s topmost (change max.genes.sets param value to increase)', nrow(camera.res), max.gene.sets))
+                camera.res = camera.res[1:max.gene.sets, ]
+            }
+        
+        camera.res$name = rownames(camera.res)
+        setnames(camera.res, gsub('\\W', '_', names(camera.res), perl = TRUE))
+        camera.res = as.data.table(camera.res)[order(-PValue), ]
+        my.sets = gene.sets[camera.res$name]
+        my.corr = apply(voom.res$E, 1, cor, y = design[,2])
+        my.rank = rank(-my.corr)
+        my.set.rank = sapply(my.sets, function(x) my.rank[x])
+        cm = function(x, width = 0.5) rgb(colorRamp(col.ramp)((pmax(-width, pmin(width, x))+width)/(2*width)), maxColorValue = 256)
+        text.space = 0.01*cex.space*length(my.rank)
+        gene.xcoord = length(my.rank)*seq(0, 0.5, length.out = max.genes)
+        notch.coord = cbind(unlist(my.set.rank), rep(1:length(my.set.rank), sapply(my.set.rank, length)))
+        ## genes to label
+        gene.list = lapply(1:length(my.set.rank), function(y)
+            {
+                x = my.set.rank[[y]]
+                if (camera.res[y, Direction == 'Up'])
+                    x = sort(x[my.corr[names(x)]>min.corr])
+                else
+                    x = rev(sort((x[my.corr[names(x)]<(-min.corr)])))
+                return(x[1:min(length(x), max.genes)])
+            })
+        gene.nm = unlist(lapply(gene.list, names))
+        gene.corr = my.corr[gene.nm]
+        gene.coord.top = gene.coord.bot = cbind(unlist(gene.list), rep(1:length(gene.list), sapply(gene.list, length))+tick.w/2)
+        gene.coord.top[,2] = gene.coord.top[,2] + gtext.shift
+        ## spread out labels
+        min.dist = min.dist + nchar(gene.nm)*text.space
+        for (i in 2:nrow(gene.coord.top))
+            if (camera.res[gene.coord.bot[i, 2], Direction] == 'Up') ## left to right
+                {
+                    if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i,1]-gene.coord.top[i-1,1]<min.dist[i])
+                        gene.coord.top[i,1] = gene.coord.top[i-1,1] + mean(c(min.dist[i-1], min.dist[i]))
+                }
+            else ## right to left
+                if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i-1,1]-gene.coord.top[i,1]<min.dist[i])
+                    gene.coord.top[i,1] = gene.coord.top[i-1,1] - mean(c(min.dist[i-1], min.dist[i]))
+                                        #gene.coord.top[,1] = position.labels(gene.coord.bot[,1], groups = gene.coord.top[,2], min.dist.ll = min.dist, min.dist.pl = 0)    
+        par(mar = 0.5*c(0,20, 5, 5))
+        par(xpd = NA)
+        rownames(notch.coord) = unlist(lapply(my.set.rank, names))    
+        graphics::layout(c(1, 2), heights = c(height.wf, 1-height.wf))
+        plot(0, type ="n", xlim = c(0, length(my.rank)), ylim = c(-0.5,0.5), ylab = '', xlab = "", axes = F, main = title)
+        par(mar = 0.5*c(5,20, 0, 5))
+        axis(2, at = seq(-0.5, 0.5, 0.5), col.axis = col.axis)
+        mtext(side = 2, 'Gene Correlations', line = 3, col = col.axis)
+        lines(my.rank, my.corr, type = 'h', col = cm(my.corr))
+        plot(0, type ="n", xlim = c(0, length(my.rank)), ylim = c(0,length(my.set.rank)+1), xlab = "", ylab = "", axes = F)
+        ## draw set labels
+        set.labs = camera.res[, sprintf('%s (Dir = %s, P = %s, FDR = %s)',
+            gsub('REACTOME', '', gsub('_', ' ', name)),
+            Direction,
+            signif(PValue,2), signif(FDR, 2)),
+            , by = 1:length(name)][, str_trim(V1)]
+        text(length(my.rank)/2, 1:length(my.set.rank) + text.shift, set.labs, adj = c(0.5, 0), cex = cex.slab*0.5, srt = 0)
+                                        # draw gene labels
+        text(gene.coord.top[,1],
+             gene.coord.top[,2]+0.1*gtext.shift,
+             gene.nm,
+             col = cm(gene.corr), cex = cex.glab*0.3, adj = c(0.5, 0))
+                                        # draw lines linking gene labels to notches
+        segments(gene.coord.top[,1],
+                 gene.coord.top[,2],
+                 gene.coord.bot[,1],
+                 gene.coord.bot[,2]+gtext.shift*0,
+                 col = alpha(cm(gene.corr), 0.2), lty = 1)
+                                        # draw "axis" backbone of notches
+        segments(rep(0, length(my.set.rank)),
+                 1:length(my.set.rank),
+                 rep(length(my.rank), length(my.set.rank)),
+                 1:length(my.set.rank),
+                 col = col.axis, lwd = 0.3, lty = 3)
+        
+        ## draw notches
+        segments(notch.coord[,1],
+                 notch.coord[,2]-tick.w/2,
+                 notch.coord[,1],
+                 notch.coord[,2]+tick.w/2, col = cm(my.corr[rownames(notch.coord)]), lwd = 2*lwd.notch)
+
+        axis(3, pos = nrow(camera.res)+1, at = c(seq(0, length(my.corr), 5000), length(my.corr)), col.axis = col.axis, col = col.axis, lwd = 0.8, cex.axis = 0.8)
+        axis(1, pos = 0.5, at = c(seq(0, length(my.corr), 5000), length(my.corr)), col.axis = col.axis, col = col.axis, lwd = 0.8, cex.axis = 0.8)
+        mtext("Gene ranks", side=1, cex.lab=1,col= col.axis)
+        mtext("Gene ranks", side=3, cex.lab=1,col= col.axis)
+    }
+ 
+
+ 
+## #' @name position.labels
+## #' @title  position.labels
+## #' @description
+## #'
+## #' Given 1D / 2D coordinates of "points", returns coordinates of optimal labels to those 
+## #' points minimizing distance between points and labels while obeying point-label and
+## #' point to point constraints.  Uses Rcplex to solve QP
+## #'
+## #' @importFrom nloptr cobyla
+## #' @param x matrix or vector of numeric coordinates
+## #' @param min.dist scalar numeric of minimal distance between labels and labels to points
+## #' @param min.dist.lp  scalar or length(x) vector numeric of minimal point to point distance
+## #' @param min.dist.ll  scalar numeric of minimal label to label distance
+## #' @export
+## position.labels = function(x, min.dist = 0, min.dist.pl = min.dist, min.dist.ll = min.dist, x0 = x + runif(length(x)), groups = rep(1, length(x)), ftol = 0.01, xtol = 1e-3, maxeval = 2000)
+##     {
+##         #library('nloptr')
+##         x = cbind(as.numeric(x))
+##         if (length(min.dist.pl)==1)
+##             min.dist.pl = rep(min.dist.pl, nrow(x))
+        
+##         hin = function(y)
+##             {
+##                 ##for all k and N(k) x[k] - x[N(k)] >= min.dist.ll[k]
+##                 dists1 = do.call(c, lapply(split(y, groups), function(yy)
+##                     {
+##                         ## distance matrix minus diagonal
+##                         if (length(yy)==1)
+##                             return(min.dist.pl+100)
+##                         tmp = as.matrix(dist(yy)) + diag(rep(NA, length(yy)))                                                   
+##                         tmp[!is.na(tmp)]
+##                     }))-min.dist.ll                
+##                 dists2 = sqrt(rowSums((x-cbind(y))^2))- min.dist.pl
+## #                message('max dist ', signif(min(dists1),0), ' ' , signif(min(dists2),0))
+##                 return(c(dists1, dists2))                       
+##             }
+
+##         fin = function(y)
+##             {
+##                 d = sum(sqrt(rowSums((x-cbind(y))^2)))
+## #                if (is.na(d))
+## #                    browser()
+## #               message(d)
+##                 return(d)
+##             }
+
+##         res = suppressWarnings(slsqp(x0, fn = fin, hin = hin, control = nl.opts(list(xtol_rel = xtol, ftol_abs = ftol, maxeval = maxeval))))
+##         return(res$par)
+##     }
+
+        
