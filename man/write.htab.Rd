@@ -8,7 +8,8 @@ write.htab(tab, file = NULL, title = NULL, footer = NULL,
   highlight = NULL, row.names = TRUE, col.names = TRUE,
   high.color = "yellow", row.colors = c("lightgray", "white"),
   header.colors = c("#4A4A4A", "white"), data.size = 15, dt = TRUE,
-  title.size = 15, footer.size = 20, header.size = round(1.1 * data.size))
+  force = FALSE, embed = FALSE, title.size = 15, footer.size = 20,
+  header.size = round(1.1 * data.size))
 }
 \arguments{
 \item{tab}{data.frame, data.table, or GRanges}

@@ -26,8 +26,8 @@ Depends:
     htmlwidgets,
     devtools,
     gUtils,
-    ggplot2,
     plotly,
+    ggplot2,	
     data.table,
     reshape2, 
 Suggests:

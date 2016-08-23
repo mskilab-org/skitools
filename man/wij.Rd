@@ -4,7 +4,8 @@
 \alias{wij}
 \title{wij}
 \usage{
-wij(expr, filename = "plot.html", zoom = NULL, cex = 1)
+wij(expr, filename = "plot.html", zoom = NULL, cex = 1, force = FALSE,
+  quiet = FALSE, embed = FALSE)
 }
 \description{
 Evaluates output of htmlwidget generating expression (e.g. via highcharter) and send to filename in predefined WIDGET.DIR

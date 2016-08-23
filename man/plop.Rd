@@ -4,7 +4,7 @@
 \alias{plop}
 \title{plop}
 \usage{
-plop(fn, prefix = NULL)
+plop(fn, prefix = NULL, force = NULL)
 }
 \arguments{
 \item{fn}{character vector of filenames to "plop" into ~public_html/prefix (Sys.getenv('PLOP.DIR') is used as alternative if defined)}

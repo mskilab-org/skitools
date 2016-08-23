@@ -5,8 +5,12 @@
 \title{queues}
 \usage{
 queues()
+
+queues()
 }
 \description{
+list queues
+
 Lists all available queues
 }
 
