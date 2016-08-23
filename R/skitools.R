@@ -6689,7 +6689,7 @@ igv = function(
         c('/xchip/cga/', '/Volumes/xchip_cga/'),
         c('/xchip/beroukhimlab/', '/Volumes/xchip_beroukhimlab/'),
         c('/cgaext/tcga/', '/Volumes/cgaext_tcga/'),
-        c(Sys.getenv('HOME'), '~/home')
+        c(Sys.getenv('HOME'), 'HOME')
         ),
     port = Sys.getenv('IGV_PORT')
 )
