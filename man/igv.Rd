@@ -16,7 +16,7 @@ igv(paths = NULL, gr = NULL, loci = NULL, snapshot = NULL,
   c("/seq/tier3b/", "/Volumes/seq_tier3b/"), c("/xchip/cle/",
   "/Volumes/xchip_cle/"), c("/xchip/cga/", "/Volumes/xchip_cga/"),
   c("/xchip/beroukhimlab/", "/Volumes/xchip_beroukhimlab/"),     
-  c("/cgaext/tcga/", "/Volumes/cgaext_tcga/"), c(Sys.getenv("HOME"), "~/home")),
+  c("/cgaext/tcga/", "/Volumes/cgaext_tcga/"), c(Sys.getenv("HOME"), "HOME")),
   port = Sys.getenv("IGV_PORT"))
 }
 \arguments{

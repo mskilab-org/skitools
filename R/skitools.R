@@ -1829,6 +1829,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
   }
 
 
+
 #' @name write.htab
 #' @title write.htab
 #'
@@ -1865,6 +1866,8 @@ write.htab = function(tab, file = NULL,
     header.colors = c('#4A4A4A', 'white'), # two element vector specifying background and text colors for header row, respectively,
     data.size = 15, # font size in px for data, title, and footer
     dt = TRUE,
+    force = FALSE, ## force filename argument
+    embed = FALSE,
     title.size = 15, footer.size = 20, header.size = round(1.1*data.size))
   {
 
@@ -1879,67 +1882,139 @@ write.htab = function(tab, file = NULL,
     if (is.null(rownames(tab)))
       row.names = F;
 
-    if (!is.null(file))
-        {
-            if (!grepl('(^~)|(^\\/)', file))
-                file = paste('~/public_html/', file, sep = '')
-        }
-    else
-        {
-            if (nchar(Sys.getenv('HTAB.PATH'))>0)
-                file = Sys.getenv('HTAB.PATH')
-            else
-                file = '~/public_html/htab.html'
-        }
+      if (!force)
+      {
+          if (!is.null(file))
+          {
+              if (!grepl('(^~)|(^\\/)', file))
+                  file = paste('~/public_html/', file, sep = '')
+          }
+          else
+          {
+              if (nchar(Sys.getenv('HTAB.PATH'))>0)
+                  file = Sys.getenv('HTAB.PATH')
+              else
+                  file = '~/public_html/htab.html'
+          }
+      }
 
+      if (nchar(file.dir(file))==0)
+          file = paste0('./', file)      
+      
+      if (!file.exists(file.dir(file)))
+          system(paste('mkdir -p', file.dir(file)))
 
-    if (dt)
-        {
-            wij(DT::datatable(tab,
-                              options = list(
-                                  pageLength = 100),
-                              rownames = row.names), file)
-        }
-    else
-        {
-            
-            for (nm in names(tab))
-                tab[[nm]] = as.character(tab[[nm]])
-            tab[is.na(tab)] = '';
-            tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
-            
-            if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
-                for (i in which(lix))
-                    tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
+      file = paste(normalizePath(file.dir(file)), file.name(file), sep = '/')
 
-            dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
-            p = hwriter::openPage(file, link.css = 'hwriter.css')
-            if (!is.null(title))
-                hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
+     if (dt)
+     {
+         wij(DT::datatable(tab,
+                           escape = FALSE,
+                           filter = 'top',
+                           options = list(
+                               pageLength = 100),
+                           rownames = row.names), file, embed = embed)
+     }
+     else
+     {
+         
+         for (nm in names(tab))
+             tab[[nm]] = as.character(tab[[nm]])
+         tab[is.na(tab)] = '';
+         tab = tab[1:nrow(tab), , drop = FALSE];  #not sure why this is necessary, but deflects occasional weird R bug
+         
+         if (any(lix <<- sapply(names(tab), function(x) is.list(tab[, x]))))
+             for (i in which(lix))
+                 tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
 
-            row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
-            names(row.bgcolor) = rownames(tab)
-            if (!is.null(highlight))
-                row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
+         dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
+         p = hwriter::openPage(file, link.css = 'hwriter.css')
+         if (!is.null(title))
+             hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
 
-            row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
+         row.bgcolor = as.list(as.character(gplots::col2hex(row.colors)[(1:nrow(tab))%%length(row.colors)+1]));
+         names(row.bgcolor) = rownames(tab)
+         if (!is.null(highlight))
+             row.bgcolor[rownames(tab[highlight,, drop = FALSE])] = list(gplots::col2hex(high.color));
+
+         row.bgcolor = c(gplots::col2hex(header.colors[1]), row.bgcolor)
 
                                         #    if (row.names)
-            col.bgcolor = gplots::col2hex(header.colors[1])
+         col.bgcolor = gplots::col2hex(header.colors[1])
 
-            col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
+         col.style = sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]));
 
-            row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
-            names(row.style) = rownames(tab)
-            row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
+         row.style = rep(sprintf('font-size:%spx; text-align:center', data.size), nrow(tab))
+         names(row.style) = rownames(tab)
+         row.style = c(list(sprintf('font-weight:bold; font-size:%spx; color:%s; text-align:center', header.size, gplots::col2hex(header.colors[2]))), row.style)
 
-            hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
-                            row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
-            if (!is.null(footer))
-                hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
-            hwriter::closePage(p)
-        }
-  }
+         hwriter::hwrite(tab, p, row.style = row.style, col.style = col.style, col.bgcolor = col.bgcolor, row.names = row.names, col.names = col.names,
+                         row.bgcolor = row.bgcolor, table.frame = 'void', table.style = 'margin-left: 30px; margin-top: 30px', br = TRUE)
+         if (!is.null(footer))
+             hwriter::hwrite(footer, p, style = sprintf('font-weight:bold; text-align:center; font-size:%spx; margin-top;50px', footer.size), center = TRUE, div = TRUE);
+         hwriter::closePage(p)
+     }
+          }
+
+      #' @name col.scale
+      #' @title col.scale
+      #'
+      #' @description
+      #' Assigns rgb colors to numeric data values in vector "x".. maps scalar values
+      #' in val.range (default c(0,1)) to a linear color scale of between col.min (default white)
+      #' and col.max (default black), each which are length 3 vectors or characters.  RGB values are scaled between 0 and 1.
+      #'
+      #' Values below and above val.min and val.max are mapped to col.max and col.max respectively
+      #'
+      #' @param x length n numeric or integer data to color
+      #' @param val.range data range to assign to colors (= c(0,1))
+      #' @param col.min character color to interpolate minimum value in val.range (='white')
+      #' @param col.max character color interpolate maximum value in val.range (='black')
+      #' @param na.col color to give to na.values (='white')
+      #' @param invert logical flag whether to flip min and max (=FALSE)
+      #' @author Marcin Imielinski
+      #' @return length n vector of colors
+      #' @export
+      col.scale = function(x, val.range = c(0, 1), col.min = 'white', col.max = 'black', na.col = 'white',
+                           invert = FALSE # if T flips rgb.min and rgb.max
+                           )
+      {
+          if (!is.numeric(col.min))
+              if (is.character(col.min))
+                  col.min = col2rgb(col.min)/255
+              else
+                  error('Color should be either length 3 vector or character')
+
+          if (!is.numeric(col.max))
+              if (is.character(col.max))
+                  col.max = col2rgb(col.max)/255
+              else
+                  error('Color should be either length 3 vector or character')
+
+          col.min = as.numeric(col.min);
+          col.max = as.numeric(col.max);
+
+          x = (pmax(val.range[1], pmin(val.range[2], x))-val.range[1])/diff(val.range);
+          col.min = pmax(0, pmin(1, col.min))
+          col.max = pmax(0, pmin(1, col.max))
+
+          if (invert)
+          {
+              tmp = col.max
+              col.max = col.min
+              col.min = tmp
+          }
+
+          nna = !is.na(x);
+
+          out = rep(na.col, length(x))
+          out[nna] = rgb((col.max[1]-col.min[1])*x[nna] + col.min[1],
+          (col.max[2]-col.min[2])*x[nna] + col.min[2],
+          (col.max[3]-col.min[3])*x[nna] + col.min[3])
+
+          return(out)
+      }
+
 
 #' @name col.scale
 #' @title col.scale
@@ -3713,22 +3788,29 @@ ppdf = function(expr, filename = 'plot.pdf', height = 10, width = 10, cex = 1, t
 #' by default plot.html
 #'
 #' @export
-wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1)
+wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1, force = FALSE, quiet = FALSE, embed = FALSE)
     {
         if (length(cex)==1)
             cex = rep(cex,2)
 
-        DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
-        if (nchar(DEFAULT.OUTDIR)==0)
-            DEFAULT.OUTDIR = normalizePath('~/public_html/')
-        
-        if (!grepl('^[~/]', filename))
-            filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
+        if (!force)
+            {
+                DEFAULT.OUTDIR = Sys.getenv('WIDGET.DIR')
+                if (nchar(DEFAULT.OUTDIR)==0)
+                    DEFAULT.OUTDIR = normalizePath('~/public_html/')
+                
+                if (!grepl('^[~/]', filename))
+                    filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
+            }
+       
+        if (nchar(file.dir(filename))==0)
+          filename = paste0('./', filename)
         
         if (!file.exists(file.dir(filename)))
             system(paste('mkdir -p', file.dir(filename)))
-        
-        cat('rendering to', filename, '\n')
+
+        filename = paste(normalizePath(file.dir(filename)), file.name(filename), sep = '/')
+
         widg = eval(expr)
 
         toWidget <- function(x) {
@@ -3756,9 +3838,64 @@ wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1)
                     zoom = 'x'
                 widg = widg %>% hc_chart(zoomType = zoom)
             }
-            
+
+        if (embed)
+            return(widg)
+
+        if (quiet == FALSE)
+            message('rendering to ', filename)
         htmlwidgets::saveWidget(widg, paste(filename), selfcontained = FALSE)  
     }
+
+
+
+#' @name wijj
+#' @title wijj
+#'
+#' @description
+#'
+#' Embeds widget in jupyter notebook
+#'
+#' @export
+wijj = function (x, width = NULL, height = NULL, file = paste0("plotlyJupyterHTML/", 
+    digest::digest(Sys.time()), ".html")) 
+{
+    if (system.file(package = "IRdisplay") == "") {
+        warning("You need the IRdisplay package to use this function: \n", 
+            "devtools::install_github(c('IRkernel/repr', 'IRKernel/IRdisplay'))")
+        return(x)
+    }
+    l <- plotly_build(x)
+    src <- if (is.null(l$url)) {
+        dir <- dirname(file)
+        if (!dir.exists(dir)) 
+            dir.create(dir, recursive = TRUE)
+        owd <- setwd(dir)
+        on.exit(setwd(owd), add = TRUE)
+        htmlwidgets::saveWidget(as.widget(l), file = basename(file), selfcontained = FALSE)
+        file
+    }
+    else {
+        paste0(l$url, ".embed")
+    }
+
+    .fun = function (x, y) 
+    {
+        if (length(x) > 0 || is_blank(x)) 
+            x
+        else y
+    }
+
+    is_blank = function (x) 
+    {
+        inherits(x, "element_blank") && inherits(x, "element")
+    }
+   #     iframe <- plotly_iframe(src, width %||% l$width, height %||%   l$height)      
+    iframe <- plotly:::plotly_iframe(src, .fun(width, l$width), .fun(height, l$height))
+
+    get("display_html", envir = asNamespace("IRdisplay"))(iframe)
+}
+
 
 
 #' @name sortable
@@ -3825,6 +3962,7 @@ sortable = function(x, filename = 'list.html', title = NULL)
      writeLines(c(head1, head2, middle, tail), filename)
     }
 
+
 ###################################
 #' @name plop
 #' @title plop
@@ -3843,7 +3981,7 @@ sortable = function(x, filename = 'list.html', title = NULL)
 #' @author Marcin Imielinski
 #' @export
 ###################################
-plop = function(fn, prefix = NULL)
+plop = function(fn, prefix = NULL, force = NULL)
   {
       if (is.list(fn))
           if (!is.data.frame(fn))
@@ -3876,16 +4014,26 @@ plop = function(fn, prefix = NULL)
       if (!file.exists(DEFAULT.OUTDIR))
           system(paste('mkdir -p', file.dir(filename)))
 
+      if (!is.null(force))
+          {
+              if (length(force)==1)
+                  force = rep(force, length(new.fn))
+              new.fn = force
+          }
+      
       new.fn = paste(DEFAULT.OUTDIR, new.fn, sep = '/')
 
       if (any(ix <- !file.exists(file.dir(new.fn))))
           sapply(new.fn[ix], function(x)
               system(paste('mkdir -p', file.dir(x))))
-
+      
       mapply(function(x, y) system(paste('cp', x, y)), fn, new.fn)
+
+
       return(new.fn)
   }
- 
+
+
 
 ###################################
 #' @name splot
@@ -9016,9 +9164,6 @@ setMethod('initialize', 'coloredData', function(.Object, data, colormap, upright
        })
 
 
-
-
-
 setGeneric('getColormap', function(.Object) standardGeneric('getColormap'))
 setGeneric('getData', function(.Object) standardGeneric('getData'))
 setGeneric('getColors', function(.Object) standardGeneric('getColors'))
@@ -9061,3 +9206,204 @@ loud = function(x)
         system(x)
         cat('')
     }
+
+#' @name rpipe
+#' @title read pipe
+#'
+#' readsLines from pipe and then closes the pipe
+rpipe = function(cmd)
+{
+    p = pipe(cmd)
+    out = readLines(p)
+    close(p)
+    return(out)    
+}
+
+
+#' @name camerplot
+#' @title cameraplot
+#' @description
+#' plots the results of CAMERA in limma package 
+#' @export
+#' @param camera.res output of camera from limma
+#' @param voom.res output of voom from limma
+#' @param gene.sets gene set input to camera (named list of indices into the voom.res gene expression matrix)
+#' @param design design matrix input to camera
+#' @param max.genes max genes to draw in "leading edge" of gene set
+#' @param min.corr minimal abs(correlation) value for leading edge definition
+#' @param cex.space  label spacing expansion factor (use if labels get too crowded
+#' @param cex.slab  set label cex
+#' @param cex.glab  gene label cex
+#' @param lwd.notch  notch thickness
+#' @param text.shift  amount to shift text from notches (>0, <1)
+#' @param text.shift  minimal distance between labels
+#' @param height.wf height of the topmost correlation waterfall plot
+#' @param col.axis axis color character
+#' @param col.ramp ramp from lowest to highest expression to phenotype correlation (default blue, red)
+#' @importFrom stringr str_trim
+#' @author Marcin Imielinski
+cameraplot = function(camera.res, gene.sets, voom.res, design,
+    title = 'Camera Gene set notch plot',
+    cex.space = 1,
+    col.axis = alpha('gray20', 0.8),
+    col.ramp = c('blue', 'red'),
+    cex.slab = 1,
+    cex.glab = 1,
+    lwd.notch = 1,
+    tick.w = 0.1,
+    max.genes = 10,
+    text.shift = 0.5,
+    height.wf = 0.1,
+    min.corr = 0.1,
+    min.dist = 10,
+    max.gene.sets= 20,
+    gtext.shift = 0.2)
+    {
+
+        if (height.wf>1 | height.wf<0)
+            {
+                warning('Waterfall height should be between 0 and 1, defaulting to 0.2')
+                height.wf = 0.2
+            }
+        
+        if (nrow(camera.res)>max.gene.sets)
+            {
+                warning(sprintf('Entered %s gene sets .. only will plot the %s topmost (change max.genes.sets param value to increase)', nrow(camera.res), max.gene.sets))
+                camera.res = camera.res[1:max.gene.sets, ]
+            }
+        
+        camera.res$name = rownames(camera.res)
+        setnames(camera.res, gsub('\\W', '_', names(camera.res), perl = TRUE))
+        camera.res = as.data.table(camera.res)[order(-PValue), ]
+        my.sets = gene.sets[camera.res$name]
+        my.corr = apply(voom.res$E, 1, cor, y = design[,2])
+        my.rank = rank(-my.corr)
+        my.set.rank = sapply(my.sets, function(x) my.rank[x])
+        cm = function(x, width = 0.5) rgb(colorRamp(col.ramp)((pmax(-width, pmin(width, x))+width)/(2*width)), maxColorValue = 256)
+        text.space = 0.01*cex.space*length(my.rank)
+        gene.xcoord = length(my.rank)*seq(0, 0.5, length.out = max.genes)
+        notch.coord = cbind(unlist(my.set.rank), rep(1:length(my.set.rank), sapply(my.set.rank, length)))
+        ## genes to label
+        gene.list = lapply(1:length(my.set.rank), function(y)
+            {
+                x = my.set.rank[[y]]
+                if (camera.res[y, Direction == 'Up'])
+                    x = sort(x[my.corr[names(x)]>min.corr])
+                else
+                    x = rev(sort((x[my.corr[names(x)]<(-min.corr)])))
+                return(x[1:min(length(x), max.genes)])
+            })
+        gene.nm = unlist(lapply(gene.list, names))
+        gene.corr = my.corr[gene.nm]
+        gene.coord.top = gene.coord.bot = cbind(unlist(gene.list), rep(1:length(gene.list), sapply(gene.list, length))+tick.w/2)
+        gene.coord.top[,2] = gene.coord.top[,2] + gtext.shift
+        ## spread out labels
+        min.dist = min.dist + nchar(gene.nm)*text.space
+        for (i in 2:nrow(gene.coord.top))
+            if (camera.res[gene.coord.bot[i, 2], Direction] == 'Up') ## left to right
+                {
+                    if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i,1]-gene.coord.top[i-1,1]<min.dist[i])
+                        gene.coord.top[i,1] = gene.coord.top[i-1,1] + mean(c(min.dist[i-1], min.dist[i]))
+                }
+            else ## right to left
+                if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i-1,1]-gene.coord.top[i,1]<min.dist[i])
+                    gene.coord.top[i,1] = gene.coord.top[i-1,1] - mean(c(min.dist[i-1], min.dist[i]))
+                                        #gene.coord.top[,1] = position.labels(gene.coord.bot[,1], groups = gene.coord.top[,2], min.dist.ll = min.dist, min.dist.pl = 0)    
+        par(mar = 0.5*c(0,20, 5, 5))
+        par(xpd = NA)
+        rownames(notch.coord) = unlist(lapply(my.set.rank, names))    
+        graphics::layout(c(1, 2), heights = c(height.wf, 1-height.wf))
+        plot(0, type ="n", xlim = c(0, length(my.rank)), ylim = c(-0.5,0.5), ylab = '', xlab = "", axes = F, main = title)
+        par(mar = 0.5*c(5,20, 0, 5))
+        axis(2, at = seq(-0.5, 0.5, 0.5), col.axis = col.axis)
+        mtext(side = 2, 'Gene Correlations', line = 3, col = col.axis)
+        lines(my.rank, my.corr, type = 'h', col = cm(my.corr))
+        plot(0, type ="n", xlim = c(0, length(my.rank)), ylim = c(0,length(my.set.rank)+1), xlab = "", ylab = "", axes = F)
+        ## draw set labels
+        set.labs = camera.res[, sprintf('%s (Dir = %s, P = %s, FDR = %s)',
+            gsub('REACTOME', '', gsub('_', ' ', name)),
+            Direction,
+            signif(PValue,2), signif(FDR, 2)),
+            , by = 1:length(name)][, str_trim(V1)]
+        text(length(my.rank)/2, 1:length(my.set.rank) + text.shift, set.labs, adj = c(0.5, 0), cex = cex.slab*0.5, srt = 0)
+                                        # draw gene labels
+        text(gene.coord.top[,1],
+             gene.coord.top[,2]+0.1*gtext.shift,
+             gene.nm,
+             col = cm(gene.corr), cex = cex.glab*0.3, adj = c(0.5, 0))
+                                        # draw lines linking gene labels to notches
+        segments(gene.coord.top[,1],
+                 gene.coord.top[,2],
+                 gene.coord.bot[,1],
+                 gene.coord.bot[,2]+gtext.shift*0,
+                 col = alpha(cm(gene.corr), 0.2), lty = 1)
+                                        # draw "axis" backbone of notches
+        segments(rep(0, length(my.set.rank)),
+                 1:length(my.set.rank),
+                 rep(length(my.rank), length(my.set.rank)),
+                 1:length(my.set.rank),
+                 col = col.axis, lwd = 0.3, lty = 3)
+        
+        ## draw notches
+        segments(notch.coord[,1],
+                 notch.coord[,2]-tick.w/2,
+                 notch.coord[,1],
+                 notch.coord[,2]+tick.w/2, col = cm(my.corr[rownames(notch.coord)]), lwd = 2*lwd.notch)
+
+        axis(3, pos = nrow(camera.res)+1, at = c(seq(0, length(my.corr), 5000), length(my.corr)), col.axis = col.axis, col = col.axis, lwd = 0.8, cex.axis = 0.8)
+        axis(1, pos = 0.5, at = c(seq(0, length(my.corr), 5000), length(my.corr)), col.axis = col.axis, col = col.axis, lwd = 0.8, cex.axis = 0.8)
+        mtext("Gene ranks", side=1, cex.lab=1,col= col.axis)
+        mtext("Gene ranks", side=3, cex.lab=1,col= col.axis)
+    }
+ 
+
+ 
+## #' @name position.labels
+## #' @title  position.labels
+## #' @description
+## #'
+## #' Given 1D / 2D coordinates of "points", returns coordinates of optimal labels to those 
+## #' points minimizing distance between points and labels while obeying point-label and
+## #' point to point constraints.  Uses Rcplex to solve QP
+## #'
+## #' @importFrom nloptr cobyla
+## #' @param x matrix or vector of numeric coordinates
+## #' @param min.dist scalar numeric of minimal distance between labels and labels to points
+## #' @param min.dist.lp  scalar or length(x) vector numeric of minimal point to point distance
+## #' @param min.dist.ll  scalar numeric of minimal label to label distance
+## #' @export
+## position.labels = function(x, min.dist = 0, min.dist.pl = min.dist, min.dist.ll = min.dist, x0 = x + runif(length(x)), groups = rep(1, length(x)), ftol = 0.01, xtol = 1e-3, maxeval = 2000)
+##     {
+##         #library('nloptr')
+##         x = cbind(as.numeric(x))
+##         if (length(min.dist.pl)==1)
+##             min.dist.pl = rep(min.dist.pl, nrow(x))
+        
+##         hin = function(y)
+##             {
+##                 ##for all k and N(k) x[k] - x[N(k)] >= min.dist.ll[k]
+##                 dists1 = do.call(c, lapply(split(y, groups), function(yy)
+##                     {
+##                         ## distance matrix minus diagonal
+##                         if (length(yy)==1)
+##                             return(min.dist.pl+100)
+##                         tmp = as.matrix(dist(yy)) + diag(rep(NA, length(yy)))                                                   
+##                         tmp[!is.na(tmp)]
+##                     }))-min.dist.ll                
+##                 dists2 = sqrt(rowSums((x-cbind(y))^2))- min.dist.pl
+## #                message('max dist ', signif(min(dists1),0), ' ' , signif(min(dists2),0))
+##                 return(c(dists1, dists2))                       
+##             }
+
+##         fin = function(y)
+##             {
+##                 d = sum(sqrt(rowSums((x-cbind(y))^2)))
+## #                if (is.na(d))
+## #                    browser()
+## #               message(d)
+##                 return(d)
+##             }
+
+##         res = suppressWarnings(slsqp(x0, fn = fin, hin = hin, control = nl.opts(list(xtol_rel = xtol, ftol_abs = ftol, maxeval = maxeval))))
+##         return(res$par)
+##     }

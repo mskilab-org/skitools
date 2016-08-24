@@ -6,7 +6,9 @@
 \usage{
 qq_pval(obs, highlight = c(), exp = NULL, lwd = 1, bestfit = T,
   col = NULL, col.bg = "black", pch = 18, cex = 1, conf.lines = T,
-  max = NULL, qvalues = NULL, label = NULL, subsample = NA, ...)
+  max = NULL, qvalues = NULL, label = NULL, plotly = FALSE,
+  annotations = list(), gradient = list(), titleText = "",
+  subsample = NA, ...)
 }
 \arguments{
 \item{obs}{vector of pvalues to plot, names of obs can be intepreted as labels}
@@ -25,9 +27,17 @@ qq_pval(obs, highlight = c(), exp = NULL, lwd = 1, bestfit = T,
 
 \item{label}{character vector, optional specifying which data points to label (obs vector has to be named, for this to work)}
 
+\item{plotly}{toggles between creating a pdf (FALSE) or an interactive html widget (TRUE)}
+
+\item{annotations}{named list of vectors containing information to present as hover text (html widget), must be in same order as obs input}
+
+\item{gradient}{named list that contains one vector that color codes points based on value, must bein same order as obs input}
+
+\item{titleText}{title for plotly (html) graph only}
+
 \item{samp}{integer, optional specifying how many samples to draw from input data (default NULL)}
 }
 \author{
-Marcin Imielinski, Eran Hodis
+Marcin Imielinski, Eran Hodis, Zoran Gajic
 }
 
