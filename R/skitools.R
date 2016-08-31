@@ -170,7 +170,7 @@ border = function(B, na.rm = TRUE)
 #' @name fready
 #' @param pattern character (default \\W)
 #' @param sub character to sub in names (default _)
-#' @return data.datalbe
+#' @return data.table
 #' @export
 ##############
 fready = function(..., pattern = "\\W+", sub = "_")
