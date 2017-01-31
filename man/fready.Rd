@@ -12,7 +12,7 @@ fready(..., pattern = "\\\\W+", sub = "_")
 \item{sub}{character to sub in names (default _)}
 }
 \value{
-data.datalbe
+data.table
 }
 \description{
 calls fread while cleaning names using provided or default pattern and sub
