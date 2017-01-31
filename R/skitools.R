@@ -1479,37 +1479,53 @@ gr.peaks = function(gr, field = 'score',
         return(out)
     }
 
-
-
-#################
+############################################
 #' ra_breaks
 #'
 #' takes in either file or data frame from dranger or snowman or path to BND / SV type vcf file
 #' and returns junctions in VCF format.
-#'
+#' 
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
 #' @name ra_breaks
-#' @importFrom IRanges IRanges
-#' @importFrom GenomeInfoDb Seqinfo
-
+#' @import VariantAnnotation
 #' @export
-ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, 
+############################################
+ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA, 
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
   )
   {
       if (is.character(rafile))
           {
               if (grepl('(.bedpe$)', rafile))                  
-                  {
-                      ra.path = rafile
-                      
+              {
+                      ra.path = rafile                      
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
-                      nh = min(which(!grepl('chrom1', readLines(ra.path))))-1
+
+                      ln = readLines(ra.path)
+                      if (is.na(skip))
+                      {
+                              nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
+                              if (is.infinite(nh))
+                                  nh = 1
+                          }
+                      else
+                          nh = skip
+
+                                       
+                      if ((length(ln)-nh)==0)
+                          if (get.loose)
+                              return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
+                          else                              
+                              return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
+#                          return(GRangesList())
+                      
+                          
                       if (nh ==0)
                           rafile = fread(rafile, header = FALSE)
                       else
                           {
+                              
                               rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
                               if (is.null(rafile))
                                   rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
@@ -1529,7 +1545,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                   }
               else if (grepl('(vcf$)|(vcf.gz$)', rafile))
                   {
-#                      library(VariantAnnotation)
+                      library(VariantAnnotation)
                       
                       vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
                       if (!('SVTYPE' %in% names(info(vcf)))) {
@@ -1545,7 +1561,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                         return (GRangesList())
 
                       ## fix mateids if not included
-                      if  (!"MATEID"%in% colnames(mcols(vgr))) {
+                      if (!"MATEID"%in%colnames(mcols(vgr))) {
                         nm <- vgr$MATEID <- names(vgr)
                         ix <- grepl("1$",nm)
                         vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
@@ -1579,58 +1595,38 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       alt <- sapply(vgr$ALT, function(x) x[1])
                       vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                       vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                      shft = as.numeric(grepl('^[\\[\\]]', alt, perl = TRUE))
-                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr) + shft, sep = ''))
-                      
+                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
                       vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                       vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-                      if (any(ix<- !(vgr$mateid %in% names(vgr))))
-                          {
-                              warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
-                              vgr$mateid[ix] = NA
-                          }
-                          
                       if (all(is.na(vgr$mateid)))
-                          {
-                              if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-                                  {
-                                      warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                                      vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                                  }
+                          if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+                              {
+                                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                              }
+                          else if (!is.null(vgr$SCTG))
+                              {
+                                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                                  require(igraph)
+                                  ucoord = unique(c(vgr$coord, vgr$mcoord))
+                                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
 
-                              if (any(ix<- !(vgr$mateid %in% names(vgr))))
-                                  {
-                                      warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
-                                      vgr$mateid[ix] = NA
-                                  }
-
-                              if (any(is.na(vgr$mateid)))                              
-                                  if (!is.null(vgr$SCTG))
+                                  if (any(duplicated(vgr$mateid)))
                                       {
-                                          warning('MATEID tag missing or malformed, guessing BND partner from coordinates and SCTG')
-                                          require(igraph)
-                                          vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-                                          names(vgr) = paste(vgr$SCTG, vgr$coord, sep = '_')                                         
-                                          
-                                          if (any(duplicated(vgr$mateid)))
-                                          {
-                                              warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                                              bix = bix[!duplicated(vgr$mateid)]
-                                              vgr = vgr[!duplicated(vgr$mateid)]
-                                          }
+                                          warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                                          bix = bix[!duplicated(vgr$mateid)]
+                                          vgr = vgr[!duplicated(vgr$mateid)]
                                       }
-                             
-                              if (is.null(vgr$mateid))
-                                  stop('MATEID tag missing')
-                          }
+                              }
+                          else
+                              stop('MATEID tag missing')
 
                       vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                       pix = which(!is.na(vgr$mix))
 
                       vgr.pair = vgr[pix]
-
 
                       if (length(vgr.pair)==0)
                           stop('No mates found despite nonzero number of BND rows in VCF')
@@ -1673,14 +1669,14 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                               strand(vgr.pair2)[tmpix] = '+'
                           }
 
-                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (ie so that they refer to the base preceding the break for these junctions
+                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
                       if (any(pos1))
                           {
                               start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
                               end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
                           }
 
-                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (ie so that they refer to the base preceding the break for these junctions
+                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
                       if (any(pos2))
                           {
                               start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
@@ -1796,6 +1792,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
              
              if (is.character(rafile$str2) | is.factor(rafile$str2))
                  rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+
              
              if (is.numeric(rafile$str1))
                  rafile$str1 = ifelse(rafile$str1>0, '+', '-')
@@ -1816,10 +1813,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                  data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
 
              if (chr.convert)
-                 {
-                     seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
-                 }
-
+                 seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
              
              out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
              out = split(out, out$ra.index)
@@ -1841,7 +1835,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
           return(list(junctions = out, loose.ends = GRanges()))
 
      return(out)
-  }
+ }
+
+
+
+
 
 
 
