@@ -7,16 +7,7 @@
 igv(paths = NULL, gr = NULL, loci = NULL, snapshot = NULL,
   track.view = NULL, new = FALSE, reset = FALSE, wkspace = "PanLungWGS",
   host = Sys.getenv("IGV_HOST"), mac = !grepl("(^cga)|(node\\\\d+)", host),
-  sort.locus = NULL, gsub.paths = list(c("~/", "~/home/"),
-  c("/gpfs/internal/", "/internal/"), c("/data/analysis/", "/analysis/"),
-  c("/data/research/mski_lab/data", "/data"), c("/data/analysis/",
-  "/analysis/"), c("/seq/picard_aggregation/",
-  "/Volumes/seq_picard_aggregation/"), c("/xchip/singtex/",
-  "/Volumes/xchip_singtex/"), c("/cga/meyerson/", "/Volumes/cga_meyerson/"),
-  c("/seq/tier3b/", "/Volumes/seq_tier3b/"), c("/xchip/cle/",
-  "/Volumes/xchip_cle/"), c("/xchip/cga/", "/Volumes/xchip_cga/"),
-  c("/xchip/beroukhimlab/", "/Volumes/xchip_beroukhimlab/"),     
-  c("/cgaext/tcga/", "/Volumes/cgaext_tcga/"), c(Sys.getenv("HOME"), "HOME")),
+  rawpaths = FALSE, sort.locus = NULL, gsub.paths = list(),
   port = Sys.getenv("IGV_PORT"))
 }
 \arguments{

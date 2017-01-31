@@ -13,7 +13,7 @@ dnorm: mean, sd
 dbinom: size, prob
 dmultinom: size, prob
 dgamma: shape, rate
-dbeta: shape1, sheape 2}
+dbeta: shape1, shape2}
 
 \item{xlim}{length 2 vector specifying plot bounds (=NULL)}
 

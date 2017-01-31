@@ -26,6 +26,7 @@ Depends:
     htmlwidgets,
     devtools,
     gUtils,
+    stringr,
     plotly,
     ggplot2,	
     data.table,

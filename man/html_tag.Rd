@@ -4,7 +4,7 @@
 \alias{html_tag}
 \title{html_tag}
 \usage{
-html_tag(tag, text = NULL, collapse = "\\n", ...)
+html_tag(tag, text = NULL, collapse = " ", ...)
 }
 \arguments{
 \item{tag}{character vector of tags (without brackets)}

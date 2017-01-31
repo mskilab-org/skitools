@@ -225,7 +225,7 @@ dedup = function(x, suffix = '.')
 #' @param titleText title for plotly (html) graph only
 #' @author Marcin Imielinski, Eran Hodis, Zoran Gajic
 #' @export
-qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=T, max=NULL, qvalues=NULL, label = NULL, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
+qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=T, max=NULL, max.x = NULL, max.y = NULL, qvalues=NULL, label = NULL, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
 {
     if(!(plotly)){
         is.exp.null = is.null(exp)
@@ -278,9 +278,19 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
             exp = sort(exp)
 
         if (is.null(max))
-            max <- max(obs,exp) + 0.5
-        else
-            max <- max
+            max = max(obs,exp) + 0.5
+        
+        if (!is.null(max) & is.null(max.x))
+            max.x = max
+        
+        if (!is.null(max) & is.null(max.y))
+            max.y  = max
+        
+        if (is.null(max.x))
+            max.x <- max(obs,exp) + 0.5
+
+        if (is.null(max.y))
+            max.y <- max(obs,exp) + 0.5
 
         if (is.exp.null)
             {
@@ -291,9 +301,9 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
 
                 if (conf.lines){
                     ## plot the two confidence lines
-                    plot(tmp.exp, -log(c95,10), ylim=c(0,max), xlim=c(0,max), type="l", axes=FALSE, xlab="", ylab="")
+                    plot(tmp.exp, -log(c95,10), ylim=c(0,max.y), xlim=c(0,max.x), type="l", axes=FALSE, xlab="", ylab="")
                     par(new=T)
-                    plot(tmp.exp, -log(c05,10), ylim=c(0,max), xlim=c(0,max), type="l", axes=FALSE, xlab="", ylab="")
+                    plot(tmp.exp, -log(c05,10), ylim=c(0,max.y), xlim=c(0,max.x), type="l", axes=FALSE, xlab="", ylab="")
                     par(new=T)
 
                     p1 <- rep(tmp.exp[1], 2)
@@ -325,11 +335,11 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
             subsample = 5e4/nrow(dat)
 
         if (is.na(subsample[1]))
-            dat[, plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max), col = colors, ylim = c(0, max), pch=pch, cex=cex, bg=col.bg, ...)]
+            dat[, plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.x), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
         else
             {
                 subsample = pmin(pmax(0, subsample[1]), 1)
-                dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max), col = colors, ylim = c(0, max), pch=pch, cex=cex, bg=col.bg, ...)]
+                dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.y), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
             }
 
         if (!is.null(label))
@@ -341,19 +351,21 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                         dat[list(label), text(x, y, labels=label, pos=3)];
             }
 
-        lines(x=c(0, max), y = c(0, max), col = "black", lwd = lwd);
+        lines(x=c(0, max(max.y, max.x)), y = c(0, max(max.x, max.y)), col = "black", lwd = lwd)
 
         if (!is.na(subsample))
             dat = dat[sample(nrow(dat), subsample*nrow(dat)), ]
 
         lambda = lm(y ~ x-1, dat)$coefficients;
 
-        lines(x=c(0, max), y = c(0, lambda*max), col = "red", lty = 2, lwd = lwd);
-        legend('bottomright',sprintf('lambda = %.2f', lambda), text.col='red', bty='n')
+        lines(x=c(0, max.x), y = c(0, lambda*max.y), col = "red", lty = 2, lwd = lwd);
+        legend('bottomright',sprintf('lambda=\n %.2f', lambda), text.col='red', bty='n')
     }
 
     else{
 
+        #browser()
+        
         if(length(annotations) < 1){
             hover <- do.call(cbind.data.frame, list(p = obs))
         }
@@ -453,7 +465,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
         dat$y = dat$obs    
         
         #declare so we can use in If statement
-        p = NULL    
+        p <- NULL    
 
         #hacky subsampling but works really well, just maxing out the number of points at 8k
         #and removing the extra from the non-sig
@@ -473,23 +485,23 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                 outstr = paste(c(rbind(annotation_names, trans[,i])), sep = "", collapse = "")
                 hover_text = c(hover_text,outstr)
             }
-
+#            browser()
             if(gradient_control){
-                dat[, p <- plot_ly(data = dat, x=x, y=y, text = hover_text, color = grad,
-                                   marker = list(colorbar = list(title = names(gradient[1]))),
+                p <- dat[, plot_ly(data = dat, x=x, y=y, hoverinfo = "text",text = hover_text, color = grad,
+                                   colors = c("blue2","gold"),marker = list(colorbar = list(title = names(gradient[1]))),
                                    mode = "markers",type = 'scatter')
                     %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
                                yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
             else{
-                dat[, p <- plot_ly(data = dat, x=x, y=y, text = hover_text,
+                p <- dat[, plot_ly(data = dat, x=x, y=y, hoverinfo = "text",text = hover_text,
                                    mode = "markers",type = 'scatter')
                     %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
                                yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
         }
 
-
+        
         else {
                                     
             dat$ID = c(1:nrow(dat))
@@ -513,14 +525,14 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
             }
             
             if(gradient_control){
-                dat2[, p <- plot_ly(data = dat2, x=x, y=y, text = hover_text, color = grad,
-                                    marker = list(colorbar = list(title = names(gradient[1]))),
+                p <- dat2[, plot_ly(data = dat2, x=x, y=y,hoverinfo = "text", text = hover_text, color = grad,
+                                    colors = c("blue2","gold"),marker = list(colorbar = list(title = names(gradient[1]))),
                                     mode = "markers",type = 'scatter')
                      %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
                                 yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
             else{
-                dat2[, p <- plot_ly(data = dat2, x=x, y=y, text = hover_text,
+                p <- dat2[,  plot_ly(data = dat2, x=x, y=y,hoverinfo = "text", text = hover_text,
                                     mode = "markers",type = 'scatter')
                      %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
                                 yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
@@ -528,6 +540,8 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
             
         }
 
+ #       browser()
+        
         #Calculating lambda, Note that this is using the whole data set not the subsampled one
         lambda = lm(y ~ x - 1, dat)$coefficients
         lambda_max = max*as.numeric(lambda)
@@ -555,7 +569,8 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                     margin = list(
                         t = 100
                         
-                        ))
+                        ),
+                    hovermode = "compare")
     }
 }
 
@@ -1490,7 +1505,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       ra.path = rafile
                       
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
-                      nh = min(which(!grepl('#', readLines(ra.path))))-1
+                      nh = min(which(!grepl('chrom1', readLines(ra.path))))-1
                       if (nh ==0)
                           rafile = fread(rafile, header = FALSE)
                       else
@@ -2248,14 +2263,15 @@ img_link = function(file, caption = NULL, embed = F, ...) {
 #' @author Marcin Imielinski
 #' @export
 #############
-img.html = function(paths, text = names(paths), height = 1024, width = 768)
+img.html = function(paths, text = names(paths), height = 1024, width = 768, header = 1)
     {
         if (is.null(text))
             text = ''
 
-        df = data.frame(paths = paths, text = text)
-        return(as.vector(rbind(ifelse(!is.na(df$text), paste("<p> <h1>", df$text, "</h1> <p> "), ""),
-            paste("<img src = '", df$paths, "' height = '", height, "' width = '", width, "'>", sep = ''))))
+        df = data.frame(paths = paths, text = text, height = height, width = width, header = header)
+        header = ifelse(!is.na(df$text), paste0("<p> <h", df$header, "> ", df$text, " </h", df$header, "> <p> "), "")
+        out = paste0(header,"<img src = '", df$paths, "' height = '", df$height, "' width = '", df$width, "'>", sep = '')
+        return(out)
     }
 
 #########
@@ -2294,7 +2310,7 @@ html_link = function(href, text = NULL)
 #' @author Marcin Imielinski
 #' @export
 #########
-html_tag = function(tag, text = NULL, collapse = '\n',  ...)
+html_tag = function(tag, text = NULL, collapse = ' ',  ...)
   {
     flags = unlist(list(...))
 
@@ -2451,7 +2467,7 @@ install.packages.github = function(pkg, username, branch)
 ####################
 tabstring = function(tab, sep = ', ', sep2 = '_', dt = FALSE)
     {
-        if (length(dim(tab))==1)
+        if (length(dim(tab))<=1)
             if (dt)
                 {
                     tab = data.table(key = names(tab), count = as.numeric(tab))
@@ -2859,59 +2875,59 @@ levapply = function(x, by, FUN = 'order')
 ##   return(igraph::graph.data.frame(edge.df, directed = directed, vertices = node.df))
 ## }
 
-## #' @name brewer.master
-## #' @title brewer.master
-## #'
-## #' @description
-## #' Makes a lot of brewer colors using an "inexhaustible" brewer palette ie will not complain if number of colors requested is too high.
-## #'
-## #' Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
-## #'
-## #' @param n TODO
-## #' @param palette character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)
-## #' @return length(n) character vector of colors
-## #' @author Marcin Imielinski
-## #' @export
-## brewer.master = function(n, palette = 'Accent')
-## {
-##   # library(RColorBrewer)
-##   palettes = list(
-##     sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
-##     diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
-##     qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
-##   );
+#' @name brewer.master
+#' @title brewer.master
+#'
+#' @description
+#' Makes a lot of brewer colors using an "inexhaustible" brewer palette ie will not complain if number of colors requested is too high.
+#'
+#' Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
+#'
+#' @param n TODO
+#' @param palette character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)
+#' @return length(n) character vector of colors
+#' @author Marcin Imielinski
+#' @export
+brewer.master = function(n, palette = 'Accent')
+{
+  # library(RColorBrewer)
+  palettes = list(
+    sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
+    diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
+    qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
+  );
 
-##   palettes = unlist(palettes);
-##   names(palettes) = gsub('\\w+\\.', '', names(palettes))
+  palettes = unlist(palettes);
+  names(palettes) = gsub('\\w+\\.', '', names(palettes))
 
-##   if (palette %in% names(palettes))
-##     i = match(palette, names(palettes))
-##   else
-##     i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
+  if (palette %in% names(palettes))
+    i = match(palette, names(palettes))
+  else
+    i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
 
-##   col = c();
-##   col.remain = n;
+  col = c();
+  col.remain = n;
 
-##   while (col.remain > 0)
-##     {
-##       if (col.remain > palettes[i])
-##         {
-##           next.n = palettes[i]
-##           col.remain = col.remain-next.n;
-##         }
-##       else
-##         {
-##           next.n = col.remain
-##           col.remain = 0;
-##         }
+  while (col.remain > 0)
+    {
+      if (col.remain > palettes[i])
+        {
+          next.n = palettes[i]
+          col.remain = col.remain-next.n;
+        }
+      else
+        {
+          next.n = col.remain
+          col.remain = 0;
+        }
 
-##       col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
-##       i = ((i) %% length(palettes))+1
-##     }
+      col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
+      i = ((i) %% length(palettes))+1
+    }
 
-##   col = col[1:n]
-##   return(col)
-## }
+  col = col[1:n]
+  return(col)
+}
 
 #' @name charToDec
 #' @title charToDec
@@ -3114,7 +3130,7 @@ rmix = function(p, rdens, n = NULL)
 #' dbinom: size, prob
 #' dmultinom: size, prob
 #' dgamma: shape, rate
-#' dbeta: shape1, sheape 2
+#' dbeta: shape1, shape2
 #' @param ... additional density specific arguments each with vectorized values of length k, where k is the number of desired mixture componetns, see dens arugment)
 #' @param alpha length(k) numeric vector specifying mixing probability
 #' @param xlim length 2 vector specifying plot bounds (=NULL)
@@ -3158,8 +3174,9 @@ dmix = function(dens = 'dnorm', xlim = NULL, n = 500, alpha = NULL, plot = F, fi
 
     if (collapse)
       {
-        out = aggregate(prob ~ x, data = out, FUN = sum)
-        out$id = 1;
+          out = as.data.table(out)[, list(prob = sum(prob), id = 1), by = x]
+#          out = aggregate(prob ~ x, data = out, FUN = sum)
+#        out$id = 1;
       }
 
     if (plot)
@@ -3595,12 +3612,11 @@ dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwid
 #' @export
 dirr = function(x, pattern = NULL, rep = '', full = TRUE,  ...)
   {
-    out = dir(x, pattern, full.names = full, ...)
-    if (!is.null(pattern))
-        names(out) = gsub(pattern, rep, dir(x, pattern))
-    else
-        names(out) = file.name(out)
-
+      out = dir(x, pattern, full.names = full, ...)
+      if (!is.null(pattern))
+          names(out) = gsub(pattern, rep, file.name(out))
+      else
+          names(out) = file.name(out)
     return(out)
   }
 
@@ -4208,7 +4224,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
     scatter = FALSE,
     text = NULL,
     cex.scatter = 1,
-    col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = TRUE)
+    col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE)
     {
         # require(ggplot2)
         if (!is.factor(group))
@@ -4247,7 +4263,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 
         if (!is.na(minsup))
             {
-          num = NULL ## NOTE fix
+                num = NULL ## NOTE fix
                 good = as.data.table(dat)[, list(num = length(y)), keyby = vgroup][num>minsup, vgroup]
                 dat = dat[(dat$vgroup %in% as.character(good)), ]
             }
@@ -4359,10 +4375,11 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 
         if (plotly)
             return(ggplotly(g))
-        else
+        
+        if (print)
             print(g)
-
-        'voila'
+        else
+            g                
     }
 
  
@@ -6822,22 +6839,23 @@ igv = function(
     wkspace = 'PanLungWGS',
     host = Sys.getenv('IGV_HOST'),
     mac = !grepl('(^cga)|(node\\d+)', host), ##
+    rawpaths = FALSE,
     sort.locus = NULL,
     gsub.paths = list(
-        c('~/', '~/home/'),
-        c('/gpfs/internal/', '/internal/'),
-        c('/data/analysis/', '/analysis/'),
-        c('/data/research/mski_lab/data', '/data'),
-        c('/data/analysis/', '/analysis/'),
-        c('/seq/picard_aggregation/', '/Volumes/seq_picard_aggregation/'),
-        c('/xchip/singtex/', '/Volumes/xchip_singtex/'),
-        c('/cga/meyerson/', '/Volumes/cga_meyerson/'),
-        c('/seq/tier3b/', '/Volumes/seq_tier3b/'),
-        c('/xchip/cle/', '/Volumes/xchip_cle/'),
-        c('/xchip/cga/', '/Volumes/xchip_cga/'),
-        c('/xchip/beroukhimlab/', '/Volumes/xchip_beroukhimlab/'),
-        c('/cgaext/tcga/', '/Volumes/cgaext_tcga/'),
-        c(Sys.getenv('HOME'), 'HOME')
+        ## c('~/', '~/home/'),
+        ## c('/gpfs/internal/', '/internal/'),
+        ## c('/data/analysis/', '/analysis/'),
+        ## c('/data/research/mski_lab/data', '/data'),
+        ## c('/data/analysis/', '/analysis/'),
+        ## c('/seq/picard_aggregation/', '/Volumes/seq_picard_aggregation/'),
+        ## c('/xchip/singtex/', '/Volumes/xchip_singtex/'),
+        ## c('/cga/meyerson/', '/Volumes/cga_meyerson/'),
+        ## c('/seq/tier3b/', '/Volumes/seq_tier3b/'),
+        ## c('/xchip/cle/', '/Volumes/xchip_cle/'),
+        ## c('/xchip/cga/', '/Volumes/xchip_cga/'),
+        ## c('/xchip/beroukhimlab/', '/Volumes/xchip_beroukhimlab/'),
+        ## c('/cgaext/tcga/', '/Volumes/cgaext_tcga/'),
+        ## c(Sys.getenv('HOME'), 'HOME')
         ),
     port = Sys.getenv('IGV_PORT')
 )
@@ -6858,7 +6876,10 @@ igv = function(
         host = ''
 
     if (nchar(host)==0)
-        stop('IGV host field is empty, either specify via host argument to this function or set IGV_HOST environment variable')
+        {
+            warning('IGV_HOST field is empty and host is not provided, defaulting to mskilab as host')
+            host = 'mskilab'
+        }
 
     con = tryCatch(suppressWarnings(socketConnection(host = host, port = port, open="r+", blocking = TRUE)), error =
            function(x) (stop(sprintf('IGV does not appear to be running on host %s, port %s.  Please start IGV (v2 or later) in external shell for host %s, then retry igv command.', host, port, Sys.getenv('HOST')))))
@@ -6882,9 +6903,12 @@ igv = function(
                     {
                         paths = paths[ix]
 
-                        new.paths = normalizePath(paths);
+                        if (rawpaths)
+                            new.paths = paths
+                        else
+                            new.paths = normalizePath(paths);
 
-                        if (mac)
+                        if (mac & !rawpaths)
                             {
                                 cat('converting server paths for MacOS IGV..\n')
                                 for (g in gsub.paths)
@@ -7129,10 +7153,14 @@ igv.loci = function(mut, ## GRanges of loci
 #' @author Marcin Imielinski
 dcast2 = function(data, formula, ..., value.var = NULL,
     fun.aggregate = function(x) if (length(x)<=1) x[1] else paste(x, collapse = ','), sep = '_')
-    {
+{
+    tmp = strsplit(as.character(formula), ' \\+ ')
+    left.side = tmp[[2]]
+    right.side = tmp[[3]]
+
         terms = sapply(unlist(as.list(attr(terms(formula), "variables"))[-1]), as.character)
         if (is.null(value.var))
-            value.var = setdiff(colnames(data), terms)
+            value.var = setdiff(colnames(data), c(left.side, right.side))
         dt = lapply(value.var, function(x)
             {
                 if (is.data.table(data))
@@ -7141,7 +7169,7 @@ dcast2 = function(data, formula, ..., value.var = NULL,
                     {
                         d = as.data.table(dcast(data, formula,  ..., fun.aggregate = fun.aggregate, value.var = x))                       
                     }
-                new.cols = setdiff(colnames(d), key(d))
+                new.cols = setdiff(colnames(d), c(key(d), left.side, right.side))
                 setnames(d, new.cols, paste(new.cols, x, sep = sep))
                 return(d)
             })
@@ -7226,49 +7254,6 @@ gr.round = function(Q, S, up = TRUE, parallel = FALSE)
     names(out) = names(Q)
     strand(out) = str;
     return(out)
-}
-
-
-#' Create GRanges of read mates from reads
-#'
-#' @return \code{GRanges} corresponding to mates of reads
-#' @name get.mate.gr
-#' @export
-get.mate.gr = function(reads)
-{
-
-    if (inherits(reads, 'GRanges')) {
-        mpos = values(reads)$mpos
-        mrnm = as.vector(values(reads)$mrnm)
-        mapq = values(reads)$MQ
-        bad.chr = !(mrnm %in% seqlevels(reads)); ## these are reads mapping to chromosomes that are not in the current "genome"
-        mrnm[bad.chr] = as.character(seqnames(reads)[bad.chr]) # we set mates with "bad" chromosomes to have 0 width and same seqnames (ie as if unmapped)
-    } else if (inherits(reads, 'data.table')) {
-        mpos <- reads$mpos
-        mrnm <- reads$mrnm
-        mapq = reads$MQ
-        bad.chr <- !(mrnm %in% c(seq(22), 'X', 'Y', 'M'))
-        mrnm[bad.chr] <- reads$seqnames[bad.chr]
-    }
-
-    if (inherits(reads, 'GappedAlignments'))
-        mwidth = qwidth(reads)
-    else
-    {
-        mwidth = reads$qwidth
-        mwidth[is.na(mwidth)] = 0
-    }
-
-    mwidth[is.na(mpos)] = 0
-    mwidth[bad.chr] = 0;  # we set mates with "bad" chromosomes to have 0 width
-    mpos[is.na(mpos)] = 1;
-
-    if (inherits(reads, 'GappedAlignments'))
-        GRanges(mrnm, IRanges(mpos, width = mwidth), strand = c('+', '-')[1+bamflag(reads)[, 'isMateMinusStrand']], seqlengths = seqlengths(reads), qname = values(reads)$qname, mapq = mapq)
-    else if (inherits(reads, 'GRanges'))
-        GRanges(mrnm, IRanges(mpos, width = mwidth), strand = c('+', '-')[1+bamflag(reads$flag)[, 'isMateMinusStrand']], seqlengths = seqlengths(reads), qname = values(reads)$qname, mapq = mapq)
-    else if (inherits(reads, 'data.table'))
-        ab=data.table(seqnames=mrnm, start=mpos, end=mpos + mwidth - 1, strand=c('+','-')[1+bamflag(reads$flag)[,'isMateMinusStrand']], qname=reads$qname, mapq = mapq)
 }
 
 
@@ -9242,7 +9227,7 @@ rpipe = function(cmd)
 #' @param col.ramp ramp from lowest to highest expression to phenotype correlation (default blue, red)
 #' @importFrom stringr str_trim
 #' @author Marcin Imielinski
-cameraplot = function(camera.res, gene.sets, voom.res, design,
+cameraplot = function(camera.res, gene.sets, voom.res, design, contrast = ncol(design), 
     title = 'Camera Gene set notch plot',
     cex.space = 1,
     col.axis = alpha('gray20', 0.8),
@@ -9276,7 +9261,7 @@ cameraplot = function(camera.res, gene.sets, voom.res, design,
         setnames(camera.res, gsub('\\W', '_', names(camera.res), perl = TRUE))
         camera.res = as.data.table(camera.res)[order(-PValue), ]
         my.sets = gene.sets[camera.res$name]
-        my.corr = apply(voom.res$E, 1, cor, y = design[,2])
+        my.corr = apply(voom.res$E, 1, cor, y = design[,contrast])
         my.rank = rank(-my.corr)
         my.set.rank = sapply(my.sets, function(x) my.rank[x])
         cm = function(x, width = 0.5) rgb(colorRamp(col.ramp)((pmax(-width, pmin(width, x))+width)/(2*width)), maxColorValue = 256)
@@ -9291,7 +9276,11 @@ cameraplot = function(camera.res, gene.sets, voom.res, design,
                     x = sort(x[my.corr[names(x)]>min.corr])
                 else
                     x = rev(sort((x[my.corr[names(x)]<(-min.corr)])))
-                return(x[1:min(length(x), max.genes)])
+
+                if (length(x)>0)                    
+                    return(x[1:min(length(x), max.genes)])
+                else
+                    return(c())                
             })
         gene.nm = unlist(lapply(gene.list, names))
         gene.corr = my.corr[gene.nm]
@@ -9300,14 +9289,22 @@ cameraplot = function(camera.res, gene.sets, voom.res, design,
         ## spread out labels
         min.dist = min.dist + nchar(gene.nm)*text.space
         for (i in 2:nrow(gene.coord.top))
-            if (camera.res[gene.coord.bot[i, 2], Direction] == 'Up') ## left to right
+        {
+            if (nrow(gene.coord.bot)>0)
                 {
-                    if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i,1]-gene.coord.top[i-1,1]<min.dist[i])
-                        gene.coord.top[i,1] = gene.coord.top[i-1,1] + mean(c(min.dist[i-1], min.dist[i]))
+                    if (camera.res[gene.coord.bot[i, 2], Direction] == 'Up') ## left to right
+                    {
+                        if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i,1]-gene.coord.top[i-1,1]<min.dist[i])
+                            gene.coord.top[i,1] = gene.coord.top[i-1,1] + mean(c(min.dist[i-1], min.dist[i]))
+                    }
+                    else ## right to left
+                    {
+                        if (nrow(gene.coord.top)>0)
+                            if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i-1,1]-gene.coord.top[i,1]<min.dist[i])
+                                gene.coord.top[i,1] = gene.coord.top[i-1,1] - mean(c(min.dist[i-1], min.dist[i]))
+                    }
                 }
-            else ## right to left
-                if (gene.coord.top[i,2] == gene.coord.top[i-1,2] & gene.coord.top[i-1,1]-gene.coord.top[i,1]<min.dist[i])
-                    gene.coord.top[i,1] = gene.coord.top[i-1,1] - mean(c(min.dist[i-1], min.dist[i]))
+        }
                                         #gene.coord.top[,1] = position.labels(gene.coord.bot[,1], groups = gene.coord.top[,2], min.dist.ll = min.dist, min.dist.pl = 0)    
         par(mar = 0.5*c(0,20, 5, 5))
         par(xpd = NA)
@@ -9407,3 +9404,42 @@ cameraplot = function(camera.res, gene.sets, voom.res, design,
 ##         res = suppressWarnings(slsqp(x0, fn = fin, hin = hin, control = nl.opts(list(xtol_rel = xtol, ftol_abs = ftol, maxeval = maxeval))))
 ##         return(res$par)
 ##     }
+
+
+
+
+#' @name parsesnpeff
+#' @title parsesnpeff
+#'
+#' @description
+#' parses vcf file containing SnpEff annotations on Strelka calls
+#'
+#' @param vcf path to vcf
+#' @param id
+#' @return GRanges object of all variants and annotations
+#' @author Kevin Hadi
+#' @export
+########
+parsesnpeff = function(vcf, id)
+           {
+            print(vcf)
+            fn = c('allele', 'annotation', 'impact', 'gene', 'gene_id', 'feature_type', 'feature_id', 'transcript_type', 'rank', 'variant.c', 'variant.p', 'cdna_pos', 'cds_pos', 'protein_pos', 'distance')
+            out = read_vcf(vcf)
+            out$ALT = sapply(out$ALT, as.character)
+            out$REF = sapply(out$REF, as.character)
+            out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
+                ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))                
+            tmp = lapply(out$ANN, function(y) do.call(rbind, strsplit(y, '\\|'))[, 1:15, drop = FALSE])
+            tmpix = rep(1:length(out), sapply(tmp, nrow))
+            meta = as.data.frame(do.call(rbind, tmp))
+            colnames(meta) = fn
+            meta$varid = tmpix
+            meta$file = vcf
+            meta$pair = id
+            out2 = out[tmpix]
+            rownames(meta) = NULL
+            values(out2) = cbind(values(out2), meta)
+            names(out2) = NULL
+            out2$ANN = NULL
+            return(out2)
+        }

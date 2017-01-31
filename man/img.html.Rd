@@ -4,7 +4,8 @@
 \alias{img.html}
 \title{img.html}
 \usage{
-img.html(paths, text = names(paths), height = 1024, width = 768)
+img.html(paths, text = names(paths), height = 1024, width = 768,
+  header = 1)
 }
 \arguments{
 \item{paths}{vector of (relative) paths to embed in html}
