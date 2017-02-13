@@ -7639,8 +7639,7 @@ gc_content = function(segs, bs_genome) ##build = 'hg19')
 #' (2) has additional flag chrsub to sub in 'chr' in selection, and then sub it out of the output
 #' @name import.ucsc
 #' @export
-import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FALSE, as = NULL, ...)
-{
+import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FALSE, as = NULL, ...) {
     si = NULL;
 
     if (verbose)
@@ -7648,8 +7647,6 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
 
     if (grepl('(\\.bw)|(\\.bigwig)', con, ignore.case = TRUE))
     {
-        if (is.null(as))
-            as = 'RleList'
 
         if (is.character(con))
             f = BigWigFile(normalizePath(con))
@@ -7660,8 +7657,6 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
     }
     else if (grepl('\\.wig', con, ignore.case = TRUE))
     {
-        if (is.null(as))
-            as = 'RleList'
 
         if (is.character(con))
             f = WIGFile(normalizePath(con))
@@ -7672,8 +7667,6 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
     }
     else if (grepl('\\.bed', con, ignore.case = TRUE))
     {
-        if (is.null(as))
-            as = 'GRanges'
 
         if (is.character(con))
             f = BEDFile(normalizePath(con))
@@ -7684,8 +7677,6 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
     }
     else if (grepl('\\.gff', con, ignore.case = TRUE))
     {
-        if (is.null(as))
-            as = 'GRangesList'
 
         if (is.character(con))
             f = GFFFile(normalizePath(con))
@@ -7696,8 +7687,6 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
     }
     else if (grepl('\\.2bit', con, ignore.case = T))
     {
-        if (is.null(as))
-            as = 'RleList'
         if (is.character(con))
             f = TwoBitFile(normalizePath(con))
         else
@@ -7707,8 +7696,6 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
     }
     else if (grepl('\\.bedgraph', con, ignore.case = T))
     {
-        if (is.null(as))
-            as = 'GRanges'
 
         if (is.character(con))
             f = BEDGraphFile(normalizePath(con))
@@ -7733,9 +7720,9 @@ import.ucsc = function(con, selection = NULL, text, chrsub = TRUE, verbose = FAL
     else
     {
         if (!is.null(selection))
-            out = import(f, selection = selection, as = as, ... )
+            out = import(f, selection = selection )
         else
-            out = import(f, as = as, ...)
+            out = import(f) 
     }
 
     if (!is(out, 'GRanges'))
