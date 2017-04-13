@@ -6375,7 +6375,7 @@ quickSig = function(maf, # this is the maf file made by mutsig preprocess *** ne
 #' @param gene.sets a named list of character vectors, each list item is a gene set, i.e. a character vector of genes
 #' @param sig.table named vector of p values from an analysis e.g. mutSig, the names of the genes are
 #' @param min.perms minimum number of permutations to do in the adaptive permutation test
-#' @param min.perms maximum number of permutations to do in the adaptive permutation test
+#' @param max.perms maximum number of permutations to do in the adaptive permutation test
 #' @param length.range length 2 integer vector specifying min and max gene set size to score after intersection with genes in sig.table default: c(5,50)
 #' @export
 #' @author Marcin Imielinski
