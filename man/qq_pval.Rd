@@ -40,4 +40,3 @@ qq_pval(obs, highlight = c(), exp = NULL, lwd = 1, bestfit = T,
 \author{
 Marcin Imielinski, Eran Hodis, Zoran Gajic
 }
-

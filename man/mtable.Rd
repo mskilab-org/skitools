@@ -18,4 +18,3 @@ tabulates unique rows values for matrix / data frame
 \author{
 Marcin Imielinski
 }
-

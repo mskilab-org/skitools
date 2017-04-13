@@ -12,4 +12,3 @@ Computes mutation rates along k gene "windows" along an ordered list "genes" of 
 \author{
 Marcin Imielinski
 }
-

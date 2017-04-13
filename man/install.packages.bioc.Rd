@@ -15,4 +15,3 @@ shortcut to install bioconductor packages
 \author{
 Marcin Imielinski
 }
-

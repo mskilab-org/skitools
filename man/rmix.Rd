@@ -31,4 +31,3 @@ Output is the rbind-ed output of individual rdens calls
 \author{
 Marcin Imielinski
 }
-

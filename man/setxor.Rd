@@ -17,4 +17,3 @@ elements in A or B that are not in the intersection of A and B
 \author{
 Marcin Imielinski
 }
-

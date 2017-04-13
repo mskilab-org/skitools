@@ -36,4 +36,3 @@ of the matching range in not S
 subject <- GRanges(1, IRanges(c(160,170),width=201), seqinfo=Seqinfo("1", 500))
 gr.round(query, subject)}
 }
-

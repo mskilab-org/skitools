@@ -18,4 +18,3 @@ Scans "Variant_Classification" field in maf and outputs TRUE if variant is in pr
 \author{
 Marcin Imielinski
 }
-

@@ -9,4 +9,3 @@ ra.union(ra1, ra2, ...)
 \description{
 returns events in ra1 that are in ra2 also
 }
-

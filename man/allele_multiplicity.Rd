@@ -16,4 +16,3 @@ using bsp_participant_id in ind and annotate, but may take a few minutes to pull
 \author{
 Marcin Imielinski
 }
-

@@ -19,4 +19,3 @@ loads Rdata environment into a list variable and returns
 \author{
 Marcin Imielinski
 }
-

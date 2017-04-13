@@ -12,4 +12,3 @@ grl.filter(grl, windows)
 \details{
 does not return list in necessarily same order
 }
-

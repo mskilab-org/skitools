@@ -27,4 +27,3 @@ of row-column locations in matrix
 \author{
 Marcin Imielinski
 }
-

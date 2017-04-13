@@ -9,4 +9,3 @@ queues()
 \description{
 Lists all available queues
 }
-

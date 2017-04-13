@@ -18,4 +18,3 @@ parses filenames from character vector of paths
 \author{
 Marcin Imielinski
 }
-

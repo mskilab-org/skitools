@@ -25,4 +25,3 @@ to two chromosomes) there are two options:
 \details{
 If a grl item contains ranges that lie on different chromosomes, then corresponding grange will have chromosome "NA" and IRange(0, 0)
 }
-

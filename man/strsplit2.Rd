@@ -27,4 +27,3 @@ Takes in a character vector and outputs a list of "separated" items
 \author{
 Marcin Imielinski
 }
-

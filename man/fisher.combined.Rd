@@ -19,4 +19,3 @@ rows correspond to hypotheses.
 \author{
 Marcin Imielinski
 }
-

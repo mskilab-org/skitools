@@ -53,4 +53,3 @@ intervals are given as GRanges
 \author{
 Marcin Imielinski
 }
-

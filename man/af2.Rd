@@ -19,4 +19,3 @@ altc1, totc1, altc2, totc2 are of length n
 \author{
 Marcin Imielinski
 }
-

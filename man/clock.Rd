@@ -14,4 +14,3 @@ clock(expr)
 \author{
 Marcin Imielinski
 }
-

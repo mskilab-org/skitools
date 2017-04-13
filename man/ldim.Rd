@@ -15,4 +15,3 @@ returns dimensions of all objects contained in list
 \author{
 Marcin Imielinski
 }
-

@@ -23,4 +23,3 @@ given 1D query
 \author{
 Marcin Imielinski
 }
-

@@ -8,4 +8,3 @@ readsLines from pipe and then closes the pipe}
 \usage{
 rpipe(cmd)
 }
-

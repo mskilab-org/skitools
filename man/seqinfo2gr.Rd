@@ -19,4 +19,3 @@ ie a pile of ranges spanning the genome
 \dontrun{si <- Seqinfo(names(hg_seqlength(), hg_seqlengths()))
 seqinfo2gr(si)}
 }
-

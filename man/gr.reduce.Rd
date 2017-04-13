@@ -20,4 +20,3 @@ collapse only within levels of a meta data field "by"
 \details{
 Will populate output with metadata of first row of input contributing the reduced output range.
 }
-

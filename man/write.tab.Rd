@@ -14,4 +14,3 @@ write.tab(x, ..., sep = "\\t", quote = F, row.names = F)
 
 \item{...}{additional arguments to write.table}
 }
-

@@ -11,4 +11,3 @@ wij(expr, filename = "plot.html", zoom = NULL, cex = 1, force = FALSE,
 Evaluates output of htmlwidget generating expression (e.g. via highcharter) and send to filename in predefined WIDGET.DIR
 by default plot.html
 }
-

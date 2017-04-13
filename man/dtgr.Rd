@@ -19,4 +19,3 @@ All of the remaining fields are added as meta data to the GRanges
 \examples{
 \dontrun{r <- dtgr(data.table(start=1, seqnames="X", end=2, strand='+'))}
 }
-

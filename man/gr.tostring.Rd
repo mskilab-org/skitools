@@ -24,4 +24,3 @@ text representation of input
 \description{
 dumps out a quick text representation of a gr object (ie a character vector)
 }
-

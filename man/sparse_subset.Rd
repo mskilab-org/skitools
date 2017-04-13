@@ -29,4 +29,3 @@ a (+/- strict) subset of the nonzero components of row j of B
 \author{
 Marcin Imielinski
 }
-

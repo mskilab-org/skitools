@@ -26,4 +26,3 @@ Takes a set of GRanges and removes any ranges that
 don't have a minimal coverage value. If you give it
 a GRangesList, you will get back an unlisted GRanges.
 }
-

@@ -574,66 +574,6 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     }
 }
 
-
-#' Converts \code{GRanges} to \code{data.table}
-#'
-#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
-#' @param x \code{GRanges} to convert
-#' @name gr2dt
-#' @export
-#'
-gr2dt  <- function(x)
-{
-    ## new approach just directly instantiating data table
-    cmd = 'data.frame(';
-    if (is(x, 'GRanges'))
-    {
-        ## as.data.table complains if duplicated row names
-        if (any(duplicated(names(x))))
-            names(x) <- NULL
-
-        was.gr = TRUE
-        f = c('seqnames', 'start', 'end', 'strand', 'width')
-        f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
-        cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
-        value.f = names(values(x))
-    }
-    else
-    {
-        was.gr = FALSE
-        value.f = names(x)
-    }
-
-    if (length(value.f)>0)
-    {
-        if (was.gr)
-            cmd = paste(cmd, ',', sep = '')
-        class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
-
-        .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
-        {
-            tmp1 = as.character(unlist(x))
-            tmp2 = rep(1:length(x), S4Vectors::elementLengths(x))
-            return(split(tmp1, tmp2))
-        }
-
-        ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
-        as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
-                       ifelse(grepl('Character', class.f), 'as.character',
-                       ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
-                       ifelse(grepl('StringSet$', class.f), 'as.character',
-                       ifelse(grepl('factor$', class.f), 'as.character',
-                       ifelse(grepl('List', class.f), 'as.list',
-                       ifelse(grepl('factor', class.f), 'as.character',
-                       ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
-        cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
-    }
-
-    cmd = paste(cmd, ')', sep = '')
-
-    return(data.table::as.data.table(eval(parse(text =cmd))))
-}
-
 #' @name wfplot
 #' @title Quick waterfall plot
 #' @description Quick waterfall plot
@@ -693,7 +633,7 @@ wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, ce
 
 
 
-############
+
 #' @name list.expr
 #' @title list.expr
 #' @description
@@ -2888,6 +2828,13 @@ levapply = function(x, by, FUN = 'order')
 #' @export
 brewer.master = function(n, palette = 'Accent')
 {
+    nms = NULL
+    if (is.character(n))
+    {
+        nms = unique(n)
+        n = length(nms)
+    }
+    
   # library(RColorBrewer)
   palettes = list(
     sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
@@ -2923,7 +2870,8 @@ brewer.master = function(n, palette = 'Accent')
       i = ((i) %% length(palettes))+1
     }
 
-  col = col[1:n]
+    col = col[1:n]
+    names(col) = nms
   return(col)
 }
 
@@ -3546,21 +3494,24 @@ gr.flip = function(...)
 #' @param ylab y axis label (='')
 #' @param xlab x axis label (='')
 #' @param log logical flag whether to plot y axis in log format (=FALSE)
-#' @param dotsize integer dot size to plot with (= NULL)
-#' @param binwidth numeric binwidth of histogram (= NULL)
+#' @param dotsize integer dot size to plot with, as function of 0.02 category width plot real estate (= NULL)
+#' @param binwidth numeric binwidth of histogram in units of data quantiles (= NULL)
 #' @param title character title of plot (='')
 #' @param ylim y limits of plot (= NULL)
 #' @param text.size text size of legend (= NULL)
 #' @author Marcin Imielinski
 #' @export
-dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwidth = NULL, title = NULL, ylim = NULL, text.size = NULL)
+dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwidth = 0.02, title = NULL, ylim = NULL, text.size = NULL)
   {
 
-    df = data.frame(y = y, group = as.character(group), stringsAsFactors = F)
+      df = data.frame(y = y, group = as.character(group), stringsAsFactors = F)
+      
+      binwidth = as.numeric((quantile(y, c(0.99)) - quantile(y, c(0.01))))*binwidth      
+      maxstack = max(hist(y, diff(range(y, na.rm = TRUE))/binwidth, plot = FALSE)$counts)
 
-    if (is.null(binwidth))
-        binwidth = as.numeric((quantile(y, c(0.95)) - quantile(y, c(0.05)))/500)
-#        binwidth = as.numeric(quantile(diff(sort(y)), 0.3)*10)
+      if (is.null(dotsize)) ## control sizing if ntot specified based on max stack size (which is function of binwidth) 
+          dotsize = pmin(1, 50/maxstack)
+
 
     if (is.null(dotsize))
         g = ggplot(df, aes(x = group, y = y)) + theme_bw() + theme(text = element_text(size = text.size)) + geom_dotplot(binaxis = 'y', method = 'dotdensity', stackdir = 'center', position = 'identity', binwidth = binwidth)
@@ -6308,7 +6259,7 @@ quickSig = function(maf, # this is the maf file made by mutsig preprocess *** ne
     cov = cov[,,-dim(cov)[3]]; # last category in cov is "total" category, which we remove
     maf = maf[maf$Hugo_Symbol %in% genes & maf$patient_name %in% names(patients), ];
     tmp = table(maf$Hugo_Symbol, maf$patient_name, maf$categ);
-    muts = cov*0;  # compute muts from maf file
+##    muts = cov*0;  # compute muts from maf file
     muts[rownames(tmp), colnames(tmp), as.numeric(dimnames(tmp)[[3]])] = tmp;
     cov = cov[genes, names(patients), ];
     muts = muts[genes, names(patients), ];
@@ -6399,27 +6350,35 @@ quickSig = function(maf, # this is the maf file made by mutsig preprocess *** ne
     return(sig)
   }
 
-
-###########
-# pmGSEA "poor man's GSEA " ***
-#
-# Given a gene.set (character vector) or gene.sets (list of character vectors)
-# and given a named vector of significance values or table of significant genes (sig.table)
-# (if table then significance column is $p or first column) identifies gene sets that have significant
-# negative deviation of a "signed K-S" statistic vs uniform distribution  (ie have p values significantly
-# clustering towards zero) ie are significantly enriched in genes showing positive selection.
-#
-# if positive.selection = F, will identify sets with significantly positive deviation of a "signed K-S" statistic (ie have p values significantly clustering towards 1)
-# these are sets showig significant negative selection.
-#
-# All p-values are computed against a distribution of signed K-S statistic obtained through permutation using random gene sets of the same size chosen from sig.table
-#
-# Will adaptively perform permutations between minperms and maxperms using following rule of thumb: if there are <PERM.THRESH permutations with
-# greater than (lower.tail = F) or less than (lower.tail = T) score than observed score, then will compute additional perms
-#
-# *** actually not much poorer than the original GSEA, basically a reimplementation of Mootha et al Nat Gen 2002
-#
-###########
+#' @name pmGSEA
+#' @title poor mans GSEA
+#' @description 
+#' 
+#' pmGSEA "poor man's GSEA " ***
+#'
+#' Given a gene.set (character vector) or gene.sets (list of character vectors)
+#' and given a named vector of significance values or table of significant genes (sig.table)
+#' (if table then significance column is $p or first column) identifies gene sets that have significant
+#' negative deviation of a "signed K-S" statistic vs uniform distribution  (ie have p values significantly
+#' clustering towards zero) ie are significantly enriched in genes showing positive selection.
+#'
+#' if positive.selection = F, will identify sets with significantly positive deviation of a "signed K-S" statistic (ie have p values significantly clustering towards 1)
+#' these are sets showig significant negative selection.
+#'
+#' All p-values are computed against a distribution of signed K-S statistic obtained through permutation using random gene sets of the same size chosen from sig.table
+#'
+#' Will adaptively perform permutations between minperms and maxperms using following rule of thumb: if there are <PERM.THRESH permutations with
+#' greater than (lower.tail = F) or less than (lower.tail = T) score than observed score, then will compute additional perms
+#'
+#' *** actually not much poorer than the original GSEA, basically a reimplementation of Mootha et al Nat Gen 2002
+#'
+#' @param gene.sets a named list of character vectors, each list item is a gene set, i.e. a character vector of genes
+#' @param sig.table named vector of p values from an analysis e.g. mutSig, the names of the genes are
+#' @param min.perms minimum number of permutations to do in the adaptive permutation test
+#' @param min.perms maximum number of permutations to do in the adaptive permutation test
+#' @param length.range length 2 integer vector specifying min and max gene set size to score after intersection with genes in sig.table default: c(5,50)
+#' @export
+#' @author Marcin Imielinski
 pmGSEA = function(gene.sets, sig.table, min.perms = 1e2, max.perms = 1e5,
   positive.selection = T, # if positive.selection = F will look at genes enriched in high p values (ie negative selection)
   length.filter = F,
@@ -7448,44 +7407,6 @@ gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'ch
     return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
 }
 
-if (FALSE)
-{
-
-#' More robust and faster implementation of GenomicRangs::setdiff
-#'
-#' Robust to common edge cases of setdiff(gr1, gr2)  where gr2 ranges are contained inside gr1's (yieldings
-#' setdiffs yield two output ranges for some of the input gr1 intervals.
-#'
-#' @param query \code{GRanges} object as query
-#' @param subject \code{GRanges} object as subject
-#' @param max.slice Default Inf. If query is bigger than this, chunk into smaller on different cores
-#' @param verbose Default FALSE
-#' @param mc.cores Default 1. Only works if exceeded max.slice
-#' @param ... arguments to be passed to \link{gr.findoverlaps}
-#' @return returns indices of query in subject or NA if none found
-#' @name gr.match
-#' @export
-gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
-{
-    if (!is.null(by)) ## in this case need to be careful about setdiffing only within the "by" level
-    {
-        tmp = gr2dt(subject)
-        tmp$strand = factor(tmp$strand, c('+', '-', '*'))
-        sl = seqlengths(subject)
-        gp = seg2gr(tmp[, as.data.frame(gaps(IRanges(start, end), 1, sl[seqnames][1])), by = c('seqnames', 'strand', by)], seqinfo = seqinfo(subject))
-    }
-    else ## otherwise easier
-    {
-        if (ignore.strand)
-            gp = gaps(gr.stripstrand(subject)) %Q% (strand == '*')
-        else
-            gp = gaps(subject)
-    }
-
-    out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
-    return(out)
-}
-}
 #' Convert data.table to GRanges
 #'
 #' Takes as input a data.table which must have the fields: start, end, strand, seqnames.
@@ -9405,7 +9326,6 @@ cameraplot = function(camera.res, gene.sets, voom.res, design, contrast = ncol(d
 
 
 
-
 #' @name parsesnpeff
 #' @title parsesnpeff
 #'
@@ -9413,17 +9333,18 @@ cameraplot = function(camera.res, gene.sets, voom.res, design, contrast = ncol(d
 #' parses vcf file containing SnpEff annotations on Strelka calls
 #'
 #' @param vcf path to vcf
-#' @param id
+#' @param id id of case
 #' @return GRanges object of all variants and annotations
 #' @author Kevin Hadi
 #' @export
 ########
-parsesnpeff = function(vcf, id)
+parsesnpeff = function(vcf, id = NULL)
            {
             print(vcf)
             fn = c('allele', 'annotation', 'impact', 'gene', 'gene_id', 'feature_type', 'feature_id', 'transcript_type', 'rank', 'variant.c', 'variant.p', 'cdna_pos', 'cds_pos', 'protein_pos', 'distance')
             out = read_vcf(vcf)
-            out$ALT = sapply(out$ALT, as.character)
+            ##            out$ALT = sapply(out$ALT, as.character)
+            out$ALT = as.character(unstrsplit(vcf$ALT))
             out$REF = sapply(out$REF, as.character)
             out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
                 ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))                
@@ -9439,5 +9360,7 @@ parsesnpeff = function(vcf, id)
             values(out2) = cbind(values(out2), meta)
             names(out2) = NULL
             out2$ANN = NULL
+            vcf$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', vcf$eff)
             return(out2)
         }
+

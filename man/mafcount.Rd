@@ -14,4 +14,3 @@ Returns base counts for reference and alternative allele for an input tum and no
 maf is a single width GRanges describing variants and field 'ref' (or 'Reference_Allele'), 'alt' (or 'Tum_Seq_Allele1') specifying reference and alt allele.
 maf is assumed to have width 1 and strand is ignored.
 }
-

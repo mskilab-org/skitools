@@ -15,4 +15,3 @@ shortcut to install github packages
 \author{
 Marcin Imielinski
 }
-

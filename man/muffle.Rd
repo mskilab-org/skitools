@@ -19,4 +19,3 @@ output of evaluated R code or NULL if error
 \author{
 Marcin Imielinski
 }
-

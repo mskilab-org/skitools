@@ -19,4 +19,3 @@ Returns a logical vector of length of the input GRanges that
 that classifies a read as clipped or not. The user can specify
 a cutoff value for how many bases need to be clipped.
 }
-

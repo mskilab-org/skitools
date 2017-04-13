@@ -19,4 +19,3 @@ Dumps maf files to "simple" format for input into oncotator, adds dummy ref_alle
 \author{
 Marcin Imielinski
 }
-

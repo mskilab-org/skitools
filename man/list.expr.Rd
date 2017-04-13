@@ -18,4 +18,3 @@ Takes a character or numeric vector and makes an expression for re-creating that
 \author{
 Marcin Imielinski
 }
-

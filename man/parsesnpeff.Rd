@@ -4,10 +4,12 @@
 \alias{parsesnpeff}
 \title{parsesnpeff}
 \usage{
-parsesnpeff(vcf, id)
+parsesnpeff(vcf, id = NULL)
 }
 \arguments{
 \item{vcf}{path to vcf}
+
+\item{id}{id of case}
 }
 \value{
 GRanges object of all variants and annotations
@@ -18,4 +20,3 @@ parses vcf file containing SnpEff annotations on Strelka calls
 \author{
 Kevin Hadi
 }
-

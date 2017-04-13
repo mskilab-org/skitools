@@ -12,4 +12,3 @@ wrapper around rtracklayer import that
 (1) handles "as" formats
 (2) has additional flag chrsub to sub in 'chr' in selection, and then sub it out of the output
 }
-

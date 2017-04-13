@@ -20,4 +20,3 @@ outputs the nonzero entries of a vector or array
 \author{
 Marcin Imielinski
 }
-

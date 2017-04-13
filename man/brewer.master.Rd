@@ -22,4 +22,3 @@ Yes - this technically violates the "grammar of graphics", but meant for quick a
 \author{
 Marcin Imielinski
 }
-

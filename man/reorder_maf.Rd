@@ -20,4 +20,3 @@ Re-orders maf to comply with the TCGA MAF specifications (v2.2), tacking on all 
 \author{
 Marcin Imielinski
 }
-

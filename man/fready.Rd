@@ -17,4 +17,3 @@ data.table
 \description{
 calls fread while cleaning names using provided or default pattern and sub
 }
-

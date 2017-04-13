@@ -12,4 +12,3 @@ fisher.plot(O)
 \description{
 Plots fisher contingency table with p value
 }
-

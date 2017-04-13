@@ -19,4 +19,3 @@ returns 0 if completed
 \description{
 Dumps gr object into gatk intervals in file path "file"
 }
-

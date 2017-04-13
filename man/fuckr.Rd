@@ -14,4 +14,3 @@ toggles options error recover / NULL
 \author{
 Marcin Imielinski
 }
-

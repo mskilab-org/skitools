@@ -24,4 +24,3 @@ x can be vector or matrix
 \author{
 Marcin Imielinski
 }
-

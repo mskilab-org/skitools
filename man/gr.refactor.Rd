@@ -21,4 +21,3 @@ of length(gr)) and returns a gr object with the new seqnames and same
 widths and new start coordinates.  These coordinates are determined by placing
 each gr on the corresponding chromosome at 1 + gap after previous gr (or at 1)
 }
-

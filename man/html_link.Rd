@@ -20,4 +20,3 @@ returns text with html link
 \author{
 Marcin Imielinski
 }
-

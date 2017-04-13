@@ -22,4 +22,3 @@ OR  ordering columns of  matrix based on top to bottom ordering of rows (if MARG
 \author{
 Marcin Imielinski
 }
-

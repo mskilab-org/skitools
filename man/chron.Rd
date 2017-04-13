@@ -9,4 +9,3 @@ chron(expr, period = 5)
 \description{
 Repeat a command periodically, e.g. every 10 seconds
 }
-

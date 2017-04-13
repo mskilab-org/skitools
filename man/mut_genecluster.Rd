@@ -15,4 +15,3 @@ Outputs a list of gene clusters (each list a character vector of gene symbols)
 \author{
 Marcin Imielinski
 }
-

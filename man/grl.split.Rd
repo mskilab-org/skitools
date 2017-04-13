@@ -22,4 +22,3 @@ new grl whose items only contain ranges with a single seqname / strand
 \details{
 can also split by arbitrary (specified) genomic ranges value fields
 }
-

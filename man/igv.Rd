@@ -50,4 +50,3 @@ specifying how to convert file paths from arguments given to igv to ones that ca
 \author{
 Marcin Imielinski
 }
-

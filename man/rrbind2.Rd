@@ -17,4 +17,3 @@ rrbind2(..., union = T, as.data.table = FALSE)
 like rbind, but takes the intersecting columns of the dfs
 rrbind = function(df1, df2, [df3 ... etc], )
 }
-

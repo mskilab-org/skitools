@@ -29,4 +29,3 @@ q.k = q value of deviation
 \author{
 Marcin Imielinski
 }
-

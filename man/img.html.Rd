@@ -24,4 +24,3 @@ alternative to img_link for "embedding images"
 \author{
 Marcin Imielinski
 }
-
