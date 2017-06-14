@@ -19,4 +19,3 @@ in the whole list
 \author{
 Marcin Imielinski
 }
-

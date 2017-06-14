@@ -17,4 +17,3 @@ more(x, grep = NULL)
 \author{
 Marcin Imielinski
 }
-

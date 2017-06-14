@@ -2,6 +2,8 @@
 % Please edit documentation in R/skitools.R
 \name{col.scale}
 \alias{col.scale}
+\alias{col.scale}
+\alias{col.scale}
 \title{col.scale}
 \usage{
 col.scale(x, val.range = c(0, 1), col.min = "white", col.max = "black",
@@ -71,4 +73,3 @@ Marcin Imielinski
 Marcin Imielinski
 }
 \keyword{internal}
-

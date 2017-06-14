@@ -29,4 +29,3 @@ eg dirr(path, '.txt', '.rds' ) will return dir output with .txt subbed with .rds
 \author{
 Marcin Imielinski
 }
-

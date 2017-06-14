@@ -37,4 +37,3 @@ col is either (1) an unamed list of unique colors (2) a named list mapping uniqu
 \author{
 Marcin Imielinski
 }
-

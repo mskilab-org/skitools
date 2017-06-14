@@ -10,4 +10,3 @@ wijj(x, width = NULL, height = NULL, file = paste0("plotlyJupyterHTML/",
 \description{
 Embeds widget in jupyter notebook
 }
-

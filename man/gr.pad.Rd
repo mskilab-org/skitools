@@ -13,4 +13,3 @@ GRanges
 Nice padding
 }
 \keyword{internal}
-

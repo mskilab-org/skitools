@@ -26,4 +26,3 @@ useful for quick eyeballing of tabular data
 \author{
 Marcin Imielinski
 }
-

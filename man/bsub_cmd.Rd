@@ -41,4 +41,3 @@ b
 \author{
 Marcin Imielinski
 }
-

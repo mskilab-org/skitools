@@ -16,4 +16,3 @@ gr2grl(gr, ix)
 gr2grl
 Quick way to make grl from list of indices into a GRanges gr
 }
-

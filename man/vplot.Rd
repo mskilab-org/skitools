@@ -50,4 +50,3 @@ Quick violin plot
 \author{
 Marcin Imielinski
 }
-

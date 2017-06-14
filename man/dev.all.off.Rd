@@ -12,4 +12,3 @@ kills all plot devices
 \author{
 Marcin Imielinski
 }
-

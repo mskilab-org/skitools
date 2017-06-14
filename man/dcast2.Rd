@@ -14,4 +14,3 @@ in a merged cast table
 \author{
 Marcin Imielinski
 }
-

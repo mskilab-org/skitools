@@ -25,4 +25,3 @@ If y is not provided, will correlate rows of x with themselves.
 \author{
 Marcin Imielinski
 }
-

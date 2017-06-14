@@ -18,4 +18,3 @@ Re-classifies oncotated variants
 \author{
 Marcin Imielinski
 }
-

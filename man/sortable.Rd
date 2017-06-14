@@ -10,4 +10,3 @@ sortable(x, filename = "list.html", title = NULL)
 dumps sortable list for manual sorting
 into list.html (in public_html by default)
 }
-

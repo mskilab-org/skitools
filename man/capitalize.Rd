@@ -17,4 +17,3 @@ character vector of strings with capitalized values
 \description{
 Capitalize first letter of each character element of vector "string"
 }
-

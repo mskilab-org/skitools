@@ -34,4 +34,3 @@ Useful for doing quick standard plots to a static location which one views throu
 \author{
 Marcin Imielinski
 }
-

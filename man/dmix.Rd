@@ -45,4 +45,3 @@ if collapse = TRUE then the density will be summed according to the mixing param
 \author{
 Marcin Imielinski
 }
-

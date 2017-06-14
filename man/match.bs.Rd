@@ -22,4 +22,3 @@ indices of the (starting) dictionary in the query string
 Wrapper around matchPdict to identify matches between a query
 string query and dictionary dict (both BString objects or subclasses)
 }
-

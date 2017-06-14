@@ -17,4 +17,3 @@ bisort(A, drop = F)
 \author{
 Marcin Imielinski
 }
-

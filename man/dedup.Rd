@@ -2,6 +2,7 @@
 % Please edit documentation in R/skitools.R
 \name{dedup}
 \alias{dedup}
+\alias{dedup}
 \title{dedup}
 \usage{
 dedup(x, suffix = ".")
@@ -34,4 +35,3 @@ Marcin Imielinski
 
 Marcin Imielinski
 }
-

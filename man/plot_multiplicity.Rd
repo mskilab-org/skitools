@@ -16,4 +16,3 @@ $cn.tot, $mult, $mult.p
 \author{
 Marcin Imielinski
 }
-

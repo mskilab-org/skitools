@@ -20,4 +20,3 @@ Takes maf data.frame and outputs table that lists how many pairs there are <= di
 \author{
 Marcin Imielinski
 }
-

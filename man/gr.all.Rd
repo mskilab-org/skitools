@@ -19,4 +19,3 @@ gr.all(unmap = FALSE, M = FALSE, Y = TRUE)
 \description{
 Return a GRanges that holds interavals for all of HG19
 }
-

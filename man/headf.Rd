@@ -17,4 +17,3 @@ headf(x, n = 5, grep = NULL)
 \author{
 Marcin Imielinski
 }
-

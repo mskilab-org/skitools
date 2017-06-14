@@ -10,4 +10,3 @@ qstat(full = FALSE, numslots = TRUE)
 Tabulates cluster usage (qstat()) or if full = TRUE flag given will dump out
 all running jobs in a data.table
 }
-

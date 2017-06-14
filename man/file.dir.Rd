@@ -18,4 +18,3 @@ grabs file.dirs from list of paths
 \author{
 Marcin Imielinski
 }
-

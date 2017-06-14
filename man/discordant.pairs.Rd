@@ -13,4 +13,3 @@ is not greater than dmin or less than dmin ahead of  "+" strand read on same chr
 \note{
 need to merge with gr.isdisc
 }
-

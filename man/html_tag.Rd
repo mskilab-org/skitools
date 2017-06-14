@@ -22,4 +22,3 @@ makes a open and close html tag with optional text inside and optional (named) v
 \author{
 Marcin Imielinski
 }
-

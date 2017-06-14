@@ -24,4 +24,3 @@ altc, totc, and cn are of length n, purity is length 1
 \author{
 Marcin Imielinski
 }
-

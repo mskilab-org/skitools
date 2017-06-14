@@ -29,4 +29,3 @@ single data frame (takin union of identically named / numbered columns as a defa
 \author{
 Marcin Imielinski
 }
-

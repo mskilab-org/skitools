@@ -12,4 +12,3 @@ ra.setdiff(ra1, ra2, ...)
 identifies events that are in ra1 that do not exist in ra2.
 Aside from ra1 and ra2, all arguments are sent to ra.overlaps
 }
-

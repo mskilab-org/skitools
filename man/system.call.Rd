@@ -22,4 +22,3 @@ The only benefit to this wrapper is a more controlled verbose argument.
 \author{
 Jeremiah Wala \email{jwala@broadinstitute.org}
 }
-

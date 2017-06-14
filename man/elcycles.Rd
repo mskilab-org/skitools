@@ -22,4 +22,3 @@ A is either an adjacency matrix or igraph object
 \author{
 Marcin Imielinski
 }
-

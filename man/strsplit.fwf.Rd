@@ -9,4 +9,3 @@ strsplit.fwf(str, fw)
 \description{
 splits a single string according to fixed widths contained in fw (ie each components i of fw denotes the width of field i in string str
 }
-

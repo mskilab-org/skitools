@@ -21,4 +21,3 @@ Filter reads by average PHRED score
 Defines a cutoff score for the mean PHRED quality of a read
 in a GRanges.
 }
-

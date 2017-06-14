@@ -21,4 +21,3 @@ Wrapper for igv function to visualize a given (single) mutation in a maf file
 \author{
 Marcin Imielinski
 }
-

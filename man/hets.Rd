@@ -13,4 +13,3 @@ hets(tum.bam, norm.bam = NULL, out.file,
 generates allele fraction at all possible hets at sites specified by vcf (eg hapmap) input
 for tumor and normal
 }
-

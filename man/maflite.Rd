@@ -19,4 +19,3 @@ https://confluence.broadinstitute.org/display/CGA/Onctoator#Oncotator-Maflitefor
 \author{
 Marcin Imielinski
 }
-

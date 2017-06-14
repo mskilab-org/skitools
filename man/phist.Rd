@@ -12,4 +12,3 @@ Quick plotlyhistogram
 \author{
 Marcin Imielinski
 }
-

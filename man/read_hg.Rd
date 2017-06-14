@@ -22,4 +22,3 @@ BSgenome.Hsapiens.UCSC.hg19 for hg19 and BSgenome.Hsapiens.UCSC.hg19 for hg18.
 If fft = TRUE, can also also return the hg19 ffTrack (requires that the file exists)
 Requires the existence of environment variable HG.FFT pointing to ffTrack .rds file..
 }
-

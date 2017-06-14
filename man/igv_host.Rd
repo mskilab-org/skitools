@@ -12,4 +12,3 @@ several settings for igv host
 \author{
 Marcin Imielinski
 }
-

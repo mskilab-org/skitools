@@ -49,4 +49,3 @@ Very similar syntax to write.tab
 \author{
 Marcin Imielinski
 }
-

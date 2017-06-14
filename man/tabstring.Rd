@@ -21,4 +21,3 @@ ie name1 (value1), name2 (value2), name3 (value3)
 \author{
 Marcin Imielinski
 }
-

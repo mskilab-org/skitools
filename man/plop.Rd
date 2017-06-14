@@ -23,4 +23,3 @@ Useful for inspecting a specific subset of analysis files eg when debugging.
 \author{
 Marcin Imielinski
 }
-

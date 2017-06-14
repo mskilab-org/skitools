@@ -25,4 +25,3 @@ corresponding to "chunks"
 \author{
 Marcin Imielinski
 }
-

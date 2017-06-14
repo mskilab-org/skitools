@@ -6,7 +6,7 @@
 \usage{
 ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
   chr.convert = T, snowman = FALSE, swap.header = NULL,
-  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE,
+  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
   get.loose = FALSE)
 }
 \description{
@@ -16,4 +16,3 @@ and returns junctions in VCF format.
 \details{
 The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 }
-

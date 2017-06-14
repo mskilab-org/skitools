@@ -574,66 +574,6 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     }
 }
 
-
-#' Converts \code{GRanges} to \code{data.table}
-#'
-#' and a field grl.iix which saves the (local) index that that gr was in its corresponding grl item
-#' @param x \code{GRanges} to convert
-#' @name gr2dt
-#' @export
-#'
-gr2dt  <- function(x)
-{
-    ## new approach just directly instantiating data table
-    cmd = 'data.frame(';
-    if (is(x, 'GRanges'))
-    {
-        ## as.data.table complains if duplicated row names
-        if (any(duplicated(names(x))))
-            names(x) <- NULL
-
-        was.gr = TRUE
-        f = c('seqnames', 'start', 'end', 'strand', 'width')
-        f2 = c('as.character(seqnames', 'c(start', 'c(end', 'as.character(strand', 'as.numeric(width')
-        cmd = paste(cmd, paste(f, '=', f2, '(x))', sep = '', collapse = ','), sep = '')
-        value.f = names(values(x))
-    }
-    else
-    {
-        was.gr = FALSE
-        value.f = names(x)
-    }
-
-    if (length(value.f)>0)
-    {
-        if (was.gr)
-            cmd = paste(cmd, ',', sep = '')
-        class.f = sapply(value.f, function(f) eval(parse(text=sprintf("class(x$'%s')", f))))
-
-        .StringSetListAsList = function(x) ### why do I need to do this, bioconductor peeps??
-        {
-            tmp1 = as.character(unlist(x))
-            tmp2 = rep(1:length(x), S4Vectors::elementLengths(x))
-            return(split(tmp1, tmp2))
-        }
-
-        ## take care of annoying S4 / DataFrame / data.frame (wish-they-were-non-)issues
-        as.statement = ifelse(grepl('Integer', class.f), 'as.integer',
-                       ifelse(grepl('Character', class.f), 'as.character',
-                       ifelse(grepl('StringSetList', class.f), '.StringSetListAsList',
-                       ifelse(grepl('StringSet$', class.f), 'as.character',
-                       ifelse(grepl('factor$', class.f), 'as.character',
-                       ifelse(grepl('List', class.f), 'as.list',
-                       ifelse(grepl('factor', class.f), 'as.character',
-                       ifelse(grepl('List', class.f), 'as.list', 'c'))))))))
-        cmd = paste(cmd, paste(value.f, '=', as.statement, "(x$'", value.f, "')", sep = '', collapse = ','), sep = '')
-    }
-
-    cmd = paste(cmd, ')', sep = '')
-
-    return(data.table::as.data.table(eval(parse(text =cmd))))
-}
-
 #' @name wfplot
 #' @title Quick waterfall plot
 #' @description Quick waterfall plot
@@ -693,7 +633,7 @@ wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, ce
 
 
 
-############
+
 #' @name list.expr
 #' @title list.expr
 #' @description
@@ -1479,37 +1419,53 @@ gr.peaks = function(gr, field = 'score',
         return(out)
     }
 
-
-
-#################
+############################################
 #' ra_breaks
 #'
 #' takes in either file or data frame from dranger or snowman or path to BND / SV type vcf file
 #' and returns junctions in VCF format.
-#'
+#' 
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
 #' @name ra_breaks
-#' @importFrom IRanges IRanges
-#' @importFrom GenomeInfoDb Seqinfo
-
+#' @import VariantAnnotation
 #' @export
-ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, 
+############################################
+ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA, 
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
   )
   {
       if (is.character(rafile))
           {
               if (grepl('(.bedpe$)', rafile))                  
-                  {
-                      ra.path = rafile
-                      
+              {
+                      ra.path = rafile                      
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
-                      nh = min(which(!grepl('chrom1', readLines(ra.path))))-1
+
+                      ln = readLines(ra.path)
+                      if (is.na(skip))
+                      {
+                              nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
+                              if (is.infinite(nh))
+                                  nh = 1
+                          }
+                      else
+                          nh = skip
+
+                                       
+                      if ((length(ln)-nh)==0)
+                          if (get.loose)
+                              return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
+                          else                              
+                              return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
+#                          return(GRangesList())
+                      
+                          
                       if (nh ==0)
                           rafile = fread(rafile, header = FALSE)
                       else
                           {
+                              
                               rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
                               if (is.null(rafile))
                                   rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
@@ -1529,7 +1485,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                   }
               else if (grepl('(vcf$)|(vcf.gz$)', rafile))
                   {
-#                      library(VariantAnnotation)
+                      library(VariantAnnotation)
                       
                       vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
                       if (!('SVTYPE' %in% names(info(vcf)))) {
@@ -1545,7 +1501,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                         return (GRangesList())
 
                       ## fix mateids if not included
-                      if  (!"MATEID"%in% colnames(mcols(vgr))) {
+                      if (!"MATEID"%in%colnames(mcols(vgr))) {
                         nm <- vgr$MATEID <- names(vgr)
                         ix <- grepl("1$",nm)
                         vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
@@ -1579,58 +1535,38 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       alt <- sapply(vgr$ALT, function(x) x[1])
                       vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                       vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                      shft = as.numeric(grepl('^[\\[\\]]', alt, perl = TRUE))
-                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr) + shft, sep = ''))
-                      
+                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
                       vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                       vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-                      if (any(ix<- !(vgr$mateid %in% names(vgr))))
-                          {
-                              warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
-                              vgr$mateid[ix] = NA
-                          }
-                          
                       if (all(is.na(vgr$mateid)))
-                          {
-                              if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-                                  {
-                                      warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                                      vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                                  }
+                          if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+                              {
+                                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                              }
+                          else if (!is.null(vgr$SCTG))
+                              {
+                                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                                  require(igraph)
+                                  ucoord = unique(c(vgr$coord, vgr$mcoord))
+                                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
 
-                              if (any(ix<- !(vgr$mateid %in% names(vgr))))
-                                  {
-                                      warning('at least some MATEIDS fail to match any IDS .. VCF likely malformed, will try to match using SCTG')
-                                      vgr$mateid[ix] = NA
-                                  }
-
-                              if (any(is.na(vgr$mateid)))                              
-                                  if (!is.null(vgr$SCTG))
+                                  if (any(duplicated(vgr$mateid)))
                                       {
-                                          warning('MATEID tag missing or malformed, guessing BND partner from coordinates and SCTG')
-                                          require(igraph)
-                                          vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-                                          names(vgr) = paste(vgr$SCTG, vgr$coord, sep = '_')                                         
-                                          
-                                          if (any(duplicated(vgr$mateid)))
-                                          {
-                                              warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                                              bix = bix[!duplicated(vgr$mateid)]
-                                              vgr = vgr[!duplicated(vgr$mateid)]
-                                          }
+                                          warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                                          bix = bix[!duplicated(vgr$mateid)]
+                                          vgr = vgr[!duplicated(vgr$mateid)]
                                       }
-                             
-                              if (is.null(vgr$mateid))
-                                  stop('MATEID tag missing')
-                          }
+                              }
+                          else
+                              stop('MATEID tag missing')
 
                       vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                       pix = which(!is.na(vgr$mix))
 
                       vgr.pair = vgr[pix]
-
 
                       if (length(vgr.pair)==0)
                           stop('No mates found despite nonzero number of BND rows in VCF')
@@ -1673,14 +1609,14 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                               strand(vgr.pair2)[tmpix] = '+'
                           }
 
-                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (ie so that they refer to the base preceding the break for these junctions
+                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
                       if (any(pos1))
                           {
                               start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
                               end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
                           }
 
-                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (ie so that they refer to the base preceding the break for these junctions
+                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
                       if (any(pos2))
                           {
                               start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
@@ -1796,6 +1732,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
              
              if (is.character(rafile$str2) | is.factor(rafile$str2))
                  rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+
              
              if (is.numeric(rafile$str1))
                  rafile$str1 = ifelse(rafile$str1>0, '+', '-')
@@ -1816,10 +1753,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                  data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
 
              if (chr.convert)
-                 {
-                     seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
-                 }
-
+                 seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
              
              out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
              out = split(out, out$ra.index)
@@ -1841,7 +1775,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
           return(list(junctions = out, loose.ends = GRanges()))
 
      return(out)
-  }
+ }
+
+
+
+
 
 
 
@@ -2890,6 +2828,13 @@ levapply = function(x, by, FUN = 'order')
 #' @export
 brewer.master = function(n, palette = 'Accent')
 {
+    nms = NULL
+    if (is.character(n))
+    {
+        nms = unique(n)
+        n = length(nms)
+    }
+    
   # library(RColorBrewer)
   palettes = list(
     sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
@@ -2925,7 +2870,8 @@ brewer.master = function(n, palette = 'Accent')
       i = ((i) %% length(palettes))+1
     }
 
-  col = col[1:n]
+    col = col[1:n]
+    names(col) = nms
   return(col)
 }
 
@@ -3548,21 +3494,24 @@ gr.flip = function(...)
 #' @param ylab y axis label (='')
 #' @param xlab x axis label (='')
 #' @param log logical flag whether to plot y axis in log format (=FALSE)
-#' @param dotsize integer dot size to plot with (= NULL)
-#' @param binwidth numeric binwidth of histogram (= NULL)
+#' @param dotsize integer dot size to plot with, as function of 0.02 category width plot real estate (= NULL)
+#' @param binwidth numeric binwidth of histogram in units of data quantiles (= NULL)
 #' @param title character title of plot (='')
 #' @param ylim y limits of plot (= NULL)
 #' @param text.size text size of legend (= NULL)
 #' @author Marcin Imielinski
 #' @export
-dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwidth = NULL, title = NULL, ylim = NULL, text.size = NULL)
+dplot = function(y, group, ylab = '', xlab = '', log = F, dotsize = NULL, binwidth = 0.02, title = NULL, ylim = NULL, text.size = NULL)
   {
 
-    df = data.frame(y = y, group = as.character(group), stringsAsFactors = F)
+      df = data.frame(y = y, group = as.character(group), stringsAsFactors = F)
+      
+      binwidth = as.numeric((quantile(y, c(0.99)) - quantile(y, c(0.01))))*binwidth      
+      maxstack = max(hist(y, diff(range(y, na.rm = TRUE))/binwidth, plot = FALSE)$counts)
 
-    if (is.null(binwidth))
-        binwidth = as.numeric((quantile(y, c(0.95)) - quantile(y, c(0.05)))/500)
-#        binwidth = as.numeric(quantile(diff(sort(y)), 0.3)*10)
+      if (is.null(dotsize)) ## control sizing if ntot specified based on max stack size (which is function of binwidth) 
+          dotsize = pmin(1, 50/maxstack)
+
 
     if (is.null(dotsize))
         g = ggplot(df, aes(x = group, y = y)) + theme_bw() + theme(text = element_text(size = text.size)) + geom_dotplot(binaxis = 'y', method = 'dotdensity', stackdir = 'center', position = 'identity', binwidth = binwidth)
@@ -6310,7 +6259,7 @@ quickSig = function(maf, # this is the maf file made by mutsig preprocess *** ne
     cov = cov[,,-dim(cov)[3]]; # last category in cov is "total" category, which we remove
     maf = maf[maf$Hugo_Symbol %in% genes & maf$patient_name %in% names(patients), ];
     tmp = table(maf$Hugo_Symbol, maf$patient_name, maf$categ);
-    muts = cov*0;  # compute muts from maf file
+##    muts = cov*0;  # compute muts from maf file
     muts[rownames(tmp), colnames(tmp), as.numeric(dimnames(tmp)[[3]])] = tmp;
     cov = cov[genes, names(patients), ];
     muts = muts[genes, names(patients), ];
@@ -6401,27 +6350,35 @@ quickSig = function(maf, # this is the maf file made by mutsig preprocess *** ne
     return(sig)
   }
 
-
-###########
-# pmGSEA "poor man's GSEA " ***
-#
-# Given a gene.set (character vector) or gene.sets (list of character vectors)
-# and given a named vector of significance values or table of significant genes (sig.table)
-# (if table then significance column is $p or first column) identifies gene sets that have significant
-# negative deviation of a "signed K-S" statistic vs uniform distribution  (ie have p values significantly
-# clustering towards zero) ie are significantly enriched in genes showing positive selection.
-#
-# if positive.selection = F, will identify sets with significantly positive deviation of a "signed K-S" statistic (ie have p values significantly clustering towards 1)
-# these are sets showig significant negative selection.
-#
-# All p-values are computed against a distribution of signed K-S statistic obtained through permutation using random gene sets of the same size chosen from sig.table
-#
-# Will adaptively perform permutations between minperms and maxperms using following rule of thumb: if there are <PERM.THRESH permutations with
-# greater than (lower.tail = F) or less than (lower.tail = T) score than observed score, then will compute additional perms
-#
-# *** actually not much poorer than the original GSEA, basically a reimplementation of Mootha et al Nat Gen 2002
-#
-###########
+#' @name pmGSEA
+#' @title poor mans GSEA
+#' @description 
+#' 
+#' pmGSEA "poor man's GSEA " ***
+#'
+#' Given a gene.set (character vector) or gene.sets (list of character vectors)
+#' and given a named vector of significance values or table of significant genes (sig.table)
+#' (if table then significance column is $p or first column) identifies gene sets that have significant
+#' negative deviation of a "signed K-S" statistic vs uniform distribution  (ie have p values significantly
+#' clustering towards zero) ie are significantly enriched in genes showing positive selection.
+#'
+#' if positive.selection = F, will identify sets with significantly positive deviation of a "signed K-S" statistic (ie have p values significantly clustering towards 1)
+#' these are sets showig significant negative selection.
+#'
+#' All p-values are computed against a distribution of signed K-S statistic obtained through permutation using random gene sets of the same size chosen from sig.table
+#'
+#' Will adaptively perform permutations between minperms and maxperms using following rule of thumb: if there are <PERM.THRESH permutations with
+#' greater than (lower.tail = F) or less than (lower.tail = T) score than observed score, then will compute additional perms
+#'
+#' *** actually not much poorer than the original GSEA, basically a reimplementation of Mootha et al Nat Gen 2002
+#'
+#' @param gene.sets a named list of character vectors, each list item is a gene set, i.e. a character vector of genes
+#' @param sig.table named vector of p values from an analysis e.g. mutSig, the names of the genes are
+#' @param min.perms minimum number of permutations to do in the adaptive permutation test
+#' @param max.perms maximum number of permutations to do in the adaptive permutation test
+#' @param length.range length 2 integer vector specifying min and max gene set size to score after intersection with genes in sig.table default: c(5,50)
+#' @export
+#' @author Marcin Imielinski
 pmGSEA = function(gene.sets, sig.table, min.perms = 1e2, max.perms = 1e5,
   positive.selection = T, # if positive.selection = F will look at genes enriched in high p values (ie negative selection)
   length.filter = F,
@@ -7450,44 +7407,6 @@ gr.tostring = function(gr, places = 2, interval = 1e6, unit = 'MB', prefix = 'ch
     return(paste(prefix, as.character(seqnames(gr)), ':', p1, '-', p2, ' ', unit, sep = ''));
 }
 
-if (FALSE)
-{
-
-#' More robust and faster implementation of GenomicRangs::setdiff
-#'
-#' Robust to common edge cases of setdiff(gr1, gr2)  where gr2 ranges are contained inside gr1's (yieldings
-#' setdiffs yield two output ranges for some of the input gr1 intervals.
-#'
-#' @param query \code{GRanges} object as query
-#' @param subject \code{GRanges} object as subject
-#' @param max.slice Default Inf. If query is bigger than this, chunk into smaller on different cores
-#' @param verbose Default FALSE
-#' @param mc.cores Default 1. Only works if exceeded max.slice
-#' @param ... arguments to be passed to \link{gr.findoverlaps}
-#' @return returns indices of query in subject or NA if none found
-#' @name gr.match
-#' @export
-gr.setdiff = function(query, subject, ignore.strand = TRUE, by = NULL,  ...)
-{
-    if (!is.null(by)) ## in this case need to be careful about setdiffing only within the "by" level
-    {
-        tmp = gr2dt(subject)
-        tmp$strand = factor(tmp$strand, c('+', '-', '*'))
-        sl = seqlengths(subject)
-        gp = seg2gr(tmp[, as.data.frame(gaps(IRanges(start, end), 1, sl[seqnames][1])), by = c('seqnames', 'strand', by)], seqinfo = seqinfo(subject))
-    }
-    else ## otherwise easier
-    {
-        if (ignore.strand)
-            gp = gaps(gr.stripstrand(subject)) %Q% (strand == '*')
-        else
-            gp = gaps(subject)
-    }
-
-    out = gr.findoverlaps(query, gp, qcol = names(values(query)), ignore.strand = ignore.strand, by = by, ...)
-    return(out)
-}
-}
 #' Convert data.table to GRanges
 #'
 #' Takes as input a data.table which must have the fields: start, end, strand, seqnames.
@@ -9394,7 +9313,6 @@ cameraplot = function(camera.res, gene.sets, voom.res, design, contrast = ncol(d
 
 
 
-
 #' @name parsesnpeff
 #' @title parsesnpeff
 #'
@@ -9402,17 +9320,18 @@ cameraplot = function(camera.res, gene.sets, voom.res, design, contrast = ncol(d
 #' parses vcf file containing SnpEff annotations on Strelka calls
 #'
 #' @param vcf path to vcf
-#' @param id
+#' @param id id of case
 #' @return GRanges object of all variants and annotations
 #' @author Kevin Hadi
 #' @export
 ########
-parsesnpeff = function(vcf, id)
+parsesnpeff = function(vcf, id = NULL)
            {
             print(vcf)
             fn = c('allele', 'annotation', 'impact', 'gene', 'gene_id', 'feature_type', 'feature_id', 'transcript_type', 'rank', 'variant.c', 'variant.p', 'cdna_pos', 'cds_pos', 'protein_pos', 'distance')
             out = read_vcf(vcf)
-            out$ALT = sapply(out$ALT, as.character)
+            ##            out$ALT = sapply(out$ALT, as.character)
+            out$ALT = as.character(unstrsplit(vcf$ALT))
             out$REF = sapply(out$REF, as.character)
             out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
                 ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))                
@@ -9428,5 +9347,7 @@ parsesnpeff = function(vcf, id)
             values(out2) = cbind(values(out2), meta)
             names(out2) = NULL
             out2$ANN = NULL
+            vcf$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', vcf$eff)
             return(out2)
         }
+

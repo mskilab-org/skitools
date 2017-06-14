@@ -17,4 +17,3 @@ B resorted using "binary" order
 \description{
 orders rows of a logical / binary matrix treating each row as binary number with digits encoded as TRUE / FALSE values of entries
 }
-

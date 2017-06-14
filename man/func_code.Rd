@@ -32,4 +32,3 @@ Useful for dumping tmp code files for farming when there are many arguments bein
 \author{
 Marcin Imielinski
 }
-

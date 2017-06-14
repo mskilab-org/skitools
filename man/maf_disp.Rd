@@ -31,4 +31,3 @@ Quick display of rows of data.frame holding contents of Oncotated maf file
 \author{
 Marcin Imielinski
 }
-

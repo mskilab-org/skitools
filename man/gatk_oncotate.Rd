@@ -23,4 +23,3 @@ to run the script.
 \author{
 Marcin Imielinski
 }
-

@@ -18,4 +18,3 @@ converts character vector to byte vector in decimal representation
 \author{
 Marcin Imielinski
 }
-

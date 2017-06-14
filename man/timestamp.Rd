@@ -12,4 +12,3 @@ returns character time stamp
 \author{
 Marcin Imielinski
 }
-

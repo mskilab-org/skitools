@@ -5,7 +5,7 @@
 \title{dplot}
 \usage{
 dplot(y, group, ylab = "", xlab = "", log = F, dotsize = NULL,
-  binwidth = NULL, title = NULL, ylim = NULL, text.size = NULL)
+  binwidth = 0.02, title = NULL, ylim = NULL, text.size = NULL)
 }
 \arguments{
 \item{y}{numeric vector of data}
@@ -18,9 +18,9 @@ dplot(y, group, ylab = "", xlab = "", log = F, dotsize = NULL,
 
 \item{log}{logical flag whether to plot y axis in log format (=FALSE)}
 
-\item{dotsize}{integer dot size to plot with (= NULL)}
+\item{dotsize}{integer dot size to plot with, as function of 0.02 category width plot real estate (= NULL)}
 
-\item{binwidth}{numeric binwidth of histogram (= NULL)}
+\item{binwidth}{numeric binwidth of histogram in units of data quantiles (= NULL)}
 
 \item{title}{character title of plot (='')}
 
@@ -34,4 +34,3 @@ Plots dotplot of grouped data
 \author{
 Marcin Imielinski
 }
-

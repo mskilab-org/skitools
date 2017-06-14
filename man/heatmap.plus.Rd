@@ -23,4 +23,3 @@ Additional features:
    allows several label tracks on top, bottom, left, and right, with separate top and bottom legend frames tohouse each
    allows use of coloredData in tracks
 }
-

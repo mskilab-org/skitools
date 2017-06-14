@@ -26,4 +26,3 @@ if embed = T, then will make img link, and additional arguments may be supplied 
 \author{
 Marcin Imielinski
 }
-

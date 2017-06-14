@@ -25,4 +25,3 @@ element of query
 \author{
 Marcin Imielinski
 }
-

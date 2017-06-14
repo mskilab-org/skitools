@@ -15,4 +15,3 @@ gc_content(segs, bs_genome)
 Uses BSgenome package to compute gc content for a collection of segments in seg data frame ($chr, $start, $end or $chr, $pos1, $pos2 or $chr, $begin, $end)
 Returns vector of gc content of length nrow(segs).
 }
-

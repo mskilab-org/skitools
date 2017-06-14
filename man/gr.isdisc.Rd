@@ -21,4 +21,3 @@ Returns a logical vector denoting if a read is discordant.
 There is only a minimum absolute isize, and any read below this is
 not considered discordant. This will return logicals based on read pairs
 }
-

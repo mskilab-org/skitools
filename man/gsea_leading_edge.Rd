@@ -13,4 +13,3 @@ Draws gsea plot for an input gene set and outputs leading edge
 \author{
 Marcin Imielinski
 }
-

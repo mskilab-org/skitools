@@ -26,4 +26,3 @@ useful for querying around specific entires of vector, matrix, data.frame, GRang
 \author{
 Marcin Imielinski
 }
-

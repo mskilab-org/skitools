@@ -55,4 +55,3 @@ datasets (eg 1000s of points):
 \author{
 Marcin Imielinski
 }
-

@@ -39,4 +39,3 @@ instructions on how to execute from command line.
 \author{
 Marcin Imielinski
 }
-

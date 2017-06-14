@@ -9,4 +9,3 @@ loud(x)
 \description{
 Runs a system command but prints a message with the output
 }
-

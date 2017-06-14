@@ -9,4 +9,3 @@ ddd(x)
 \description{
 shortcut to gr2dt
 }
-

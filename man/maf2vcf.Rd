@@ -17,4 +17,3 @@ Dumps maf data frame to VCF file "fn"
 \author{
 Marcin Imielinski
 }
-

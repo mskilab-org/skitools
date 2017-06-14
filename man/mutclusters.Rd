@@ -36,4 +36,3 @@ Clustering is by default using single-linkage agglomerative clustering, but any 
 \author{
 Marcin Imielinski
 }
-
