@@ -4568,7 +4568,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
                                 if (is.null(col.scatter))
                                     g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
                                 else
-                                    g = g + geom_jitter(data = dat, fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
+                                    g = g + geom_jitter(data = dat, fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
 
                             }
                         else
@@ -4576,7 +4576,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
                                 if (is.null(col.scatter))
                                     g = g + geom_jitter(data = dat, mapping = aes(fill = group, text = text), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
                                 else
-                                    g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, shape = 21, alpha), position = position_jitter(height = 0))
+                                    g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
                             }
                     }
                     
