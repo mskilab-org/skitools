@@ -25,7 +25,6 @@
 # General utility functions
 #
 
-# used for genome plot
 .ls.objects <- function (pos = 1, pattern, order.by,
                          decreasing=FALSE, head=FALSE, n=5) {
     napply <- function(names, fn) sapply(names, function(x)
@@ -55,11 +54,20 @@
 
 
 ## shorthand listing largest objects in the workspace
+
+#' @name lsos
+#' @title lsos
+#'
+#' @description
+#' returns largest object in workspace
+#'
+#' @param n num of objects to return
+#' @author Stack Overflow Post 21442
+#' @export
 lsos <- function(..., n=10) {
     .ls.objects(..., order.by="Size", decreasing=TRUE, head=TRUE, n=n)
 }
 
-## lapply(list, dim) shortcut
 
 #' @name ldim
 #' @title ldim
@@ -327,7 +335,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
         dat = data.table(x = sort(exp), y = obs[ord], colors = colors[ord], pch = pch, cex = cex)
         if (!is.null(names(obs)))
             {
-                names = names(obs[ord])
+                dat$names = names(obs[ord])
                 setkey(dat, names)
             }
 
@@ -1305,8 +1313,13 @@ gr.peaks = function(gr, field = 'score',
                         else
                             {
                                 ## only need to recompute peak in region containing any in.peak intervals
-                                tmp = gr.peaks(gr[gr.in(gr, peak.hood), ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
-                                last = c(last[!gr.in(last, peak.hood)], tmp)
+                                in.peak = gr.in(gr, peak.hood)
+
+                                tmp = NULL
+                                if (any(in.peak))
+                                    tmp = gr.peaks(gr[in.peak, ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
+                                last = grbind(last[!gr.in(last, peak.hood)], tmp)
+                                names(values(last)) = field
                             }
 
                         ## these are the regions with the maximum peak value
@@ -1380,7 +1393,7 @@ gr.peaks = function(gr, field = 'score',
                 last$peeled = FALSE
                 return(c(out, last[-mix]))
             }
-
+    
         if (na.rm)
             if (any(na <- is.na(values(gr)[, field])))
                 gr = gr[!na]
@@ -1414,7 +1427,7 @@ gr.peaks = function(gr, field = 'score',
         else
             out = out[order(-out$score)]
 
-        names(values(out)) = field
+        names(values(out))[1] = field
 
         return(out)
     }
@@ -1779,6 +1792,289 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
 
 
+#' @name score.walks
+#' @title score.walks
+#' @description
+#'
+#' Scores GRangesList of walks against GRanges of 10X reads with $BX tag.
+#' 
+#' @param wks GRangesList of walks
+#' @param bam bam file 
+#' @param reads GRanges of reads with BX tag
+#' @param win  genomic window in which to score (default is just reduce(unlist(wks))))
+#' @param wins tiles to chop up genome further (beyond walk segments)
+#' @param raw  returns raw barcode by walk matrix of barcode scores 
+#'
+#' @return scores of walks or (if raw == tRUE) raw barcode to walk maps
+#' @export
+#' @author Marcin Imielinski
+score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, rthresh = 4, thresh = 1e5, pad = 1e4, raw = FALSE, allpaths = TRUE, verbose = TRUE)
+{
+  if (is.null(wins))
+  {
+    
+    tmp = unique(disjoin(gr.stripstrand(unlist(wks))))
+    wins = sort(disjoin(c(gr.start(tmp, pad), gr.end(tmp, pad))))
+    strand(wins) = '+'
+  }
+
+  ## add 1 unit of "padding" to any cyclic walks to adequately measure
+  cyc.ix = values(wks)$is.cyc
+
+  if (any(cyc.ix))
+    wks[cyc.ix] = do.call(GRangesList, lapply(which(cyc.ix), function(x) c(wks[[x]], wks[[x]])))
+
+
+  THRESH = thresh
+
+  if (!is.null(win))
+    wins = wins[gr.in(wins, win)]
+  
+  if (verbose)
+    message('Total territory to analyze is ', round(sum(as.numeric(width(wins)))/1e6,2), 'MB')
+
+  if (sum(as.numeric(width(wins)))/1e6==0)
+    stop('No walk areas intersect with provided win')
+
+  reads.dt = NULL;
+  if (!is.null(bam))
+  {
+    if (verbose)
+      message('Pulling out reads')
+
+    reads = dt2gr(read.bam(bam, streduce(wins), tag = 'BX', as.data.table = TRUE))
+  }
+
+  if (!inherits(reads, 'GRanges'))
+    reads = dt2gr(reads)
+
+
+  if (verbose)
+    message("Computing insert size distro for ", length(reads), " reads")
+
+  reads = reads[!is.na(reads$BX), ]
+  reads.dt = as.data.table(reads)
+
+  ## rthresh is reads per barcode filter
+  ## i.e. remove all barcodes with fewer than rthresh reads per barcode
+  if (!is.na(rthresh))
+    {
+      keep.bx = reads.dt[, length(start), keyby = "BX"][V1>=rthresh, BX]
+      reads.dt = reads.dt[BX %in% keep.bx, ]
+    }
+  bxlev = unique(reads$BX)
+
+  zthresh = 3
+  
+  reads.dt[, sn:= as.integer(seqnames)]
+  reads.dt[, str := strand == '+']
+
+  ## nullify isize for discordant pairs
+  if (verbose)
+    message("Identifying discordant pairs")
+  
+  reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
+  reads.dt[, both := any(R1) & any(!R1), by = qname]      
+  reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
+                              first.strand.pos = str[1],
+                              other.strand.pos = any(str[R1!=R1[1]])
+                              ), by = qname]
+
+  reads.dt[first.strand.pos & !other.strand.pos & !sn.diff, insert.size := max(end[R1!=R1[1]])-start[1], by = qname]
+
+  #reads.dt[, insert.sizez := scale(insert.size)]
+  ithresh.high = quantile(reads.dt$insert.size, 0.99, na.rm = TRUE)
+  ithresh.low = quantile(reads.dt$insert.size, 0.80, na.rm = TRUE)
+  reads.dt[, count := length(start), by = qname]
+  reads.dt[both == TRUE, discordant := insert.size > ithresh.high]
+  init.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
+
+                                        #      ithresh.high = reads.dt[insert.sizez>zthresh, min(insert.size)]
+
+
+  ## filter "short dup" read pairs from  discordants (- to the left of + read ...)
+  ## which seems to be artifact mode in 10X data
+  ## (i.e. no longer call them discordant)
+  dthresh = 1e4
+  reads.dt[discordant == TRUE, ddist := abs(end-mpos)]
+  reads.dt[discordant == TRUE & ddist<dthresh & sn.diff == 0 & !first.strand.pos & other.strand.pos, discordant := NA]
+
+  if (verbose)
+  {
+    final.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
+    message('Found ', final.disc, ' discordant pairs after removing ', init.disc - final.disc, ' small dup-like pairs')
+  }
+
+  if (verbose)
+    message("Identifying barcode strobe width")
+
+  reads.dt[which(!discordant & R1 == TRUE), bx.diff := c(diff(start), NA), by = .(seqnames, BX)]
+  reads.dt[which(!discordant & R1 == FALSE), bx.diff := c(diff(start), NA), by = .(seqnames, BX)]
+  reads.dt[, bx.diffz := scale(log(bx.diff+1))]     
+  bzthresh = 2
+  bthresh = reads.dt[bx.diffz>bzthresh, min(bx.diff)]
+
+  ## concordant read pairs
+  readsc = dt2gr(reads.dt[which(!discordant), ])
+
+  ## discordant read pairs --> strand flip secnod read in pair
+  readsd = dt2gr(reads.dt[which(discordant), ][R1==FALSE, strand := c('+'='-', '-'='+')[strand]])
+
+  if (verbose)
+    message("Collapsing concordant linked reads by inferred strobe width ", bthresh)
+  ## collapse / reduce concordant read pairs
+  readsc = dt2gr(as.data.table(grl.reduce(split(readsc + bthresh/2, readsc$BX)))[, BX := group_name])
+
+  readsc$BX = factor(readsc$BX, bxlev)
+  readsd$BX = factor(readsd$BX, bxlev)
+  
+  wov = grl.unlist(wks)[, 'grl.ix'] %*% wins[, c()]
+
+  ## matrix of base pair width overlap between walks and wins
+  wovmat = sparseMatrix(as.integer(wov$grl.ix), wov$subject.id, x = as.numeric(width(wov)), dims = c(length(wks), length(wins)))
+
+  if (length(reads)==0)
+    stop("No reads with non NA BX provided, please check input")
+
+  ## for discordant pairs ...
+  ## we want to directly assess intersection with walks
+  ## in a strand specific way
+  wksu = grl.unlist(wks) ## these are unlisted
+  wksur = gr.flipstrand(wksu) ## these are strand flipped unlisted
+
+  qmap = as.data.table(readsd)[, .(qname, BX)][, BX[1], keyby = qname][, structure(V1, names = as.character(qname))]
+  qlev = names(qmap)
+
+  if (verbose)
+    message("Lifting discordant reads onto walks")
+
+  ## lift read onto walk coordinates using gChain
+  wk.nm = names(wks)
+  names(wks) = 1:length(wks)
+  wks.chain = spChain(wks)
+
+  ## now we want to ask what are the read pairs that now become concordant
+  ## on each lifted walk??
+  ## then score per BX and walk, how many discordant pairs are made concordant post-lift 
+  ## and finally note which barcodes have the maximum number of their discordant pairs 
+  ## lifted onto the walk
+  readsdl = wks.chain * readsd
+  readsdl.dt = as.data.table(readsdl)[order(seqnames, start), ]
+
+  ## use similar criteria to above to identify discordant / concordant reads in "lifted coordinates"
+  readsdl.dt = readsdl.dt[, both := any(R1) & any(!R1), by = .(seqnames, qname)][both == TRUE, ]
+  readsdl.dt[both == TRUE, ":="(
+                             first.strand.pos = str[1],
+                             other.strand.pos = any(str[R1!=R1[1]])
+                           ), by = qname]
+  readsdl.dt[first.strand.pos & !other.strand.pos, insert.size := end[R1!=R1[1]][1]-start[1], by = qname]
+  readsdl.dt[, insert.size := end[R1!=R1[1]][1]-start[1], by = qname]
+  readsdl.dt[, concordant := insert.size<ithresh.low]
+  readsdl.dt = readsdl.dt[concordant == TRUE, ][R1 == TRUE, ][, dup := duplicated(query.id), by = .(BX, seqnames)]
+  readsdl.dt = readsdl.dt[dup==FALSE, ]
+  bxstatsd = readsdl.dt[ , .(score = length(qname)), by = .(BX, seqnames)]
+  bxstatsd[, max.score := max(score), by = .(BX)]
+  bxstatsd = bxstatsd[score == max.score, ] ## only keep the max scoring BX, seqnames pairs
+
+  ## we want to use these as votes for walk support, but then any other non matching discordant pairs as anti-matches
+  ## first building a mat rix of qnames x walks
+  rovd.mat = sparseMatrix(as.integer(factor(bxstatsd$BX, bxlev)), as.numeric(as.character(bxstatsd$seqnames)), x = bxstatsd$score,
+                          dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
+
+  if (verbose)
+    message("Lifting concordant linked read footprints onto walks")
+  rovcl = wks.chain * readsc
+  rovclb = t(wks.chain) * rovcl
+  values(rovclb)$walk = seqnames(rovcl)[rovclb$query.id]
+  values(rovclb)$bx.walk = paste(values(rovclb)$BX, values(rovclb)$walk)
+
+  rovclbr = grl.reduce(split(rovclb, values(rovclb)$bx.walk))
+  bxwid.lift = as.data.table(matrix(unlist(strsplit(names(rovclbr), ' ')), ncol= 2, byrow = TRUE))
+  setnames(bxwid.lift, c('BX', 'seqnames'))
+  bxwid.lift[, wid.lifted := grl.eval(rovclbr, sum(as.numeric(width)))]
+
+  if (verbose)
+    message("Analyzing concordant walk footprints on walks")
+
+  ## for every barcode we want to ask how much of its width
+  ## is "missing" post lift to that walk?  that's going to drive a negative score
+  ## with regard to its match to a given walk
+  bxwid = as.data.table(readsc)[, .(wid = sum(as.numeric(width))), keyby = BX]
+  rsc = split(readsc, readsc$BX)
+  bxwid.max = data.table(BX = names(rsc), wid = grl.eval(rsc, max(width)))
+  setkey(bxwid.max, BX)
+  
+                                        #      bxwid.lift = as.data.table(rovcl)[, .(wid.lifted = sum(width)), keyby = .(BX, seqnames)]
+  bxwid.lift[bxwid, wid.left := wid-wid.lifted, on = 'BX']
+
+  ## neg.mat = negative overlap matrix from lift
+  neg.mat = sparseMatrix(as.integer(factor(bxwid.lift$BX, bxlev)), as.numeric(as.character(bxwid.lift$seqnames)), x = bxwid.lift$wid.left, dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
+
+  ## reduce the footprint of each BX on each walk + bthresh pad
+  rovcl.fp = as.data.table(grl.reduce(split(rovcl + bthresh, rovcl$BX)))[, BX := group_name]
+
+  ## calculate widths of (largest vs next largest) footprints per walk
+  bxstats = rovcl.fp[rev(order(width)), ][, .(wid.lifted = width[1]), keyby = .(BX, seqnames)]
+  bxstats[, wid.og := bxwid.max[.(bxstats$BX), wid]] ## compare reduced wid in lifted to max wid in non lifted
+  bxstats[, wid.rel := wid.lifted / wid.og]
+
+  ## pick only the walk x barcode combos with max lifted footprint 
+  bxstats[, max.lifted := max(wid.lifted), by = BX]
+  #bxstats = bxstats[wid.lifted == max.lifted , ]
+
+  if (verbose)
+    message("Creating barcode x walk matrices")
+
+  ## rovc.mat = convert bxstats to barcode x walk matrix
+  rovc.mat = sparseMatrix(as.integer(factor(bxstats$BX, bxlev)), as.numeric(as.character(bxstats$seqnames)), x = bxstats$wid.rel, dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
+  
+  ## combine everything via logistic function into probability like score 
+  .logistic = function(x, x0) 1/(1+exp(-x))
+
+
+  ## rescale all width based matrices by median bxwidth
+#  mbw = median(bxwid$wid)
+ # rovc.mat = sweep(rovc.mat, 1, mbw, "/")
+#  neg.mat = sweep(neg.mat, 1, mbw, "/")
+
+  ## instead just by strobe width for the neg.mat (overlap 
+  neg.mat = sweep(neg.mat, 1, bthresh/4, "/")
+
+  if (verbose)
+    message("Converting scores to quasi probabilities")
+  ## transform everything by logistic and sweep rowSums
+
+  neg.mat = sweep(neg.mat, 1, apply(neg.mat, 1, min), '-')
+
+  provd = 2*(.logistic(rovd.mat)-0.5)
+  provc = 2*(.logistic(rovc.mat)-0.5)
+  pneg = 2*(.logistic(neg.mat)-0.5)
+
+  if (any( ix <- rowSums(provc)==0)) ## reset blank rows to flat uniform dist
+    provc[ix, ] = 1/ncol(provc) 
+
+  if (any( ix <- rowSums(provd)==0)) ## reset blank rows to flat uniform dist
+    provd[ix, ] = 1/ncol(provd) 
+
+  if (any(ix <- rowSums(pneg)==0)) ## reset blank rows to flat uniform dist
+    pneg[ix, ] = 1/ncol(pneg) 
+
+  sc = provd*provc*(1-pneg)
+  sc = sweep(sc, 1, rowSums(sc), '/')
+
+  ## NA all rows that are equivalently distributed across all walks
+  sc[apply(sc, 1, function(x) all(diff(x)==0)), ] = NA
+
+  if (!is.null(wk.nm))
+    colnames(sc) = wk.nm
+
+  if (raw)
+    return(list(sc = sc, rsc = rsc, provd = provd, provc = provc, pneg = pneg))
+  
+  scr = colSums(sc)
+
+  return(scr)
+}
 
 
 
@@ -2137,7 +2433,7 @@ strsplit2 = function(x, sep1 = ",", sep2 = " ", j = 1)
 ################
 timestamp = function()
   {
-    return(gsub('[^\\d]', '', as.character(Sys.time()), perl = T))
+    return(gsub('[\\:\\-]', '', gsub('\\s', '_', Sys.time())))
   }
 
 
@@ -3221,7 +3517,7 @@ nz = function(x, zero = 0, full = FALSE, matrix = TRUE)
 
             ##out = sparseMatrix::sparseMatrix(as.integer(rid), as.integer(cid), x = tmp[, 'val'], dimnames = list(levels(rid), levels(cid)))
             ## sparseMatrix not avaiable on R-3.2
-            out = matrix(as.integer(rid), as.integer(cid), x = tmp[, 'val'], dimnames = list(levels(rid), levels(cid)))
+            out = sparseMatrix(as.integer(rid), as.integer(cid), x = tmp[, 'val'], dimnames = list(levels(rid), levels(cid)))
 
             if (full)
                 out = as.matrix(out)
@@ -3316,14 +3612,26 @@ morder = function(A, orient = 1)
 #' @export
 #' @author Marcin Imielinski
 ######################################################
-mmatch = function(A, B, dir = 1)
-  {
-    SEP = ' ';
-    Atxt = apply(A, dir, function(x) paste(x, collapse = SEP))
-    Btxt = apply(B, dir, function(x) paste(x, collapse = SEP))
+mmatch = function(A, B, dir = 1, default.value = 0)
+{
+  nzix = which(A!=default.value, arr.ind = TRUE)
+  Adt = as.data.table(nzix)[, v := A[nzix]]
+  if (dir == 2)
+    setnames(Adt, c('row', 'col'), c('col', 'row'))
+  sA = Adt[, paste(col, v, collapse = ' '), by = row]
+  setkey(sA, row)
+  
+  nzix = which(B!=default.value, arr.ind = TRUE)
+  Bdt = as.data.table(nzix)[, v := B[nzix]]
+  if (dir == 2)
+    setnames(Bdt, c('row', 'col'), c('col', 'row'))
+  sB = Bdt[, paste(col, v, collapse = ' '), by = row]      
+  setkey(sB, V1)
 
-    return(match(Atxt, Btxt))
-  }
+  ix = sB[.(sA[.(1:nrow(A)), ]$V1), unname(row)]
+
+  return(ix)
+}
 
 ##########################################################
 #' @name bisort
@@ -3669,7 +3977,7 @@ ppng = function(expr, filename = 'plot.png', height = 1000, width = 1000, dim = 
         system(paste('mkdir -p', file.dir(filename)))
 
     cat('rendering to', filename, '\n')
-    png(filename, height = height, width = width, pointsize = 12*cex.pointsize, ...)
+    png(filename, height = height, width = width, pointsize = 24*cex.pointsize, ...)
 
     if (!is.null(dim))
         {
@@ -4097,8 +4405,8 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
             {
                 dat = data.frame(x, y)
                 ix = rowSums(is.infinite(as.matrix(dat)), na.rm = TRUE)>0 | rowSums(is.na(dat))
-                dat = dat[!ix, ]
-
+                dat = as.data.table(dat[!ix, ])[ x>=xlim[1] & x<=xlim[2] & y>=ylim[1] & y<=ylim[2], ]
+               
                 m = lm(y ~ x, dat)
                 abline(m, lwd = 3, lty = 2, col = col.fit)
 
@@ -4166,20 +4474,29 @@ phist = function(expr, data = data.frame(), ...)
 #' @author Marcin Imielinski
 #' @import ggplot2
 #' @export
-vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, mapping = NULL,
+vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, flip = FALSE,  mapping = NULL,
     stat = "ydensity",
     position = "dodge",
-    trim = TRUE, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
+    trim = TRUE, sample = NA, scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
     scatter = FALSE,
     text = NULL,
     cex.scatter = 1,
     col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE)
     {
         # require(ggplot2)
-        if (!is.factor(group))
-            group = as.factor(group)
-        dat = data.table(y = suppressWarnings(as.numeric(y)), group)
-
+      if (!is.factor(group))
+          group = as.factor(group)
+      dat = data.table(y = suppressWarnings(as.numeric(y)), group)
+      
+      if (!is.na(sample))
+        if (sample>0)
+        {
+          if (sample<1)
+            dat = dat[sample(nrow(dat), round(sample*nrow(sample))), ]
+          else
+            dat = dat[sample(nrow(dat), round(sample)), ]
+        }
+      
         if (is.null(facet1))
             {
                 facet1 = facet2
@@ -4195,12 +4512,12 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
             if (!is.factor(facet2))
                 facet2 = factor(facet2, unique(facet2))
 
-        suppressWarnings(dat[, facet1 := facet1])
-        suppressWarnings(dat[, facet2 := facet2])
+      suppressWarnings(dat[, facet1 := facet1])
+      suppressWarnings(dat[, facet2 := facet2])
 
-        dat = dat[rowSums(is.na(dat))==0, ]
+      dat = dat[rowSums(is.na(dat))==0, ]
 
-        ## remove 0 variance groups
+            ## remove 0 variance groups
         dat$vgroup = paste(dat$group, dat$facet1, dat$facet2)
 
         ## if (vfilter)
@@ -4303,6 +4620,10 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 
         if (!is.null(legend.nrow))
             g = g + guides(fill = guide_legend(nrow = legend.nrow, byrow = TRUE))
+
+
+      if (flip)
+        g = g + coord_flip()
 
         if (!is.null(dat$facet1))
             {
@@ -8386,20 +8707,64 @@ standardize_segs = function(seg, chr = FALSE)
 #' Tabulates cluster usage (qstat()) or if full = TRUE flag given will dump out
 #' all running jobs in a data.table
 #'
-#' 
+#' @author Marcin Imielinski
 #' @export
-qstat = function(full = FALSE, numslots = TRUE)
+qstat = function(full = FALSE, numslots = TRUE, resources = full)
     {
-        nms = c('jobid','prior','ntckt','name','user','project','department','state','cpu','mem','io','tckts','ovrts','otckt','ftckt','stckt','share','queue','slots')
-        p = pipe('qstat -u "*" -ext')
-        tab = strsplit(str_trim(readLines(p)), '\\s+')
-        close(p)
-        iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>14
-        if (sum(iix)==0)
-            return(data.table())
-        tab = lapply(tab, function(x) x[1:length(nms)])
-        tmp = as.data.table(matrix(unlist(tab[iix]), ncol = length(nms), byrow = TRUE))       
-        setnames(tmp, nms)
+      nms = c('jobid','prior','ntckt','name','user','project','department','state','cpu','mem','io','tckts','ovrts','otckt','ftckt','stckt','share','queue','slots')
+      cmd = 'qstat -u "*" -ext'
+      if (resources)
+        cmd = paste(cmd, "-r")
+      p = pipe(cmd)
+      tmp = readLines(p)
+      if (resources) ## parse resources text
+      {
+        resource.line = grepl('^\\s+', tmp)
+        lines = tmp[!resource.line]
+        line.num = cumsum(!resource.line)
+        rmap = cbind(
+          data.table(lnum = line.num[resource.line], has.colon = grepl('\\:', tmp[resource.line])),
+          as.data.table(matrix(unlist(lapply(strsplit(tmp[resource.line],
+                                                      '(\\:\\s+)'),
+                                             function(x) c(x[1], x[length(x)], length(x)==2))),
+                               ncol = 3, byrow = TRUE)))
+        rmap = rmap[, .(lnum,
+                        tag = fill.blanks(ifelse(as.logical(V3) | has.colon, gsub('\\W+', '_', str_trim(V1)), NA)),
+                        val = ifelse(!as.logical(V3) & has.colon, '', str_trim(V2)))]
+        ## reformat the "=" tags
+        rmap[grepl('=', val), ":="(tag = paste(sapply(strsplit(val, '=|\\s+'), '[', 1), sep = '_'), val = paste(sapply(strsplit(val, '=|\\s+'), '[', 2), sep = '_'))]        
+        rtab = dcast.data.table(rmap, lnum ~ tag, value.var = 'val', fun.aggregate =
+                                                                       function(x) paste(x, collapse= ';'))
+      }
+      else
+        lines = tmp
+
+      tab = strsplit(str_trim(lines), '\\s+')
+      close(p)
+      iix = sapply(tab, length)<=length(nms) & sapply(tab, length)>14
+      if (sum(iix)==0)
+        return(data.table())
+      tab = lapply(tab, function(x) x[1:length(nms)])
+      tmp = as.data.table(matrix(unlist(tab[iix]), ncol = length(nms), byrow = TRUE))
+      setnames(tmp, nms)
+
+      tmp[, host := queue]
+      tmp[, queue := sapply(strsplit(queue, '@'), '[', 1)][is.na(queue), host := '']
+      tmp[, slots := as.numeric(slots)]
+      tmp[, mem := as.numeric(mem)]
+
+      if (resources)
+      {
+        tmp.lnum = which(iix)
+        tmp = cbind(tmp, rtab[.(tmp.lnum), ])
+        tmp$lnum = NULL
+
+        if (!is.null(tmp$Hard_Resources))
+        {
+          tmpl = lapply(strsplit(tmp$Hard_Resources, ';'), strsplit, '=')
+        }
+      }
+
 
         if (!full)
             {
@@ -8424,6 +8789,54 @@ qstat = function(full = FALSE, numslots = TRUE)
     }
 
 
+#' @name gigs
+#' @title gigs
+#' @description
+#' 
+#' Takes string representing memory and returns numeric string representing number of GB
+#' represented by this string or NA
+#'
+#' @author Marcin Imielinski
+#' @export
+gigs = function(x)
+{
+  x = str_trim(x)
+  xn = as.numeric(gsub('[A-Za-z]', '', x))
+
+  multiplier =
+    ifelse(grepl('Y(i)?(B)?$', x, ignore.case = TRUE), 1e15,
+    ifelse(grepl('Z(i)?(B)?$', x, ignore.case = TRUE), 1e12,
+    ifelse(grepl('E(i)?(B)?$', x, ignore.case = TRUE), 1e9,
+    ifelse(grepl('P(i)?(B)?$', x, ignore.case = TRUE), 1e6,
+    ifelse(grepl('T(i)?(B)?$', x, ignore.case = TRUE), 1e3,
+    ifelse(grepl('G(i)?(B)?$', x, ignore.case = TRUE), 1,
+    ifelse(grepl('M(i)?(B)?$', x, ignore.case = TRUE), 1e-3,
+    ifelse(grepl('K(i)?(B)?$', x, ignore.case = TRUE), 1e-6,
+    ifelse(grepl('(B)?$', x, ignore.case = TRUE), 1e-9,
+           NA)))))))))
+
+  return(xn*multiplier)
+}
+
+#' @name seconds
+#' @title seconds
+#' @description
+#' 
+#' Takes string representing time elapsed and returns numeric string representing number of GB
+#' represented by this string or NA
+#'
+#' @author Marcin Imielinski
+#' @export
+seconds = function(x)
+{
+  naix = !is.na(x)
+  out = rep(NA, length(x))
+  ll = strsplit(x[naix], "\\:")
+  bad = sapply(ll, length)!=4
+  naix[naix][bad]= FALSE
+  out[naix] = matrix(as.numeric(unlist(ll[!bad])), ncol = 4, byrow = TRUE) %*% cbind(c(3600, 60, 1, 0.01))
+  return(out)
+}
 
 #' @name qhost
 #' @title qstat
@@ -8431,7 +8844,7 @@ qstat = function(full = FALSE, numslots = TRUE)
 #' 
 #' Tabulates per host cluster load
 #'
-#' 
+#' @author Marcin Imielinski
 #' @export
 qhost = function(full = FALSE, numslots = TRUE)
     {
@@ -8452,6 +8865,50 @@ qhost = function(full = FALSE, numslots = TRUE)
         tmp$MEMTOT = suppressWarnings(pmax(as.numeric(gsub('G', '', tmp$MEMTOT)), 0, na.rm = TRUE))
         return(tmp)
     }
+
+#' @name qviz
+#' @title qviz
+#' @description
+#' 
+#' Plots resources (default h_vmem requestes) across cluster either for
+#' provided slice of qstat(full = TRUE) output or a fresh call to qstat(full = TRUE)
+#'
+#' @author Marcin Imielinski
+#' @export
+qviz = function(res = NULL, queue = NULL, field = "h_vmem", frac = FALSE, all = FALSE, plot = TRUE)
+{
+  if (is.null(res))
+    res = qstat(full = TRUE)
+
+  if (!all)
+    res = res[state == 'r', ]
+
+  if (!is.null(queue))
+  {
+    tmp.q = queue
+    res = res[res$queue %in% tmp.q, ]
+  }
+
+  res$val = res[[field]]
+
+  if (is.character(res$val))
+    res$val = gigs(res$val)
+
+  summ = res[, .(val = sum(val, na.rm = TRUE)), keyby = .(host, user)]
+
+  if (frac)
+    summ[, val := round(val / sum(val), 2), by = host]
+
+  tmp = dcast.data.table(summ, host ~ user, value.var = "val", fill = 0)
+
+  mat = as.matrix(tmp[,-1])
+  rownames(mat) = tmp$host
+
+  if (plot)
+    d3heatmap::d3heatmap(mat, scale = 'none', Rowv = TRUE, labRow = rownames(mat), cexCol = 1, cexRow = 0.8)
+  else
+    mat  
+}
 
 
 #' @name ddd
@@ -9350,4 +9807,400 @@ parsesnpeff = function(vcf, id = NULL)
             vcf$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', vcf$eff)
             return(out2)
         }
+
+
+
+summary.df = function(x, nm = '', last = FALSE)
+{
+    if (is.null(x))
+        out = data.frame(name = nm, method = as.character(NA), p = as.numeric(NA), estimate = as.numeric(NA), ci.lower = as.numeric(NA),  ci.upper = as.numeric(NA), effect = as.character(NA))
+    else if ('lm' %in% class(x))
+    {        
+        coef = as.data.frame(summary(x)$coefficients)
+        if (nchar(nm)==0)
+            nm = rownames(coef)
+        
+        colnames(coef) = c('estimate', 'se', 'stat', 'p')
+        if (last)
+            coef = coef[nrow(coef), ]
+        coef$ci.lower = coef$estimate - 1.96*coef$se
+        coef$ci.upper = coef$estimate + 1.96*coef$se
+        if (summary(x)$family$link %in% c('log', 'logit'))
+        {
+                    coef$estimate = exp(coef$estimate)
+                    coef$ci.upper= exp(coef$ci.upper)
+                    coef$ci.lower= exp(coef$ci.lower)
+                }
+            out = data.frame(name = nm, method = summary(x)$family$family, p = signif(coef$p, 3), estimate = coef$estimate, ci.lower = coef$ci.lower, ci.upper = coef$ci.upper, effect = paste(signif(coef$estimate, 3), ' [',  signif(coef$ci.lower,3),'-', signif(coef$ci.upper, 3), ']', sep = ''))
+        }
+    else        
+        out = data.frame(name = nm, method = x$method, p = signif(x$p.value, 3), estimate = x$estimate, ci.lower = x$conf.int[1], ci.upper = x$conf.int[2], effect = paste(signif(x$estimate, 3), ' [',  signif(x$conf.int[1],3),'-', signif(x$conf.int[2], 3), ']', sep = ''))
+    
+    out$effect = as.character(out$effect)
+    out$name = as.character(out$name)
+    out$method = as.character(out$method)
+    rownames(out) = NULL
+    return(out)
+}
+
+
+#' @name sc.context
+#' @title sc.context
+#' @description
+#'
+#' Computes strand collapsed k-nucleotide contexts and representative string for various mutations represented as granges object
+#' corresponding to reference coordinate that is being mutated (e.g 0 width for insertion, >=1 width for a del, and 1 width for a SNV, >1 width for a MNV)
+#' with alt fields $ALT representing alternate sequences [ACGT]* where any non ACGT sequence is treated
+#' as a blank (i.e. for a del) using reference genome hg that is either a BSGenome, ffTrack, or 2bit (i.e. an input into read_seq
+#' 
+#' A strand collapsed k-nucleotide context involves a base that is being altered and (k-1)/2 nucleotides around it, where
+#' k is an odd positive integer.
+#'
+#' Examples:
+#'
+#' A[T>A]G + represents a T>A mutation happening on the positive strand with an A
+#' in 5' position and G in the 3' position
+#'
+#' A[>ATTTT]G - represents a >ATTTT insertion on the negative strand with an A
+#' in 5' position and G in the 3' position
+#'
+#' A[ATTTT>]G + represents a ATTTT> deletion on the positive strand with an A
+#' in 5' position and G in the 3' position
+#' 
+#' default is k = 3
+#'
+#' @author Marcin Imielinski
+#' @export
+sc.context = function(mut, hg, k = 3, alt.field = 'ALT', mc.cores = 1, verbose = FALSE)
+{
+    if (!is(mut, 'GRanges'))        
+        stop(sprintf('Input argument mut must be granges with field $%s', alt.field))
+
+    if (!(alt.field %in% names(values(mut))))
+        stop(sprintf('Input argument mut must be granges with field $%s', alt.field))
+        
+    if (k %% 2 != 1)
+        stop('k must be an odd number eg 1,3,5 etc')
+
+    ## check if alt field represents actual DNA
+    ALT = as.character(DNAStringSet(values(mut)[, alt.field]))
+
+        ## apply strand collapse to tri nuc mutation context
+    strand(mut) = '+'
+    mut$ref = as.character(get_seq(hg, mut, mc.cores = mc.cores, verbose = verbose)) ## flank gets upstream 5' sequence
+    mut$context5 = as.character(get_seq(hg, flank(mut, (k-1)/2), mc.cores = mc.cores, verbose = verbose)) ## flank gets upstream 5' sequence
+    mut$context3 = as.character(get_seq(hg, gr.flipstrand(flank(gr.flipstrand(mut), (k-1)/2)), mc.cores = mc.cores, verbose = verbose)) ## flip of flank of flip gets downstream 3' sequence
+    mut$alt = as.character(ALT)
+    
+    nuc5 = nuc3 = as.character(DNAStringSet(mkAllStrings(DNA_BASES,(k-1)/2)))
+    ref = unique(c(as.character(DNAStringSet(mkAllStrings(DNA_BASES, 1))), mut$ref)) ## supplement ref with any "observed refs"
+    alt = unique(c(as.character(DNAStringSet(mkAllStrings(DNA_BASES, 1))), as.character(ALT))) ## supplement ref with any "observed alt"
+    dict = as.data.table(expand.grid(context5 = nuc5, ref = ref, alt = alt, context3 = nuc3))
+    dict = dict[order(factor(ref, levels = c('A', 'C', 'G', 'T'))), ]
+    dict[, num := 1:length(context5)]
+    setkeyv(dict, c('context5', 'ref', 'alt', 'context3'))
+    dictr = dict[, .(context5 = as.character(reverseComplement(DNAStringSet(context3))),
+                      ref = as.character(reverseComplement(DNAStringSet(ref))),
+                      alt = as.character(reverseComplement(DNAStringSet(alt))),
+                     context3 = as.character(reverseComplement(DNAStringSet(context5))))]    
+    dict$rnum = dict[dictr, num]
+
+    dict[, context := paste(context5, ref, context3, sep = '')]
+    dict[, sign := 0]
+    dict[is.na(rnum), sign := ifelse(as.character(context)<as.character(reverseComplement(DNAStringSet(context))), 1, -1)] ## if not in dictionary (ie indel) then use the byte rep to arbitrarily but reproducibly call one event mutant
+    dict[!is.na(rnum), sign := ifelse(num<rnum, 1, -1)]
+
+    tmp = dict[list(mut$context5, mut$ref, mut$alt, mut$context3), list(context5, ref, alt, context3, sign)]
+    tmp[is.na(sign), sign := 0]
+
+    strand(mut) = ifelse(is.na(tmp$sign), '*', ifelse(tmp$sign>0, '+', '-'))
+    mut$context5 = as.character(tmp$context5)
+    mut$context3 = as.character(tmp$context3)
+    mut$alt = as.character(tmp$alt)
+    mut$ref = as.character(tmp$ref)
+
+    ## strand flip for negative strand mutations
+    if (any(fix <- tmp$sign<0))
+    {
+        mut$context5[fix] = as.character(reverseComplement(DNAStringSet(as.character(tmp$context3[fix])))) ## keep track of reverse complement contexts
+        mut$context3[fix] = as.character(reverseComplement(DNAStringSet(as.character(tmp$context5[fix]))))
+        mut$ref[fix] = as.character(reverseComplement(DNAStringSet(as.character(tmp$ref[fix]))))
+        mut$alt[fix] = as.character(reverseComplement(DNAStringSet(as.character(tmp$alt[fix]))) )
+    }
+
+    ## fill out reciprocal contexts
+    mut$context5r = as.character(reverseComplement(DNAStringSet(as.character(tmp$context3)))) ## keep track of reverse complement contexts
+    mut$context3r = as.character(reverseComplement(DNAStringSet(as.character(tmp$context5))))
+    mut$altr = as.character(reverseComplement(DNAStringSet(as.character(mut$alt))))
+    mut$refr = as.character(reverseComplement(DNAStringSet(as.character(mut$ref))) )             
+
+    ## put together into signature
+    mut$ref.context = paste(mut$context5, mut$ref, mut$context3, sep = '')
+    mut$ref.contextr = paste(mut$context5r, mut$refr, mut$context3r, sep = '')
+    mut$mut.context = paste(mut$context5, '(', mut$ref, '>', mut$alt, ')', mut$context3, sep = '')    
+    mut$mut.contextr = paste(mut$context5r, '(', mut$refr, '>', mut$altr, ')', mut$context3r, sep = '')
+    mut
+}
+
+
+
+#' @name staveRDS
+#' @title staveRDS
+#' @description
+#'
+#' Stamps and saves RDS file .. i.e. saving datestamped filename and
+#' and soft link to the datestamped file
+#' 
+#' @export
+staveRDS = function(object, file, note = NULL, ..., verbose = FALSE)
+{
+  stamped.file = gsub('.rds$', paste('.', timestamp(), '.rds', sep = ''), file, ignore.case = TRUE)
+  saveRDS(object, stamped.file, ...)
+
+  if (file.exists(file))
+  {
+    if (verbose)
+      message('Removing existing ', file)
+    system(paste('rm', file))
+  }
+
+  if (verbose)
+    message('Symlinking ', file, ' to ', stamped.file)
+
+  system(paste('ln -sfn', normalizePath(stamped.file), file))
+
+  if (!is.null(note))
+  {
+    writeLines(note, paste0(stamped.file, '.readme'))
+  }
+}
+
+#' @name label.runs
+#' @title label.runs
+#' @description
+#'
+#' Labels runs of TRUE in a vector with increasing indices
+#' @author Marcin Imielinski
+#' @export
+label.runs = function(x) as.integer(ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA))    
+
+#' @name fill.blanks
+#' @title fill.blanks
+#' @description
+#'
+#' Takes vector with NAs and "fill in blank" positions i with the value of the last non NA position
+#' @export
+#' @author Marcin IMielinski
+fill.blanks = function(x)
+{
+  na.ix = is.na(x)
+
+  ## none NA return
+  if (!any(na.ix))
+    return(x)
+
+  ## all NA return NA
+  if (all(na.ix))
+    return(x)
+
+  nna.lab = cumsum(!na.ix)
+  unna.lab = unique(nna.lab)
+  map = structure(match(unna.lab, nna.lab), names = unna.lab)
+  x[na.ix] = x[map[nna.lab[na.ix]]]
+  return(x)  
+}
+
+
+
+#' @name dodo.call
+#' @title dodo.call
+#' @description
+#' do.call implemented using eval parse for those pesky (e.g. S4) case when do.call does not work
+#' @export
+dodo.call = function(FUN, args)
+{
+    if (!is.character(FUN))        
+        FUN = substitute(FUN)
+    cmd = paste(FUN, '(', paste('args[[', 1:length(args), ']]', collapse = ','), ')', sep = '')
+    return(eval(parse(text = cmd)))
+}
+
+
+#' @name d3igraph
+#' @title d3igraph
+#' @description
+#' Wrapper around network d3 package to quickly convert igraph to D3 and visualize
+#' Note: note can send output to plot.html via vij
+#'
+#' @export
+d3igraph = function(g)
+{
+    wc <- cluster_walktrap(g)
+    members <- membership(wc)
+    karate_d3 <- networkD3::igraph_to_networkD3(g, group = members)
+    forceNetwork(Links = karate_d3$links, Nodes = karate_d3$nodes,
+                 Source = 'source', Target = 'target',
+                              NodeID = 'name', Group = 'group')    
+}
+
+
+
+
+
+#' @name kill.zombies
+#' @title kill.zombies
+#' @description
+#' Kill R zombies.  Needs to be run from R session that spawned the zombies.
+#'
+#' @export
+kill.zombies = function(x) 
+{
+  includes <- '#include <sys/wait.h>'
+  code <- 'int wstat; while (waitpid(-1, &wstat, WNOHANG) > 0) {};'
+  wait <- inline::cfunction(body=code, includes=includes, convention='.C')
+  wait()
+  message("Zombie kill complete")
+}
+
+
+
+#' @name brew
+#' @title brew
+#' @description
+#'
+#' Takes factor or character categorical vector and returns same length vector of colors one representing each category
+#'
+#' @export
+brew = function(x, palette = "Accent") 
+{
+  if (!is.factor(x))
+    x = factor(x)
+  
+  ucols = structure(brewer.master(length(levels(x))), names = levels(x))
+  return(ucols[x])
+}
+
+#' @name dflm
+#' @title dflm
+#' @description
+#'
+#' Formats lm, glm, or fisher.test outputs into readable data.table
+#'
+#' @export
+dflm = function(x, last = FALSE, nm = '')
+{
+  if (is.null(x))
+    out = data.frame(name = nm, method = as.character(NA), p = as.numeric(NA), estimate = as.numeric(NA), ci.lower = as.numeric(NA),  ci.upper = as.numeric(NA), effect = as.character(NA))
+  else if ('lm' %in% class(x))
+  {
+
+    coef = as.data.frame(summary(x)$coefficients)
+    colnames(coef) = c('estimate', 'se', 'stat', 'p')
+    if (last)
+      coef = coef[nrow(coef), ]
+    coef$ci.lower = coef$estimate - 1.96*coef$se
+    coef$ci.upper = coef$estimate + 1.96*coef$se
+    if (summary(x)$family$link %in% c('log', 'logit'))
+    {
+      coef$estimate = exp(coef$estimate)
+      coef$ci.upper= exp(coef$ci.upper)
+      coef$ci.lower= exp(coef$ci.lower)
+    }
+    if (!last)
+      nm = paste(nm, rownames(coef))
+    out = data.frame(name = nm, method = summary(x)$family$family, p = signif(coef$p, 3), estimate = coef$estimate, ci.lower = coef$ci.lower, ci.upper = coef$ci.upper, effect = paste(signif(coef$estimate, 3), ' [',  signif(coef$ci.lower,3),'-', signif(coef$ci.upper, 3), ']', sep = ''))
+  }
+  else
+  {
+    out = data.frame(name = nm, method = x$method, p = signif(x$p.value, 3), estimate = x$estimate, ci.lower = x$conf.int[1], ci.upper = x$conf.int[2], effect = paste(signif(x$estimate, 3), ' [',  signif(x$conf.int[1],3),'-', signif(x$conf.int[2], 3), ']', sep = ''))
+  }
+  
+  out$effect = as.character(out$effect)
+  out$name = as.character(out$name)
+  out$method = as.character(out$method)
+  rownames(out) = NULL
+  return(as.data.table(out))
+}
+
+
+
+#' @name match.seq
+#' @title match.seq
+#' @description
+#'
+#' (Exact) matches a set of character query sequences against a set of (optionally named) subject sequences
+#' Returning a GRanges seqnames and coordinates with query.id (and optionally query name) as meta data.
+#'
+#' @param query character or DNAStringSet
+#' @param subject character or DNAStringSet
+#' @param mc.cores multithreading for parsing
+#' @param ... additional params to PDict
+#' @export
+match.seq = function(query, subject, mc.cores = 1, verbose = FALSE, ...)
+{
+  if (is.null(names(subject)))
+    names(subject) = 1:length(subject)
+
+  if (any(duplicated(names(subject))))
+  {
+    warning('Names of subject sequences have duplicates, deduping')
+    names(subject) = dedup(names(subject))
+  }
+  
+  if (!is(query, 'PDict'))
+    pdict = Biostrings::PDict(query, ...)
+  
+  if (!is(subject, 'DNAStringSet'))
+    subject = Biostrings::DNAStringSet(subject)
+  
+  res = mclapply(1:length(subj), function(i)
+  {
+    if (verbose)
+      message('Processed subject ', i)
+    ll = lapply(Biostrings::matchPDict(pdict, subject[[i]]), as.data.table)
+    out = rbindlist(lapply(1:length(ll), function(j) ll[[j]][, query.id := j][, seqnames := i]))
+  },  mc.cores = mc.cores)
+    
+  if (verbose)
+    message('Consolidating results into data.table and GRanges')
+
+  res = rbindlist(res)
+  res = res[order(seqnames, query.id, start), ]  
+  res[, seqnames := names(subject)[seqnames]]
+  
+  return(dt2gr(res, seqlengths = seqlengths(subject)))
+}
+
+
+grok_vcf = function(x)
+{
+    fn = c('allele', 'annotation', 'impact', 'gene', 'gene_id', 'feature_type', 'feature_id', 'transcript_type', 'rank', 'variant.c', 'variant.p', 'cdna_pos', 'cds_pos', 'protein_pos', 'distance')
+    out = suppressWarnings(read_vcf(x))
+    if (length(out)>0)
+    {
+        out$REF = as.character(out$REF)
+        out$ALT = as.character(unstrsplit(out$ALT))
+        out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
+                      ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))                
+        tmp = lapply(out$ANN, function(y) do.call(rbind, strsplit(y, '\\|'))[, 1:15, drop = FALSE])
+        tmpix = rep(1:length(out), sapply(tmp, nrow))
+        meta = as.data.frame(do.call(rbind, tmp))
+        colnames(meta) = fn
+        meta$varid = tmpix
+        meta$file = x
+        out2 = out[tmpix]
+        rownames(meta) = NULL
+        values(out2) = cbind(values(out2), meta)
+        names(out2) = NULL
+        out2$ANN = NULL
+        out2$oneliner = paste(
+            ifelse(!is.na(out2$gene),
+                   as.character(out2$gene),
+                   as.character(out2$annotation)),
+            ifelse(nchar(as.character(out2$variant.p))>0,
+                   as.character(out2$variant.p),
+                   as.character(out2$variant.c)))        
+    }
+    return(out2)
+}
 

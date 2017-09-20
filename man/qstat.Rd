@@ -4,9 +4,12 @@
 \alias{qstat}
 \title{qstat}
 \usage{
-qstat(full = FALSE, numslots = TRUE)
+qstat(full = FALSE, numslots = TRUE, resources = full)
 }
 \description{
 Tabulates cluster usage (qstat()) or if full = TRUE flag given will dump out
 all running jobs in a data.table
+}
+\author{
+Marcin Imielinski
 }

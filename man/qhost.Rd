@@ -9,3 +9,6 @@ qhost(full = FALSE, numslots = TRUE)
 \description{
 Tabulates per host cluster load
 }
+\author{
+Marcin Imielinski
+}

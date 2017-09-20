@@ -5,13 +5,13 @@
 \title{vplot}
 \usage{
 vplot(y, group = "x", facet1 = NULL, facet2 = NULL, transpose = FALSE,
-  mapping = NULL, stat = "ydensity", position = "dodge", trim = TRUE,
-  scale = "area", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL,
-  ylab = NULL, minsup = NA, scatter = FALSE, text = NULL,
-  cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL,
-  legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE,
-  dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE,
-  print = TRUE)
+  flip = FALSE, mapping = NULL, stat = "ydensity", position = "dodge",
+  trim = TRUE, sample = NA, scale = "area", log = FALSE, count = TRUE,
+  xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE,
+  text = NULL, cex.scatter = 1, col.scatter = NULL, alpha = 0.3,
+  title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE,
+  vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1,
+  plotly = FALSE, print = TRUE)
 }
 \arguments{
 \item{y}{numeric data vector}
