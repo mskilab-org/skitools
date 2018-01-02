@@ -8,3 +8,8 @@ readsLines from pipe and then closes the pipe}
 \usage{
 rpipe(cmd)
 }
+\description{
+read pipe
+
+readsLines from pipe and then closes the pipe
+}

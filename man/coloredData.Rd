@@ -3,7 +3,6 @@
 \docType{class}
 \name{coloredData}
 \alias{coloredData}
-\alias{coloredData}
 \title{coloredData}
 \usage{
 coloredData(data, colormap, upright = T)

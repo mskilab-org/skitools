@@ -14,3 +14,9 @@ write.tab(x, ..., sep = "\\t", quote = F, row.names = F)
 
 \item{...}{additional arguments to write.table}
 }
+\description{
+write.tab
+writes tab delimited no quotes without row names table (passes remaining arguments to write.table)
+
+equivalent to write.table(sep = TAB.DELIM, quote = F, row.names = F)
+}

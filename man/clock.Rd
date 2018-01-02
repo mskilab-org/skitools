@@ -11,6 +11,11 @@ clock(expr)
 \arguments{
 \item{expr}{R code to eval while suppressing all errors}
 }
+\description{
+clock
+
+times expression
+}
 \author{
 Marcin Imielinski
 }
