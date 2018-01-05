@@ -10263,3 +10263,52 @@ rrbind = function(..., union = T)
 
 
 
+#' @name mski_alpha
+#' @title mski_alpha
+#' @description 
+#'
+#' Wrapper combining 'col2rgb()' and 'rgb()' for single colors
+#'
+#' Originally called 'alpha()' in 'mskilab/bamUtils'
+#' 
+#' @param col string Any of the three kinds of R color specifications, i.e., either a color name (as listed by colors()), a hexadecimal string of the form "#rrggbb" or "#rrggbbaa" (see rgb), or a positive integer i meaning palette()[i]
+#' @param alpha boolean indicating whether the alpha channel (opacity) values should be returned (default = FALSE)
+#' @return string
+#' @export
+mski_alpha = function(col, alpha = FALSE)
+{
+  col.rgb = col2rgb(col, alpha = alpha)
+  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
+}
+
+
+#' @name get.var.col
+#' @title Simple function storing default variant color scheme
+#' @description 
+#'
+#' Simple function storing default variant color scheme
+#'
+#' Originally in 'mskilab/bamUtils'
+#'
+#' @return vector of default variant colors
+#' @export
+get.varcol = function()
+{
+    VAR.COL = c('XA' = 'green', 'XG' = 'brown', 'XC' = 'blue', 'XT' = 'red', 'D' = 'white', 
+    'I'= 'purple', 'N' = alpha('gray', 0.2), 'XX' = 'black', 'S' = alpha('pink', 0.9))
+    return(VAR.COL)
+}
+
+
+
+
+
+
+
+
+
+
+
+
