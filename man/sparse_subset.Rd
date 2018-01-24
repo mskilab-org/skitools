@@ -2,8 +2,11 @@
 % Please edit documentation in R/skitools.R
 \name{sparse_subset}
 \alias{sparse_subset}
+\alias{sparse_subset}
 \title{sparse_subset}
 \usage{
+sparse_subset(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
+
 sparse_subset(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 }
 \arguments{
@@ -22,6 +25,10 @@ k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i 
 a (+/- strict) subset of the nonzero components of row j of B
 }
 \description{
+given k1 x n matrix A and k2 x n matrix B
+returns k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i of A is
+a (+/- strict) subset of the nonzero components of row j of B
+
 given k1 x n matrix A and k2 x n matrix B
 returns k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i of A is
 a (+/- strict) subset of the nonzero components of row j of B

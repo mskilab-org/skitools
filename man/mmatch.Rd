@@ -4,7 +4,7 @@
 \alias{mmatch}
 \title{mmatch}
 \usage{
-mmatch(A, B, dir = 1)
+mmatch(A, B, dir = 1, default.value = 0)
 }
 \arguments{
 \item{A}{query matrix k1 x n}
