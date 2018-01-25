@@ -10304,6 +10304,107 @@ get.varcol = function()
 
 
 
+## #' @name counts2rpkm
+## #' @title Compute rpkm counts from counts
+## #' @description
+## #'
+## #' Takes 'Rsamtools::countBam()'' (or 'bam.cov.gr()') output "counts" and computes RPKM by aggregating across "by" variable
+## #'
+## #' @param counts data.table or data.frame with records, width fields
+## #' @param by string Field to group counts by
+## #' @note The denominator (i.e. total reads) is just the sum of counts$records
+## #' @return TO BE DONE
+## #' @export
+counts2rpkm = function(counts, by)
+{
+    if (missing(counts) | missing(by)){
+        stop('Error: "counts2rpkm()" requires both arguments "counts" and "by". Please see documentation for details.')
+    }
+    out = aggregate(1:nrow(counts), by = list(by), FUN = function(x) sum(counts$records[x])/sum(counts$width[x]/1000))
+    out[,2] = out[,2] / sum(counts$records) * 1e6
+    names(out) = c('by', 'rpkm')
+    return(out)
+}
+
+
+
+
+
+#' @name oneoffs
+#' @title Calls samtools mpileup to dump tsv of "one off" variants / sites
+#' @description
+#'
+#' Calls samtools mpileup to dump tsv of "one off" variants / sites (i.e. that are present in exactly one read per site)
+#'
+#' @param out.file string Path to file in which to dump tsv 
+#' @param bam string Path to BAM file 
+#' @param ref tring Path to reference FASTA
+#' @param min.bq integer Minimum base quality
+#' @param min.mq integer Minimum mapping quality
+#' @param indel boolean Flag whether to collect one off indels (default is substitution)
+#' @param chunksize integer Number of mpileup lines to put into memory
+#' @param verbose boolean Flag to increase verbosity (default = TRUE)
+#' @note The denominator (i.e. total reads) is just the sum of counts$records
+#' @export
+oneoffs = function(out.file, bam, ref, min.bq = 30, min.mq = 60, indel = FALSE, chunksize = 1e4, verbose = TRUE)
+{   
+    if (indel){
+        cmd = sprintf('samtools mpileup -x -B -Q %s -q %s -s -f %s %s | grep -P "\\w+\\s\\w+\\s\\w+\\s[\\,\\.]*[\\+\\-]\\d+[ACGTNacgtn]+[\\,\\.]*\\s"', min.bq, min.mq, ref, bam)
+    }
+    else{
+        cmd = sprintf('samtools mpileup -x -B -Q %s -q %s -s -f %s %s | grep -P "\\w+\\s\\w+\\s\\w+\\s[\\,\\.]*[ACGTacgt][\\,\\.]*\\s"', min.bq, min.mq, ref, bam)
+    }
+  
+    p = pipe(cmd, open = 'r')
+
+    start = Sys.time()
+    fields = c('chr', 'pos', 'ref', 'cov', 'alt', 'bq', 'mq')
+
+    i = nv = nl = 0
+
+    while (length(chunk <- readLines(p, n = chunksize)) > 0){
+
+        tab = fread(paste(chunk, collapse = '\n'), sep = '\t', header = FALSE)
+        setnames(tab, fields)
+        tab[ ,varnum := 1:.N]
+
+        if (indel){
+
+            tab[, left.pad := nchar(gsub("[\\+\\-].*", '', alt))]
+            tab[, wid := as.numeric(gsub('.*([\\+\\-]\\d+).*', '\\1', alt))]
+            tab[, var := mapply(function(x,i) substr(x, 1, i),
+                gsub('.*[\\+\\-]\\d+([ACGTNacgtn]+).*', '\\1', alt),
+                abs(wid))]
+            tab[wid>0, bq := mapply(function(x, i) substr(x, i, i), bq, wid)]
+            tab[wid<0, bq := NA]
+            varb = tab[, .(chr, pos, alt, wid, mq = NA, bq = NA)]                          
+        }
+        else{
+            varb = tab[, .(chr = chr, pos = pos, alt = unlist(strsplit(alt, '')),
+                wid = 0,
+                bq = utf8ToInt(unlist(strsplit(bq, '')))-33,
+                mq = utf8ToInt(unlist(strsplit(mq, '')))-33), by = varnum][!(alt %in% c(".", ",")), ]
+        }
+
+    
+        fwrite(varb, out.file, append = (i>0))
+        nv = nv + nrow(varb)
+        nl = nl + length(chunk)
+        i = i+1
+        if (verbose){
+            message('Wrote total of ',
+                nl, ' variants to ", out.file, ". Now at coordinate ',
+                varb[nrow(varb), sprintf("chr%s %s", chr, prettyNum(pos, ','))])
+            print(Sys.time() - start)
+        }
+    }
+  
+    close(p)
+    if (verbose){
+        message('Done writing ', out.file)
+    }
+}
+
 
 
 
