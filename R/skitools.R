@@ -12321,7 +12321,7 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
     bp2 = grl.unlist(ra2) + pad
     ix = gr.findoverlaps(bp1, bp2, ignore.strand = ignore.strand, ...)
 
-<<<<<<< HEAD
+
 ## #' @name counts2rpkm
 ## #' @title Compute rpkm counts from counts
 ## #' @description
@@ -12423,7 +12423,7 @@ oneoffs = function(out.file, bam, ref, min.bq = 30, min.mq = 60, indel = FALSE, 
     }
 }
 
-=======
+
     .make_matches = function(ix, bp1, bp2)
     {
         if (length(ix) == 0){
@@ -12431,7 +12431,7 @@ oneoffs = function(out.file, bam, ref, min.bq = 30, min.mq = 60, indel = FALSE, 
         }
         tmp.match = cbind(bp1$grl.ix[ix$query.id], bp1$grl.iix[ix$query.id], bp2$grl.ix[ix$subject.id], bp2$grl.iix[ix$subject.id])
         tmp.match.l = lapply(split(1:nrow(tmp.match), paste(tmp.match[,1], tmp.match[,3])), function(x) tmp.match[x, , drop = F])
->>>>>>> 31f21ff73612d14499b353bd9d2a65088371d2ef
+
 
         matched.l = sapply(tmp.match.l, function(x) all(c('11','22') %in% paste(x[,2], x[,4], sep = '')) | all(c('12','21') %in% paste(x[,2], x[,4], sep = '')))
 
@@ -12466,3 +12466,31 @@ oneoffs = function(out.file, bam, ref, min.bq = 30, min.mq = 60, indel = FALSE, 
         return(ro)
     }
 }
+
+
+## not exported in dev branch, gUtils
+## #' @name grl.stripnames
+## # ' @title Remove \code{GRanges} names inside a \code{GRangesList}
+## #' @description
+## #'
+## #' Remove \code{GRanges} names inside a \code{GRangesList}
+## #'
+## #' @param grl \code{GRangesList} with names elements
+## #' @return \code{GRangesList} where \code{GRanges} have no names
+grl.stripnames = function(grl)
+{
+    ele = tryCatch(as.data.frame(grl)$element, error = function(e) NULL)
+    if (is.null(ele)){
+        ele = unlist(lapply(1:length(grl), function(x) rep(x, length(grl[[x]]))))
+    }
+
+    gr = unlist(grl);
+    names(gr) = NULL;
+
+    out = split(gr, ele);
+    values(out) = values(grl)
+    names(out) = names(grl)
+
+    return(out)
+}
+
