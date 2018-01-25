@@ -2,6 +2,7 @@
 % Please edit documentation in R/skitools.R
 \name{modix}
 \alias{modix}
+\alias{modix}
 \title{modix}
 \usage{
 modix(ix, l)

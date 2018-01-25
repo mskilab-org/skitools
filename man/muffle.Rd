@@ -16,11 +16,6 @@ muffle(code, ...)
 \value{
 output of evaluated R code or NULL if error
 }
-\description{
-muffle
-
-Runs code returning NULL is there is any error
-}
 \author{
 Marcin Imielinski
 }

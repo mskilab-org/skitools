@@ -1,4 +1,4 @@
-### Marcin Imielinski
+## Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
 ##
@@ -1367,7 +1367,7 @@ gr.peaks = function(gr, field = 'score',
                                         peak.gr = seg2gr(gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
                                             eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
                                             by = eval(id.field)])
-                                        names(values(peak.gr))[3] = field ## not sure why I need to do this line, should be done above
+                                        names(values(peak.gr))[] = field ## not sure why I need to do this line, should be done above
                                     }
 
                                 B = matrix(sample(1:length(peak.gr), nbootstrap * length(peak.gr), prob = abs(values(peak.gr)[, field]), replace = TRUE), ncol = length(peak.gr))
@@ -1908,11 +1908,13 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
   if (verbose)
     message("Identifying barcode strobe width")
 
-  reads.dt[which(!discordant & R1 == TRUE), bx.diff := c(diff(start), NA), by = .(seqnames, BX)]
-  reads.dt[which(!discordant & R1 == FALSE), bx.diff := c(diff(start), NA), by = .(seqnames, BX)]
-  reads.dt[, bx.diffz := scale(log(bx.diff+1))]     
-  bzthresh = 2
+  setkeyv(reads.dt, c("seqnames", "start"))
+  reads.dt[which(!discordant & R1 == TRUE), bx.diff := c((start-shift(end))[-1], NA), by = .(seqnames, BX)]
+  reads.dt[which(!discordant & R1 == FALSE), bx.diff := c((start-shift(end))[-1], NA), by = .(seqnames, BX)]
+  reads.dt[, bx.diffz := scale(log(pmax(0, bx.diff)+1))]     
+  bzthresh = 1
   bthresh = reads.dt[bx.diffz>bzthresh, min(bx.diff)]
+  bmean = reads.dt[, mean(bx.diff, na.rm = TRUE)]
 
   ## concordant read pairs
   readsc = dt2gr(reads.dt[which(!discordant), ])
@@ -1923,7 +1925,23 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
   if (verbose)
     message("Collapsing concordant linked reads by inferred strobe width ", bthresh)
   ## collapse / reduce concordant read pairs
-  readsc = dt2gr(as.data.table(grl.reduce(split(readsc + bthresh/2, readsc$BX)))[, BX := group_name])
+
+  #### ALT approach for read cloud generation given thresh
+  .reads2clouds = function(reads, thresh = bthresh)
+  {
+    reads = gr2dt(reads)
+    setkeyv(reads, c("seqnames", "start"))
+    if (is.null(reads$bx.diff))
+      reads[, bx.diff := c((start-shift(end))[-1], NA), by = .(seqnames, BX)]  
+    reads[, rl := label.runs(bx.diff<thresh | is.na(bx.diff)), by = .(seqnames, BX)]
+    reads[is.na(rl), rl := -(1:.N)] ## label loners
+    reads[, rll := paste(seqnames, BX, rl, sep = '_')]
+    reads = dt2gr(reads[, .(seqnames = seqnames[1], start = start[1], end = end[.N], BX = BX[1]), by = rll])
+    return(reads)
+  }
+
+  readsc = .reads2clouds(readsc)
+  #readsc = dt2gr(as.data.table(grl.reduce(split(readsc + bthresh/2, readsc$BX)))[, BX := group_name])
 
   readsc$BX = factor(readsc$BX, bxlev)
   readsd$BX = factor(readsd$BX, bxlev)
@@ -1988,6 +2006,14 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
   values(rovclb)$walk = seqnames(rovcl)[rovclb$query.id]
   values(rovclb)$bx.walk = paste(values(rovclb)$BX, values(rovclb)$walk)
 
+  tmp = rep(readsc, length(wks))
+  tmp$walk = rep(1:length(wks), each = length(readsc))
+  leftover.ix = setdiff(1:length(tmp), gr.findoverlaps(tmp, rovclb, by = c("BX", "walk"))$query.id)
+  leftovers = tmp[leftover.ix]
+
+  ## count "leftover" clouds per BX per walk
+leftovers
+
   rovclbr = grl.reduce(split(rovclb, values(rovclb)$bx.walk))
   bxwid.lift = as.data.table(matrix(unlist(strsplit(names(rovclbr), ' ')), ncol= 2, byrow = TRUE))
   setnames(bxwid.lift, c('BX', 'seqnames'))
@@ -2007,30 +2033,52 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
                                         #      bxwid.lift = as.data.table(rovcl)[, .(wid.lifted = sum(width)), keyby = .(BX, seqnames)]
   bxwid.lift[bxwid, wid.left := wid-wid.lifted, on = 'BX']
 
+  ## assume 10 "fragments" per BX genome wide, and nclbx clouds per bx
+  nclbx = length(unique(readsc$rll)) / length(unique(readsc$BX))
+  gsize = sum(as.numeric(seqlengths(reads)))
+  wsize = sum(as.numeric(width(wins)))
+  lambda = nclbx*10*wsize/gsize ## lambda for clouds per window
+
   ## neg.mat = negative overlap matrix from lift
   neg.mat = sparseMatrix(as.integer(factor(bxwid.lift$BX, bxlev)), as.numeric(as.character(bxwid.lift$seqnames)), x = bxwid.lift$wid.left, dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
 
   ## reduce the footprint of each BX on each walk + bthresh pad
-  rovcl.fp = as.data.table(grl.reduce(split(rovcl + bthresh, rovcl$BX)))[, BX := group_name]
+  #  rovcl.fp = as.data.table(grl.reduce(split(rovcl + bthresh, rovcl$BX)))[, BX := group_name]
+  rovcl.fp = as.data.table(.reads2clouds(rovcl, bthresh))[width>bthresh ,]
+  setkeyv(rovcl.fp, c("seqnames", "BX"))  
+  rovcl.fp[, gaps := start-shift(end),  by = .(seqnames, BX)]
+  rovcl.fp[is.na(gaps), gaps := 0]
+  rovcl.fp[, pgap := dexp(gaps, 1/bmean, log = TRUE)]
+
+  log.sum.exp =  function(x){
+    offset = max(x)
+    log(sum(exp(x - offset))) + offset
+  }
 
   ## calculate widths of (largest vs next largest) footprints per walk
-  bxstats = rovcl.fp[rev(order(width)), ][, .(wid.lifted = width[1]), keyby = .(BX, seqnames)]
-  bxstats[, wid.og := bxwid.max[.(bxstats$BX), wid]] ## compare reduced wid in lifted to max wid in non lifted
-  bxstats[, wid.rel := wid.lifted / wid.og]
+  bxstats = rovcl.fp[, .(jpgap = sum(pgap)), keyby = .(BX, seqnames)]
+  bxstats[, lse := log.sum.exp(jpgap), by = BX]
+  bxstats[, pw := exp(jpgap-lse), by = BX]
 
-  ## pick only the walk x barcode combos with max lifted footprint 
-  bxstats[, max.lifted := max(wid.lifted), by = BX]
-  #bxstats = bxstats[wid.lifted == max.lifted , ]
+  ## bxstats = rovcl.fp[rev(order(width)), ][, .(wid.lifted = width[1]), keyby = .(BX, seqnames)]
+  ## bxstats[, wid.og := bxwid.max[.(bxstats$BX), wid]] ## compare reduced wid in lifted to max wid in non lifted
+  ## bxstats[, wid.rel := wid.lifted / wid.og]
+  ## bxstats[, wid.rel := (wid.rel-mean(wid.rel))/range(wid.rel), by = BX]
+  ## bxstats[is.na(wid.rel), wid.rel := 0]  
+  ## ## pick only the walk x barcode combos with max lifted footprint 
+  ## bxstats[, max.lifted := max(wid.lifted), by = BX]
+  ## #bxstats = bxstats[wid.lifted == max.lifted , ]
 
   if (verbose)
     message("Creating barcode x walk matrices")
 
-  ## rovc.mat = convert bxstats to barcode x walk matrix
-  rovc.mat = sparseMatrix(as.integer(factor(bxstats$BX, bxlev)), as.numeric(as.character(bxstats$seqnames)), x = bxstats$wid.rel, dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
+  ## rovc.mat = convert bxstats to barcode x walk matrix    
+  ##  rovc.mat = sparseMatrix(as.integer(factor(bxstats$BX, bxlev)), as.numeric(as.character(bxstats$seqnames)), x = bxstats$wid.rel, dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
+
+  rovc.mat = sparseMatrix(as.integer(factor(bxstats$BX, bxlev)), as.numeric(as.character(bxstats$seqnames)), x = bxstats$pw, dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
   
   ## combine everything via logistic function into probability like score 
   .logistic = function(x, x0) 1/(1+exp(-x))
-
 
   ## rescale all width based matrices by median bxwidth
 #  mbw = median(bxwid$wid)
@@ -2043,11 +2091,12 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
   if (verbose)
     message("Converting scores to quasi probabilities")
   ## transform everything by logistic and sweep rowSums
-
   neg.mat = sweep(neg.mat, 1, apply(neg.mat, 1, min), '-')
 
   provd = 2*(.logistic(rovd.mat)-0.5)
-  provc = 2*(.logistic(rovc.mat)-0.5)
+  ## provc = 2*(.logistic(rovc.mat)-0.5)
+  provc = rovc.mat
+#  provc = t(apply(as.matrix(provc), 1, function(x) x == max(x))) + 0
   pneg = 2*(.logistic(neg.mat)-0.5)
 
   if (any( ix <- rowSums(provc)==0)) ## reset blank rows to flat uniform dist
@@ -2062,6 +2111,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
   sc = provd*provc*(1-pneg)
   sc = sweep(sc, 1, rowSums(sc), '/')
 
+  browser()
   ## NA all rows that are equivalently distributed across all walks
   sc[apply(sc, 1, function(x) all(diff(x)==0)), ] = NA
 
@@ -2069,7 +2119,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     colnames(sc) = wk.nm
 
   if (raw)
-    return(list(sc = sc, rsc = rsc, provd = provd, provc = provc, pneg = pneg))
+    return(list(sc = sc, rsc = rsc, provd = provd, provc = provc, pneg = pneg))               
   
   scr = colSums(sc)
 
@@ -3980,11 +4030,11 @@ ppng = function(expr, filename = 'plot.png', height = 1000, width = 1000, dim = 
     png(filename, height = height, width = width, pointsize = 24*cex.pointsize, ...)
 
     if (!is.null(dim))
-        {
+    { 
             if (length(dim)==1)
                 dim = rep(dim, 2)
             dim = dim[1:2]
-            layout(matrix(1:prod(dim), nrow = dim[1], ncol = dim, byrow = TRUE))
+            layout(matrix(1:prod(dim), nrow = dim[1], ncol = dim[2], byrow = TRUE))
         }
 
     eval(expr)
@@ -4450,6 +4500,33 @@ phist = function(expr, data = data.frame(), ...)
     }
 
 
+#' @name pscatter
+#' @title pscatter
+#'
+#' @description
+#' Quick plotly scatterplot
+#'
+#' @author Marcin Imielinski
+#' @import plotly
+#' @export
+pscatter = function(x, y, text = '', color = NULL, size = NULL, mode = 'markers', type = 'scatter')
+{
+  data = data.table(x = x, y = y, text = text)
+
+  if (!is.null(color))
+    if (is(color, 'character'))
+      data$color = color
+
+  if (!is.null(size))
+    if (is(color, 'character') | is(color, 'numeric') | is(color, 'integer'))
+      data$size = size
+
+  t = paste0("plot_ly(data = data, mode = mode, type = type, ",
+            paste0(names(data), '=~', names(data), collapse = ', '), ')')
+  eval(parse(text = t))
+}
+
+
 #' @name vplot
 #' @title vplot
 #'
@@ -4651,323 +4728,6 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
         else
             g                
     }
-
- 
-###############################
-#' varcount
-#'
-#' Wrapper around applyPileups
-#' 
-#' takes in vector of bam paths, GRanges corresponding to sites / territories to query,
-#' and outputs a list with fields
-#' $counts = 3D matrix of base counts
-#' (A, C, G, T, N) x sites x bams subject to mapq and baseq thresholds
-#  $gr = output ranges corresponding to "sites" columns of output
-#'#' 
-#'
-#' (uses varbase)
-#'
-#'
-#' ... = other args go to read.bam
-#' @name varcount
-#' @export
-###############################
-varcount = function(bams, gr, min.mapq = 0, min.baseq = 20, max.depth = 500, indel = F, ...)
-  {
-    require(abind)
-    require(Rsamtools)
-
-    out = list()
-
-    if (any(width(gr)!=1))
-      gr = gr.start(gr)
-
-    
-    if (is.character(bams))
-        {            
-            bami = gsub('\\.bam$', '.bai', bams)
-            ix = file.exists(bami)
-            if (any(!ix))
-                bami[!ix] = paste(bams[!ix], 'bai', sep = '.')
-            if (any(!file.exists(bami)))
-                stop('one or more BAM file indices missing')
-            fuck = mapply(function(bam, bai) BamFile(bam, index = bai), bams, bami, SIMPLIFY = FALSE)
-            bams = BamFileList(mapply(function(bam, bai) BamFile(bam, index = bai), bams, bami, SIMPLIFY = FALSE))
-#            bams = BamFile(bams, index = bami)
-        }
-    else if (is(bams, 'BamFile'))
-        bams = BamFileList(bams)
-    
-    ix = as.logical(as.character(seqnames(gr)) %in% seqlevels(bams))
-    if (any(ix))
-        {
-            pp = ApplyPileupsParam(which = gr[ix], what = c("seq"), minBaseQuality = min.baseq, minMapQuality = min.mapq, maxDepth = max.depth)
-            pu = applyPileups(PileupFiles(bams), function(x) x, param = pp)
-        }
-
-    if (is(bams, 'BamFile') | is(bams, 'BamFileList'))
-        bam.paths = Rsamtools::path(bams)
-    else if (is(bams, 'BamFileList'))
-        bam.paths = sapply(bams, path)
-    else if (is(bams, 'list'))
-        bam.paths = sapply(bams, path)
-    else if (is(bams, 'character'))
-        bam.paths = bams
-
-    if (!indel)
-        {
-            cnames = c('A', 'C', 'G', 'T', 'N')
-            out$counts = array(NA, dim = c(length(cnames), length(gr), length(bams)), dimnames = list(cnames, NULL, bam.paths))
-            if (any(ix))
-                {
-                    nna = sapply(pu, function(x) length(x$seq)>0)
-                    out$counts[,which(ix)[nna],] = aperm(do.call('abind', lapply(pu, function(x)
-                        {
-                            x$seq[cnames,,, drop = F]
-                        })), c(1,3,2))
-            }
-        }
-    else
-        {
-            cnames = unique(unlist(lapply(pu, function(x) rownames(x$seq))))
-            cnames = cnames[order(nchar(cnames), cnames)]
-            out$counts = array(NA, dim = c(length(cnames), length(gr), length(bams)), dimnames = list(cnames, NULL, bam.paths))
-            if (any(ix))
-                {
-                nna = sapply(pu, function(x) length(x$seq)>0)
-                out$counts[,which(ix)[nna],] = aperm(do.call('abind', lapply(pu, function(x)
-                    {
-                        out = array(NA, dim = c(length(cnames), dim(x$seq)[2:3]), dimnames = list(cnames));
-                        out[rownames(x$seq),, ] = x$seq
-                    })), c(1,3,2))
-                        return(out)
-            }
-        }    
-    out$gr = gr
-    
-    return(out)    
-  }
-
-
-################################
-#' mafcount 
-#'
-#' Returns base counts for reference and alternative allele for an input tum and norm bam and maf data frame or GRAnges specifying substitutions
-#'
-#' maf is a single width GRanges describing variants and field 'ref' (or 'Reference_Allele'), 'alt' (or 'Tum_Seq_Allele1') specifying reference and alt allele.
-#' maf is assumed to have width 1 and strand is ignored.  
-#'
-#' @name mafcount
-#' @export
-#################################
-mafcount = function(tum.bam, norm.bam = NULL, maf, chunk.size = 100, verbose = T, mc.cores = 1, ...)
-    {
-
-        if (is.character(tum.bam))
-            tum.bam = BamFile(tum.bam)
-        
-        bams = BamFileList(tum.bam)
-        
-        if (!is.null(norm.bam))
-            {
-                if (is.character(norm.bam))
-                    norm.bam = BamFile(norm.bam)
-                bams = c(bams, BamFileList(norm.bam))
-            }
-    
-    chunks = chunk(1, length(maf), chunk.size)
-
-        
-        if (is.null(maf$Tumor_Seq_Allele1))
-            maf$Tumor_Seq_Allele1 = maf$alt
-        
-        if (is.null(maf$Tumor_Seq_Allele1))
-            maf$Tumor_Seq_Allele1 = maf$ALT
-
-        if (is.null(maf$Reference_Allele))
-            maf$Reference_Allele = maf$ref
-        
-        if (is.null(maf$Reference_Allele))
-            maf$Reference_Allele = maf$REF
-
-        if (!all(is.character(maf$Tumor_Seq_Allele1)))
-            maf$Tumor_Seq_Allele1 = sapply(maf$Tumor_Seq_Allele1, function(x) as.character(x)[1])
-        
-        if (!all(is.character(maf$Reference_Allele)))
-            maf$Reference_Allele = as.character(maf$Reference_Allele)
-            
-            
-        if (is.null(maf$Reference_Allele) | is.null(maf$Tumor_Seq_Allele1))
-            stop("Can't find variant columns in input granges, please check input to make sure it either has standard VCF ALT / REF columns or MAF file columns specifying alt and ref allele")
-            
-    maf$alt.count.t =  maf$ref.count.t = NA
-
-    if (!is.null(norm.bam))
-      maf$alt.count.n =  maf$ref.count.n = NA
-
-    if (verbose)
-      cat('Initialized\n')
-
-    if (is.data.frame(maf))
-      maf = seg2gr(maf)
-    tmp = do.call('rbind',
-      mclapply(1:nrow(chunks), function(i)
-            {
-                if (verbose)
-                    cat('Starting chunk ', chunks[i, 1], ' to ', chunks[i, 2], '\n')
-                
-                ix = chunks[i,1]:chunks[i,2]
-               if (verbose)
-                   now = Sys.time()
-               
-               vc = varcount(bams, maf[ix], ...)
-               
-               if (verbose)
-                 print(Sys.time() - now)
-               
-               tum.count = vc$counts[, , 1]
-
-               if (is.null(dim(tum.count)))
-                 tum.count = cbind(tum.count)
-        
-               out = cbind(
-                 tum.count[cbind(match(maf$Tumor_Seq_Allele1[ix], rownames(tum.count)), 1:length(ix))],
-                 tum.count[cbind(match(maf$Reference_Allele[ix], rownames(tum.count)), 1:length(ix))]
-                 )
-
-               if (verbose)
-                 cat('Num rows:', nrow(out), '\n')
-                     
-               if (!is.null(norm.bam))
-                 {
-                   norm.count = vc$counts[, , 2]
-                   
-                   if (is.null(dim(norm.count)))
-                     norm.count = cbind(norm.count)
-                   
-                   out = cbind(out, 
-                     norm.count[cbind(match(maf$Tumor_Seq_Allele1[ix], rownames(norm.count)), 1:length(ix))],
-                     norm.count[cbind(match(maf$Reference_Allele[ix], rownames(norm.count)), 1:length(ix))]
-                     )
-                 }
-               return(out)               
-            }, mc.cores = mc.cores))
-
-    maf$alt.count.t = tmp[,1]
-    maf$ref.count.t = tmp[,2]
-    maf$alt.frac.t = maf$alt.count.t / (maf$alt.count.t + maf$ref.count.t)
-    maf$ref.frac.t = 1 - maf$alt.frac.t
-
-    if (!is.null(norm.bam))
-      {
-        maf$alt.count.n = tmp[,3]
-        maf$ref.count.n = tmp[,4]
-        maf$alt.frac.n = maf$alt.count.n / (maf$alt.count.n + maf$ref.count.n)
-        maf$ref.frac.n = 1 - maf$alt.frac.n
-      }
-
-    return(maf)
-  }
-
-#' hets
-#'
-#' generates allele fraction at all possible hets at sites specified by vcf (eg hapmap) input
-#' for tumor and normal
-#'
-#' @name hets
-#' @export
-hets = function(tum.bam, norm.bam = NULL, out.file, vcf.file = '/cga/meyerson/home/marcin/DB/dbSNP/hapmap_3.3.b37.vcf', chunk.size1 = 1e3, chunk.size2 = 1e2, mc.cores = 1, verbose = T, na.rm = TRUE, 
-  filt.norm = T ## if TRUE will remove any sites that have allele fraction 0 or 1 or NA in MAF 
-  )
-  {    
-      f = file(vcf.file, 'r')
-      if (grepl('VCF', readLines(f, 1)))
-          vcf = TRUE
-      else
-          vcf = FALSE
-
-      sl = hg_seqlengths()
-
-      if (verbose)
-          st = Sys.time()
-
-      nprocessed = 0
-      nhets = 0
-      first = T
-      ## get past headers
-      while (grepl('^#', last.line <<- readLines(f, n=1))){}
-
-      if (verbose)
-          cat('Opened vcf, writing hets to text file', out.file, '\n')
-
-      out.cols = c('seqnames', 'start', 'end', 'Tumor_Seq_Allele1', 'Reference_Allele', 'ref.count.t', 'alt.count.t', 'ref.count.n', 'alt.count.n', 'alt.frac.t', 'ref.frac.t', 'alt.frac.n', 'ref.frac.n')
-
-
-      if (vcf)
-          col.ix = 1:5
-      else
-          {
-              col.ix = match(c("Chromosome", "Start_position", "End_position", "Reference_Allele", "Tumor_Seq_Allele1", "Tumor_Seq_Allele2"), strsplit(last.line, '\t')[[1]])
-              if (any(is.na(col.ix)))
-                  stop('Error processing variant file: must be valid VCF or MAF')
-          }
-      
-      while (!is.null(tmp <- tryCatch(read.delim(file = f, as.is = T, header = F, nrows = chunk.size1)[, col.ix], error = function(x) NULL)))
-          {
-              if (vcf)
-                  names(tmp) = c('chr', 'start', 'name', 'ref', 'alt')
-              else
-                  {
-                      names(tmp) = c('chr', 'start', 'name', 'ref', 'alt', 'alt2')
-                      ## just in case the first tumor seq allele is equal to reference .. which happens in mafs
-                      tmp$alt = ifelse(tmp$alt==tmp$ref, tmp$alt2, tmp$alt)
-                  }
-              
-              loc = seg2gr(tmp, seqlengths = sl)    
-              clock({loc.count = mafcount(tum.bam, norm.bam, loc, indel = T, chunk.size = chunk.size2, mc.cores = mc.cores)})
-              nprocessed = nprocessed + length(loc.count)
-              
-              if (filt.norm & !is.null(loc.count$alt.frac.n))
-                  loc.count = loc.count[which(loc.count$alt.frac.n != 1 & loc.count$alt.frac.n != 0)]
-              
-              nhets = nhets + length(loc.count)
-              if (length(loc.count)>0)
-                  {
-                      df = as.data.frame(loc.count)
-                      if (na.rm) ## remove any entries with 0 ref or alt reads in tumor or normal
-                          {
-                              if (!is.null(norm.bam)) 
-                                  naix = apply(df[, c('alt.count.t', 'ref.count.t', 'alt.count.n', 'ref.count.n')], 1, function(x) all(is.na(x)))
-                              else
-                                  naix = apply(df[, c('alt.count.t', 'ref.count.t')], 1, function(x) all(is.na(x)))
-                              df = df[which(!naix), ]
-                          }
-                      out.cols = intersect(out.cols, names(df))
-                      if (first)
-                          {
-
-                              write.tab(df[, out.cols], out.file, append = F, col.names = T)
-                              first = F
-                          }
-                      else                      
-                          write.tab(df[, out.cols], out.file, append = T, col.names = F)
-                  }
-              
-              if (verbose)
-                  cat(sprintf('Processed %s sites, wrote %s candidate hets\n', nprocessed, nhets))
-              
-              if (verbose)
-                  {
-                      cat('Time elapsed:\n')
-                      print(Sys.time() - st)
-                  }              
-          }
-      
-      close(f)
-
-      if (verbose)
-          cat('Finished het processing wrote to file', out.file, '\n')
-  }
 
 
 #' @name clock
@@ -8719,7 +8479,7 @@ qstat = function(full = FALSE, numslots = TRUE, resources = full)
       tmp = readLines(p)
       if (resources) ## parse resources text
       {
-        resource.line = grepl('^\\s+', tmp)
+        resource.line = grepl('^    \\s+', tmp) ## this is a bit fragile since we are depending on the "resource lines" having more than 4 spaces
         lines = tmp[!resource.line]
         line.num = cumsum(!resource.line)
         rmap = cbind(
@@ -10172,11 +9932,55 @@ match.seq = function(query, subject, mc.cores = 1, verbose = FALSE, ...)
 }
 
 
-grok_vcf = function(x)
+#' @name grok_vcf
+#' @title grok_vcf
+#' @description
+#'
+#' Does additional processing of annotated vcf output and produces
+#' a more readable granges output.
+#' 
+#' @param x GRanges input 
+#' @export
+grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner = FALSE, verbose = FALSE)
 {
-    fn = c('allele', 'annotation', 'impact', 'gene', 'gene_id', 'feature_type', 'feature_id', 'transcript_type', 'rank', 'variant.c', 'variant.p', 'cdna_pos', 'cds_pos', 'protein_pos', 'distance')
-    out = suppressWarnings(read_vcf(x))
-    if (length(out)>0)
+  fn = c('allele', 'annotation', 'impact', 'gene', 'gene_id', 'feature_type', 'feature_id', 'transcript_type', 'rank', 'variant.c', 'variant.p', 'cdna_pos', 'cds_pos', 'protein_pos', 'distance')
+
+  if (is.character(x))
+    {
+      out = suppressWarnings(read_vcf(x))
+      if (is.na(label))
+        label = x
+    }
+  else
+    out = x
+
+  if (is.na(label))
+    label = ''
+
+  if (verbose)
+    message('Grokking vcf ', label)
+
+  if (!long)
+  {
+        vcf = out
+        if (length(vcf)>0)
+        {
+            vcf$eff = unstrsplit(vcf$ANN)
+            vcf$ref = as.character(vcf$REF)
+            vcf$alt = as.character(unstrsplit(vcf$ALT))
+            vcf$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', vcf$eff)
+            if (!keep.modifier)
+              vcf = vcf[!vcf$modifier]
+            vcf = vcf[, sapply(values(vcf), class) %in% c('factor', 'numeric', 'integer', 'logical', 'character')]
+            vcf$var.id = 1:length(vcf)
+            vcf$type = ifelse(nchar(vcf$ref)==nchar(vcf$alt), 'SNV', 
+                       ifelse(nchar(vcf$ref)<nchar(vcf$alt),
+                              'INS', 'DEL'))
+            vcf$label = label
+        }
+        return(vcf)
+  }
+  else if (length(out)>0)
     {
         out$REF = as.character(out$REF)
         out$ALT = as.character(unstrsplit(out$ALT))
@@ -10193,7 +9997,8 @@ grok_vcf = function(x)
         values(out2) = cbind(values(out2), meta)
         names(out2) = NULL
         out2$ANN = NULL
-        out2$oneliner = paste(
+        if (oneliner)
+          out2$oneliner = paste(
             ifelse(!is.na(out2$gene),
                    as.character(out2$gene),
                    as.character(out2$annotation)),
@@ -10205,6 +10010,2193 @@ grok_vcf = function(x)
 }
 
 
+#' multicoco
+#' 
+#' multi-scale coverage correction
+#' 
+#' Given gc and mappability coverage correction at k "nested" scales finds the coverage
+#' assignment at the finest scale that yields the best correction at every scale
+#' 
+#' FUN = is a function that takes in a data frame / granges with
+#' $reads and other covariate functions $gc, $map and outputs a vector of corrected read counts
+#' 
+#' cov is a constant with GRanges of coverage samples with (by default) fields $reads, $map, $gc 
+#' 
+#' base = is the multiple with which to perform "numlevs" additional scales of correction
+#' 
+#####################################
+multicoco = function(cov,
+    numlevs = 1, ## numbers of scales at which to correct
+    base = 100, ## scale multipler
+    fields = c("gc", "map"), # fields of gc which to use as covariates
+    iterative = TRUE,
+    presegment = TRUE, ## whether to presegment
+    min.segwidth = 5e6, ## when presegmenting, min seg width
+    mono = FALSE, ## just do single iteration at finest scale
+    verbose = T,
+    imageroot = NULL, ## optional file root to which to dump images of correction
+    FUN = NULL, ## function with which to correct coverage (by default loess correction modified from HMMcopy that takes in granges with fields $reads and other fields specified in "fields"
+    ..., ## additional args to FUN
+    mc.cores = 1)
+    {
+        require(Rcplex)
+        if (verbose)
+           cat('Converting to data.table\n')
+
+        WID = max(width(cov))
+        
+        cov.dt = as.data.table(as.data.frame(cov))
+        
+        sl = structure(as.numeric(1:length(seqlevels(cov))), names = seqlevels(cov))       
+
+        if (verbose)
+            cat('Grouping intervals\n')
+
+        ## compute level means
+        ## lev 0 = raw data
+        ## lev 1 = base-fold collapsed
+        ## lev 2 = base^2-fold collapsed
+        ## etc
+        parentmap= list() ## data.tables that map lev labels at level k  to parent lev labels
+        cov.dt[, lev0:=as.character(1:length(seqnames))]
+        for (k in 1:numlevs)
+            {
+                if (verbose)
+                    cat('Defining', base^k, 'fold collapsed ranges\n')
+                cov.dt[, eval(paste("lev", k, sep = '')) := as.character(sl[seqnames] + as.numeric(Rle(as.character(1:length(start)), rep(base^k, length(start)))[1:length(start)])/length(start)), by = seqnames]
+                parentmap[[k]] = data.table(parent = cov.dt[, get(paste("lev", k, sep = ''))], child = cov.dt[, get(paste("lev", k-1, sep = ''))], key = 'child')[!duplicated(child), ]
+            }
+
+        if (presegment) ## perform rough segmentation at highest level
+            {
+                sl = seqlengths(cov)
+                if (verbose)
+                    cat('Presegmenting at ', as.integer(WID*base^(numlevs)), ' bp scale \n')
+                require(DNAcopy)
+                tmp.cov = seg2gr(cov.dt[,list(chr = seqnames[1], start = min(start), end = max(end), strand = strand[1], reads = mean(reads, na.rm = T)), by = get(paste("lev", numlevs, sep = ''))], seqlengths = sl)
+                ix = which(!is.na(values(tmp.cov)[, 'reads']))
+                cna = CNA(log(values(tmp.cov)[, 'reads'])[ix], as.character(seqnames(tmp.cov))[ix], start(tmp.cov)[ix], data.type = 'logratio')
+                tmp = print(segment(smooth.CNA(cna), alpha = 1e-5, verbose = T))
+                tmp = tmp[!is.na(tmp$loc.start) & !is.na(tmp$chrom) & !is.na(tmp$loc.end), ]
+                seg = sort(seg2gr(tmp, seqlengths = sl))
+                seg = seg[width(seg)>min.segwidth] ## remove small segments
+                seg.dt = as.data.table(as.data.frame(seg))
+                seg = seg2gr(seg.dt[, list(seqnames = seqnames,
+                    start = ifelse(c(FALSE, seqnames[-length(seqnames)]==seqnames[-1]), c(1, start[-1]), 1),
+                    end = ifelse(c(seqnames[-length(seqnames)]==seqnames[-1], FALSE), c(start[-1]-1, Inf), seqlengths(seg)[seqnames]))], seqlengths = sl)
+                seg = gr.val(seg, tmp.cov, 'reads') ## populate with mean coverage
+                seg$reads = seg$reads/sum(as.numeric(seg$reads*width(seg))/sum(as.numeric(width(seg)))) ## normalize segs by weigthed mean (so these become a correction factor)
+            }
+        else
+            seg = NULL
+        
+        if (verbose)
+            cat('Aggregating coverage within levels \n')
+        
+        ## list of data frames showing scales of increasing collapse
+
+        cov.dt[, ix := 1:nrow(cov.dt)]
+        
+        cmd1 = paste('list(ix.start = ix[1], ix.end = ix[length(ix)], reads = mean(reads, na.rm = T),', paste(sapply(fields, function(f) sprintf("%s = mean(%s, na.rm = T)", f, f)), collapse = ','), ')', sep = '')
+        
+        cmd2 = paste('list(lab = lev0, reads,', paste(fields, collapse = ','), ', seqnames, start, end)', sep = '')
+
+        if (mono)
+            {
+                if (verbose)
+                    cat('Mono scale correction \n')
+                 grs = list(cov.dt[, eval(parse(text=cmd2))])
+                 numlevs = 1
+             }
+        else
+            {
+                grs = c( list(cov.dt[, eval(parse(text=cmd2))]),
+                    lapply(1:numlevs, function(x)
+                        {
+                            if (verbose)
+                                cat('Aggregating coverage in level', x,  '\n')
+                            out = cov.dt[, eval(parse(text=cmd1)), keyby = list(lab = get(paste('lev', x, sep = '')))]
+                            out[, ":="(seqnames = cov.dt$seqnames[ix.start], end = cov.dt$end[ix.start], start = cov.dt$start[ix.start])]
+                            out[, ":="(ix.start= NULL, ix.end = NULL)]
+                            return(out)
+                        }))
+            }
+        
+        setkey(grs[[1]], 'lab')
+                               
+        ## modified from HMMCopy to 
+        ## (1) take arbitrary set of covariates, specified by fields vector
+        ## (2) employ as input an optional preliminary (coarse) segmentation with which to adjust signal immediately prior to loess
+        ## NOTE: (this only impacts the loess fitting, does not impose any segmentation on thed ata)
+        ##
+        if (is.null(FUN))            
+            FUN = function(x, fields = fields, samplesize = 5e4, seg = NULL, ## seg is a Granges with meta data field $reads
+                verbose = T, doutlier = 0.001, routlier = 0.01)
+                {                    
+                    if (!all(fields %in% names(x)))
+                        stop(paste('Missing columns:', paste(fields[!(fields %in% names(x))], collapse = ',')))
+                    
+                    x$valid <- TRUE
+                    for (f in fields)
+                        {
+                            x$valid[is.na(x[, f])] = FALSE
+                            x$valid[which(is.infinite(x[, f]))] = FALSE
+                        }
+                   
+                    if (verbose)
+                        cat('Quantile filtering response and covariates\n')
+
+                    range <- quantile(x$reads[x$valid], prob = c(routlier, 1 - routlier), na.rm = TRUE)
+
+                    if (verbose)
+                        cat(sprintf("Response min quantile: %s max quantile: %s\n", round(range[1],2), round(range[2],2)))
+                    
+                    domains = lapply(fields, function(f) quantile(x[x$valid, f], prob = c(doutlier, 1 - doutlier), na.rm = TRUE))
+                    names(domains) = fields
+                    
+                    x$ideal <- x$valid
+                    x$ideal[x$reads<=range[1] | x$reads>range[2]] = FALSE
+                                        
+                    for (f in fields)
+                        x$ideal[x[, f] < domains[[f]][1] | x[, f] > domains[[f]][2]] = FALSE
+
+                    if (verbose)
+                        cat(sprintf('Nominated %s of %s data points for loess fitting\n', sum(x$ideal), nrow(x)))
+
+                    set <- which(x$ideal)
+
+                    if (length(set)<=10)
+                        {
+                            warning("Not enough samples for loess fitting - check to see if missing or truncated data?")
+                            return(x$reads)
+                        }
+                    
+                    for (f in fields)
+                        {                            
+                            if (verbose)
+                                message(sprintf("Correcting for %s bias...", f))
+                            
+                            select <- sample(set, min(length(set), samplesize))
+
+                            x2 = x[, c('reads', f)]
+                            x2$covariate = x2[, f]
+
+                            x2s = x2[select, ]
+                            
+                            if (!is.null(seg)) ## here we apply a prelmiinary segmentation to correct for large scale copy variation allow more power to reveal the covariate signal
+                                {
+                                    if (verbose)
+                                        message('Applying preliminary segmentation prior to loess fitting')
+                                    
+                                    x.grs = gr.val(seg2gr(x[select, ], seqlengths = NULL), seg, 'reads')
+                                    x2s$reads = x2s$reads/x.grs$reads
+                                }
+                            
+                            fit = loess(reads ~ covariate, data = x2s, span = 0.3)
+                            if (is.na(fit$s))
+                                {
+                                    warning("Using all points since initial loess failed")
+                                    fit = loess(reads ~ covariate, data = x2[select, ], span = 1)
+                                }
+
+                            tryCatch(
+                                {
+                                    if (!is.na(fit$s))
+                                        {
+                                            domain = domains[[f]]
+
+                                            yrange <- quantile(x2s$reads, prob = c(routlier, 1 - routlier), na.rm = TRUE)                                            
+                                            df = data.frame(covariate = seq(domain[1], domain[2], 0.001))
+       
+                                            if (!is.null(imageroot))
+                                                {
+                                                    out.pdf = paste(imageroot, ifelse(grepl("/$", imageroot), '', '.'), f,'_correction.pdf', sep = '')
+                                                    if (verbose) {
+                                                        cat("Dumping figure to", out.pdf, "\n")
+                                                    }
+
+                                                    pdf(out.pdf, height = 6, width = 6) 
+                                                    plot(x2s$covariate, x2s$reads, col = alpha('black', 0.1), pch = 19, cex = 0.4, xlim = domain, ylim = yrange, ylab = sprintf('signal before %s correction', f), xlab = f);
+                                                    lines(df$covariate, predict(fit, df), col = 'red', lwd = 2)
+                                                    dev.off()
+                                                }                               
+                                            x$reads = x2$reads/predict(fit, x2) ## apply correction
+                                        }
+                                    else
+                                        print("Loess failed, yielding NA loess object, continuing without transforming data")
+                                }, error = function(e) print("Unspecified loess or figure output error"))
+                        }
+                    return(x$reads)
+                }
+
+        if (verbose)
+            cat('Correcting coverage at individual scales\n')
+        
+        ## level 1,2, ..., k corrections
+        ## these are the computed corrected values that will be input into the objective function
+
+        if (iterative) ## iteratively correct
+            {
+                correction = NULL
+                for (i in rev(1:length(grs)))
+                    {
+                        cat('Correcting coverage at ', WID*base^(i-1), 'bp scale, with', nrow(grs[[i]]), 'intervals\n')
+                        if (i != length(grs))                            
+                            grs[[i]]$reads = grs[[i]]$reads/correction[parentmap[[i]][grs[[i]]$lab, parent], cor]
+
+                        if (WID*base^(i-1) > 1e5) ## for very large intervals do not quantile trim, only remove NA
+                            grs[[i]]$reads.corrected = FUN(as.data.frame(grs[[i]]), fields, doutlier = 0, seg = seg)
+                        else
+                            grs[[i]]$reads.corrected = FUN(as.data.frame(grs[[i]]), fields, seg = seg);  
+
+
+                        if (is.null(correction))
+                            correction = data.table(lab = grs[[i]]$lab, cor = grs[[i]]$reads / grs[[i]]$reads.corrected, key = 'lab')
+                        else
+                            {
+                                ## multiply new correction and old correction
+                                old.cor = correction[parentmap[[i]][grs[[i]]$lab, parent], cor]
+                                new.cor = grs[[i]]$reads / grs[[i]]$reads.corrected                                     
+                                correction = data.table(lab = grs[[i]]$lab,  cor = old.cor * new.cor, key = 'lab') ## relabel with new nodes
+                            }                        
+                    }
+
+                cov.dt$reads.corrected = grs[[1]][cov.dt$lev0, ]$reads.corrected
+                rm(grs)
+                gc()
+#                cov.dt[, reads.corrected := grs[[1]][lev0, reads.corrected]]
+            }
+        else ## parallel mode
+            {
+
+                ## compute marginal values / ratios for reads and covariates
+                if (verbose)
+                    cat('Computing marginal values of read coverage and covariates\n')
+                
+                ## now compute marginal ratio relative next-level mean for all levels except for top level
+                for (k in 1:numlevs)
+                    {
+                        if (verbose)
+                            cat('Defining marginal coverage for', base^k, 'fold collapsed ranges\n')
+                        ix = parentmap[[k]][grs[[k]]$lab, parent]
+                        grs[[k]]$reads = grs[[k]]$reads / grs[[k+1]][ix, reads]
+                        print('fucken bitch yeah yeah')
+
+                        for (f in fields)                    
+                            grs[[k]][, eval(parse(text = sprintf("%s := grs[[k]]$%s / grs[[k+1]][ix, %s]",f, f, f)))]
+                    }
+                                                
+                grs = mclapply(grs, function(x) {
+                    if (verbose)
+                        cat('Correcting coverage at ', base^(k-1), 'fold collapse, with', nrow(grs[[k]]), 'intervals\n')
+                    x$cor = FUN(as.data.frame(x), fields);
+                    return(x)
+                }, mc.cores = mc.cores)
+                
+                gc()
+                
+                for (k in 1:length(grs))
+                    {
+                        cov.dt[, eval(paste('cor', k-1, sep = '')) := as.numeric(NA)]
+                        cov.dt[, eval(paste('cor', k-1, sep = ''))] = grs[[k]][cov.dt[, get(paste('lev', k-1, sep = ''))], ]$cor
+                    }
+                
+                ulev = unique(cov.dt[, get(paste('lev', numlevs, sep = ''))])
+                
+                cov.dt$lid = factor(cov.dt[, get(paste('lev', numlevs, sep = ''))])
+                cov.dt[, gid := 1:length(start)]                
+                cov.dt[, eval(parse(text = paste("reads.corrected := ", paste('cor', 0:numlevs, sep = '', collapse = "*"))))]
+                
+                ##        out = rbindlist(mclapply(ulev, function(x) .optimize_subtree(cov.dt[get(paste('lev', numlevs,sep = '')) == x], numlevs), mc.cores = mc.cores))                
+                ## .optimize_subtree = function(this.chunk, numlevs)   {
+                ##     browser()
+                ##     this.chunk.og = this.chunk
+                ##     this.chunk.og[, reads.corrected := NA] 
+                ##     this.chunk.og$id = as.character(1:nrow(this.chunk.og))
+                ##     setkey(this.chunk.og, 'id')
+                ##     this.chunk = this.chunk.og[!is.na(cor0), ]
+
+                ##     if (verbose)                
+                ##         cat('chunk', as.integer(this.chunk.og$lid)[1], 'of', length(levels(this.chunk.og$lid)), '\n')
+                    
+                    
+                ##     if (nrow(this.chunk)>0)
+                ##         {
+                ##             y_lev = rbindlist(
+                ##                 c(lapply(0:(numlevs-1), function(x) this.chunk[, list(lev = x, cor = get(paste('cor', x, sep = ''))[1], parent_lab = get(paste('lev', x+1, sep = ''))[1]), by = list(lab = get(paste('lev', x, sep = '')))]), list(this.chunk[, list(lev = numlevs, cor = get(paste('cor', numlevs, sep = ''))[1], parent_lab = NA), by = list(lab = get(paste('lev', numlevs, sep = '')))])))
+
+                ##                         #                    y_lev = y_lev[!is.na(cor), ]
+                            
+                ##             ## build tree structure of rows of y_lev i.e. the variables in our optimization
+                ##             ## map nodes to their parents 
+                ##             y_lev[, parent.ix := match(paste(lev+1, parent_lab), paste(lev, lab))]
+                ##             y_lev[, id := 1:length(parent.ix)]
+
+                ##             if (any(!is.na(y_lev$parent.ix)))
+                ##                 {
+                ##                     ## make constraints matrix - one constraint per unique parent
+                ##                     ##
+                ##                     ## this defines parents in terms of their children (mean function)
+                ##                     A = y_lev[!is.na(parent.ix), sparseMatrix(as.integer(factor(c(parent.ix, parent.ix))), c(parent.ix, id), x = c(rep(-1, length(parent.ix)), rep(1, length(id))))]
+                ##                     A = cBind(A, A*0) ## add room for residual variables
+                ##                     Arhs = rep(0, nrow(A)) ## right hand side of A is 0
+
+                ##                     ## residual constraints relate nodes, their parents and the fits contained in the "cor" columns
+                ##                     ## if q_ki is the fit for the ith node in the kth level
+                ##                     ## then x_ki - q_ki*x_p(ki) + r_ki = 0
+
+                ##                     ## this encodes basic residual matrix whose rows have the form:  x_ki - q_ki*x_p(ki) = residual
+                ##                     ## except for the top level, which is a single parentless node, and has the form:  x_ki - q_ki = residual
+                ##                     ##
+                ##                     ## the variables are indexed 1:nrow(y_lev), and the residuals are the next nrow(y_lev) indices
+                ##                     R = sparseMatrix(rep(1:nrow(y_lev),2), c(1:nrow(y_lev), nrow(y_lev) + 1:nrow(y_lev)), x = rep(c(1,-1), each = nrow(y_lev)))
+                ##                     rownames(R) = as.character(y_lev$id)
+                ##                     R[y_lev[!is.na(parent.ix), cbind(id, parent.ix)]] = -y_lev[!is.na(parent.ix), cor]
+                ##                     Rrhs = y_lev[, ifelse(is.na(parent.ix), cor, 0)]
+                ##                     R = R[!is.na(y_lev$cor), ]
+                ##                     Rrhs = Rrhs[!is.na(y_lev$cor)]
+                                    
+                ##                     ## make objective function
+                ##                     ##
+                ##                     ## problem:
+                ##                     ## find x, r minimizing ||r||
+                ##                     ##
+                ##                     ## Ax = 0 (encodes node-parent relationships where parent = mean(children)
+                ##                     ## x_ki - q_ki*x_p(ki) - r_ki = 0 (for k<numlevs)
+                ##                     ## x_ki - r_ki = q_ki (for k = numlevs, a single node)
+                ##                     ## 
+                ##                     y_lev[, obj.weight := 1/length(id), by = lev]
+
+                ##                     Q = diag(c(y_lev$obj.weight*0, 1 + 0*y_lev$obj.weight)) ## only put 1 weights on the matrix entries corresponding to the residual
+
+                ##                     vtype = rep('C', ncol(A)) ## all variables are continuous
+                ##                     sense = rep('E', nrow(A) + nrow(R)) ## all constraints specify equality
+                ##                     tilim = 10;
+                ##                     cvec = rep(0, ncol(A)) ## all variables are continuous
+
+                ##                     ## now we need to encode the sum relationships between x0 etc.
+                ##                     sol = Rcplex(cvec = cvec, Amat = rBind(A, R), bvec = c(Arhs, Rrhs), sense = sense, Qmat = Q, lb = rep(c(0, -Inf), each = nrow(y_lev)), ub = Inf, n = 1, objsense = "min", vtype = vtype, control = list(tilim = tilim))
+                ##                     y_lev$opt = sol$xopt[1:nrow(y_lev)]
+                ##                     setkey(this.chunk, 'lev0')
+                ##                     this.chunk[y_lev[lev==0, lab], reads.corrected := y_lev[lev == 0, ]$opt]
+                ##                     this.chunk[, reads.corrected := y_lev[lev == 0, ]$opt]
+                ##                     this.chunk.og$reads.corrected = this.chunk[this.chunk.og$id, ]$reads.corrected
+                ##                 }
+                ##         }            
+                ##     return(this.chunk.og)
+                ## }
+            }
+        
+        if (verbose)
+            cat('Converting to GRanges\n')
+
+        gc()
+        
+        out = seg2gr(as.data.frame(cov.dt), seqlengths = seqlengths(cov))
+
+        if (verbose)
+            cat('Made GRanges\n')
+        
+        gc()
+        return(out)
+    }
+
+
+
+#' @name print_eq
+#' @title print_eq
+#' @descriptino
+#' Prints and formats equations Ax = b in matrix Ab whose last column is the vector B
+#'
+#' @export
+print_eq = function(Ab, xlabels = NULL)
+  {
+    Ab = as.matrix(Ab)
+        
+    A = Ab[, -ncol(Ab), drop = F]
+    b = Ab[, ncol(Ab)]
+    
+    if (!is.null(xlabels))
+      colnames(A) = xlabels
+    else if (is.null(colnames(A)))
+      colnames(A) = paste('x', 1:ncol(A), sep = '')
+    else if (length(ix <- which(nchar(colnames(A)) == 0)) != 0)
+      colnames(A)[ix] = paste('x', ix, sep = '')
+       
+    cat('', paste(sapply(1:nrow(A), function(x,y)
+                        {
+                          ix = which(A[x, ]!=0)
+                          if (length(ix)>0)
+                            paste(signif(as.numeric(A[x, ix]),2), y[ix], sep = ' ', collapse = ' +\t')
+                          else
+                            '0'
+                        },
+                        colnames(A)), '\t=', b, '\n'))
+  }
+
+
+
+#' @name gr2json
+#' @title gr2json
+#'
+#' @description
+#' 
+#' Dumps GRanges into JSON with metadata features as data points in  "intervals"
+#'
+#'
+#'
+#' @param GRange input granges object
+#' @param file output json file
+#' @author Marcin Imielinski
+gr2json = function(intervals, file, y = rep("null", length(intervals)), labels = '', maxcn = 100, maxweight = 100)
+{    
+
+    #' ++ = RL
+    #' +- = RR
+    #' -+ = LL
+    qw = function(x) paste0('"', x, '"')
+
+    ymin = 0;
+    ymax = maxcn;
+    
+    nodes = intervals
+    id = rep(1:length(nodes), 2)
+
+    node.dt = data.table(
+        iid = 1:length(nodes),
+        chromosome = qw(as.character(seqnames(nodes))),
+        startPoint = as.character(start(nodes)),
+        strand = as.character(strand(nodes)),
+        endPoint = as.character(end(nodes)),
+        y = y, 
+        title = labels)
+
+    oth.cols = setdiff(names(values(nodes)), colnames(node.dt))
+    node.dt = as.data.table(cbind(node.dt, values(nodes)[, oth.cols]))
+
+    oth.cols = union('type', oth.cols)
+    if (is.null(node.dt$type))
+        node.dt$type = 'interval'
+    
+    intervals.json = node.dt[, paste0(
+        c("intervals: [", paste(
+                              "\t{",
+                              "iid: ", iid,
+                              ", chromosome: ", chromosome,
+                              ", startPoint: ", startPoint,
+                              ", endPoint: ", endPoint,
+                              ", y: ", y,
+                              ", title: ", qw(title),
+                               ", strand: ", qw(strand),
+                              eval(parse(text = ## yes R code making R code making JSON .. sorry .. adding additional columns
+                                             paste0("paste0(",
+                                                    paste0('", ', oth.cols, ':", qw(', oth.cols, ')', collapse = ','),
+                                                    ")", collapse = ''))),                                  
+                              "}",                              
+                              sep = "",
+                              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
+
+    meta.json =
+        paste('meta: {\n\t',
+              paste(
+                  c(paste('"ymin:"', ymin),
+                  paste('"ymax:"', ymax)),
+                  collapse = ',\n\t'),
+              '\n}')
+
+    out = paste(c("var json = {",
+                  paste(
+                      c(meta.json,
+                        intervals.json          
+                        ),
+                      collapse = ',\n'
+                  ),"}"),                                                          
+                sep = "")
+
+    writeLines(out, file)
+}
+
+
+
+##################################
+#' segment
+#' 
+#' Wrapper around cumSeg to segment numeric data in an input GRanges with signal meta data field (e.g. $signal)
+#' Returns a GRAnges of piecewise constant regions with their associated value
+#' 
+##################################
+cumseg = function(gr, field = 'signal', log = T, type = 'bic', alg = 'stepwise', S = 1, verbose = F, mc.cores = 1, ...)
+  {
+    require(cumSeg)
+
+    if (!(field %in% names(values(gr))))
+      stop(sprintf('Field "%s" not a meta data columnin the input GRanges', field))
+
+    if (log)
+      values(gr)[, field] = log(values(gr)[, field])
+
+    good.ix = !(is.infinite(values(gr)[, field]) | values(gr)[, field]==0)
+    good.ix[is.na(values(gr)[, field])] = F
+    gr = gr[good.ix]
+
+    if (length(gr) == 0)
+      return(gr[c(), field])
+    
+    args = list(...)
+
+    if (!("sel.control" %in% names(args)))
+      args$sel.control = sel.control(type = 'bic', alg = alg, S = S)
+            
+    grl = split(gr, as.character(seqnames(gr)))
+    
+    out = do.call('c', mclapply(names(grl), function(chr)
+      {
+        if (verbose)
+          cat('Starting ', chr, '\n')
+        this.gr = grl[[chr]]
+
+        if (length(this.gr)<=1)
+          return(si2gr(this.gr)[chr])
+        
+        tmp = do.call(jumpoints, c(list(values(this.gr)[, field], start(this.gr)), args))
+        out = GRanges(chr, IRanges(c(1, tmp$psi), c(tmp$psi, seqlengths(this.gr)[[chr]])), seqlengths = seqlengths(this.gr))
+        values(out)[, field] = NA
+        values(out)[, field] = tmp$est.means
+        
+        if (verbose)
+          cat('\t... generated ', length(out), ' segs\n')
+        
+        return(out)
+      }, mc.cores = mc.cores))
+
+    if (log)
+      values(out)[, field] = exp(values(out)[, field])
+
+    return(out)        
+  }
+
+
+
+############################
+#' pp2gb
+#' 
+#' converts purity / ploidy to gamma / beta (or reverse)
+#' 
+#' takes in gr with signal field "field"
+#'
+#' @param purity value between 0 and 1
+#' @param ploidy value nonnegative
+#' @param mu vector of n segment averages
+#' @param w vector of n segment widths 
+#' @param gamma non-negative value
+#' @param beta non-negative value
+#' @return
+#' list with purity / ploidy / gamma / beta entries
+#' @export
+############################
+pp2gb = function(purity = NA, ploidy = NA, mu = NA, w = NA, gamma = NA, beta = NA)
+{                
+    if (all(is.na(mu)) & all(is.na(w)))
+        stop('mu and w should be non-empty')
+    
+    if (length(mu) != length(w))
+        stop('mu and w should match up in length')
+
+    w = as.numeric(w)
+    mu[is.infinite(mu)] = NA
+    w[is.na(mu)] = NA
+    sw = sum(w, na.rm = T)
+    mutl = sum(mu * w, na.rm = T)                
+    ncn = rep(2, length(mu))
+    ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2                
+    
+    if (is.na(gamma) & is.na(beta) & !is.na(purity) & !is.na(ploidy))
+    {
+        gamma = 2*(1-purity)/purity
+        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
+    }
+    else if (!is.na(gamma) & !is.na(beta) & is.na(purity) & is.na(ploidy))
+    {
+        purity = 2/(gamma+2)
+        v = beta * mu - ncn * gamma / 2
+        ploidy = sum(v*w, na.rm = TRUE)/sum(w, na.rm = TRUE)
+    }
+    else
+        stop('Either gamma and beta are empty OR purity and ploidy are empty')
+    return(list(purity = purity, ploidy = ploidy, gamma = gamma, beta = beta))
+}
+
+
+
+
+
+#' @name karyoSim
+#' @title karyoSim
+#' @description
+#' 
+#' Simulate (random) evolution of rearrangements according to input junctions, which are provided as a GRangesList, and
+#' grouped into "events" by events list (list of numeric vectors or of lists of numeric vectors indexing "junctions")
+#' 
+#' Goal of the simulation is to instantiate a collection of junctions (+/- approach some copy number profile)
+#' through a sequence of rearrangements and whole-chromosome copy changes
+#' 
+#' Junctions are sequences of signed reference intervals that are contiguous on the
+#' on the tumor genome (usually pairs)
+#' 
+#' Each event consists of either
+#' (1) a "quasi reciprocal sequence" (QRS) of junctions, implemented during a single "cell cycle", and are specified by vectors of junction indices,
+##    where no indices are repeated (save the last and first, which specifies a cycle)
+#' (2) a set of sets of junctions, specified as a list of list of junction indices, again without repetition, corresponding to complex events
+#'     spanning multiple QRS's or "cell cycles" e.g. a BFB, which involve a replication step in between each QRS.  The subsequent QRS's
+#'     (attempted to be) instantiated in cis to the last item in the previous QRS
+#' (3) a GRanges object specifying a reference locus and meta data field $type = "loss" or "gain" specifying one or more pieces of reference genome that should
+#'     be lost or gained at a given step.
+#' 
+#' - Events are interpreted as strings of one or more "quasi reciprocal sequence" (QRS) of junctions
+#'   which may be closed / cyclic (if they begin and end with the same junction index) or open. in which case they will result
+#'   in at least some interval loss.  We restrict QRS's to contain at most one repeated junction, and this has to be the first
+#'   and the last item in the sequence.  "Quasi" reciprocal means that we allow some sequence to be lost or gained in between breaks.
+#' - Every QRS is instantiated in the current genome, by mapping junctions, which are specified in haploid reference
+#'   coordinates to intervals on the current genome.  By default, instantiation is chosen so that the source interval of 
+#'   every junction in the QRS is on the same chromosome as the target interval on the previous junction in the QRS.  If this is the
+#'   case, then we say that the current junction  "follows" the previous one in this WQRS instantiation.  Quasi-reciprocality is then applied
+#'   by possibly adding intervals at the site of a break (i.e. if the target interval of the previous junction is upstream of the
+#'   source interval of the next junction).   In situations where an instance of a subsequent junction cannot be found to followthe current
+#'   junction, then the chain is either (1) interpreted as "broken", i.e. equiv to an unbalanced rearrangement (if strict.chain = F or (2)
+#'   the event is discarded (if strict.chain = T)
+#' - Junctions / events can have many possible instantiations at a given round of evolution.
+#'   This is because a given haploid interval on the reference can be associated with many loci on the tumor chromosome
+#'   (in the simplest case, two homologues of the same chromosome)
+#'   By default, the following preferences are exercised for choosing junction instantiations:
+#'   (1) if a chromosome strand can be found that contains all the intervals in the junction (2) a chromosome whose both strands
+#'   contain all the intervals in the junction (3) a set of chromosome that instantiates the event as a chain of junctions
+#'   these prefereences can be over-ridden by specifying instant.local and instant.chain flags
+#' - After every cycle we do a "clean up" which involves (1) rejoining any pairs of broken ends that were partners at the previous
+#'   iteration (2) removing any fragments that lack a telomere (if req.tel = T) or lack other req.gr (3) replacing reverse complements
+#'   of chromosomes from previous iteration that were rearranged in the previous iteration with the reverse complements of their alteration
+#'   products in the current iteration.
+#' - Every junction is implemented <exactly once> during the evolutionary history, i.e. lightning does not strike twice, infinite
+#'   sites model
+#'   
+#' p.chrom = prob of chrom event at each simulation step
+#' p.chromloss = probability of chromosomal loss | chrom event (default 0.5)
+#' p.chromgain = probability of chromosomal gain | chrom event (default 0.5)
+#' lambda.chrom = poisson lambda of number of different chromosomes gained or lost at a chromosomal event
+#' lambda.chromgain = poisson lambda of number of chromosomes gained at each "gain" event (default lambda.chrom)
+#' labmda.chromloss = poisson lambda of number of chromosomes lostd at each "loss" event (default lambda.chrom)
+#' 
+#' p.wgd = prob of whole genome doubling at each simulation step
+#' 
+#' Optionally can provide a copy profile cn.profile (GRanges tiling genome with $cn meta data field) and heuristic will be applied
+#' to attempt to "evolve" the simulation towards the observed copy profile (to be implemented)
+#' 
+#' Output is provided as
+#' - (if full = F) list with fields
+#'                 $chroms = Named GRangesList of final tumor chromosomes in terms of reference intervals
+#'                 $gChain = gChain mapping reference to tumor genome
+#'                 $cn = gRanges in reference genome of copy counts of reference intervals
+#'                 $events = data frame of event indices with field $id (for event id), $desc (see below for description)
+#' - (if full = T) List of lists, each item k corresponding to each stage k of evolution and 
+#'                 containing the following fields:
+#'                 $chroms = Named GRangesList of tumor chromosomes at that stage in terms of reference intervals
+#'                 $gChain = gChain mapping reference to current genome k
+#'                 $gChain.last = gChain mapping last evolution step to current (from reference in first item of history)
+#'                 $cn = gRanges in reference genome of copy counts of reference intervals
+#'                 $event = list with $id, $desc that gives the id and description of event
+#'                          for chromosomal loss / gain $id = 'chromgain', or 'chromloss', $desc = indices chromosomes
+#'                          for ra event, $id event id, desc = junctions involved
+#' 
+########################################
+karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: currently only allows "simple junctions", i.e. locus pairs, eventually will
+                               # allow multi (i.e. two or more) range pairs
+  events = NULL, # list of integer vectors or lists of integer vetcors corresponding to "events", list item can be GRanges with meta data field $type
+                 # with values "loss" or "gain"
+  p.chrom = 0, ## probability of chromosomal event at each time step
+  p.wgd = 0,  ## conditional prob of wgd given chromosomal event
+  p.chromgain = 0.5, ## conditional probability of chromosome gain given not WGD, chromosomal event
+  cn = NULL, ## GRanges with 'cn' property
+  req.gr = NULL, ## GRanges that every chromosome needs to overlap in order to make it to the next evolution time step
+                  ## e.g. centromeres
+  req.tel = TRUE, ## logical flag whether to require every chromosome to have telomeres at both ends at every evolution time step
+  neo.tel = NULL, ## GRanges specifying intervals that qualify as neo-telomeres, these will only be applied if req.tel = TRUE
+  haploid = T, ## tells us whether input genome is haploid, in which case we will begin the simulation with a "genome doubling"
+  local.junction = T, ## if T, we prefer to instantiate intervals of a junction "locally" on the same chromosome,
+                     # if F we allow all instantiations to be equally likely
+  local.qrs = T, ## if T, we prefer QRS instantiations that operate on a single chromosome, if F then all are equally good
+                 ## by "prefer", we mean that we score each instantiation, and then choose the best scoring (or "a best", if there
+                 ## are ties)
+  force.event = T, ## if T, will attempt to implement QRS / event even if QRS can only be instantiated partially or in fragments
+  lambda.chrom = 0, lambda.chromgain = lambda.chrom, lambda.chromloss = lambda.chrom,
+  full = F, ## full output?
+  random.event = T, ## if not random.event, then provided event order will be followed, and blank events will trigger a (random) chromosomal event
+  precedence = NULL, ## length(events) x length(events) binary matrix of DAG entries ij representing whether event i occurs before event j
+  dist = 1000, ## distance at which to allow deletion breaks
+  verbose = T,
+  ... # other optional input to chromoplexy()  
+  )
+  {                  
+    kag = karyograph(junctions)
+    
+    ## check events to make sure kosher
+      
+    if (!all(sapply(1:length(events), function(x) {
+      if (is(events[[x]], 'GRanges'))
+        {
+          ev = events[[x]]
+          if (is.null(values(ev)$type))
+            stop('GRanges specifying copy number events must have $type field set to "gain" or "loss"')
+          else if (any(!(values(ev)$type %in% c('gain', 'loss'))))
+            stop('GRanges specifying copy number events must have $type field set to "gain" or "loss"')
+          else
+            T
+        }      
+      else if (is(events[[x]], 'vector'))
+        {
+          ev = as.numeric(events[[x]])
+          if (any(!(abs(ev) %in% 1:length(junctions))))
+            stop(sprintf('Event %s has junction index out of bounds', x))
+          else
+            T
+        }
+      else if (is.list(events[[x]]))
+        all(sapply(1:length(events[[x]], function(y)
+               {
+                 ev = events[[x]][[y]]
+                 if (any(!abs(ev)) %in% 1:length(junctions))
+                   stop(sprintf('Event %s, subevent %s has junction index out of bounds', x, y))
+                 else
+                   T
+               })))
+    })))
+      stop('Some events are of the wrong type')
+                         
+    ## junctions in terms of graph nodes
+    junctions.kg = kag$ab.edges[, c(1:2), ]
+        
+    if (is.null(events))
+      {
+        pc = chromoplexy(kag, dist = dist, ...)
+        events = c(pc$paths, lapply(pc$cycles, function(x) c(x, x[1])))
+        singletons = setdiff(1:nrow(kag$ab.edges), unlist(events)) ## all events that are not part of a path or cycle
+        if (length(singletons)>0)
+          events = c(events, split(singletons, 1:length(singletons)))
+      }
+    
+    ## this helps us keep track of how many junctions we have accounted for
+    ## while choosing events
+    cn.event = sapply(events, is, 'GRanges')    
+    event2junction = sparseMatrix(i = 1, j = 1, x = 0, dims = c(length(events), nrow(junctions.kg)))
+    if (any(!cn.event))
+        {        
+          ix = cbind(unlist(mapply(function(x,y) rep(x, y), which(!cn.event), sapply(events[!cn.event], length))), unlist(events[!cn.event]))
+          ix = ix[!duplicated(ix), ]
+          event2junction[ix] = 1
+        }
+    
+    ## events are "done" if we have already used a junction / ra that belongs to that event
+    done.events = rep(F, nrow(event2junction))
+    done.junctions = rep(F, ncol(event2junction))
+    k = 0 ## evolution time step
+    
+    #### some local utility functions
+    ####
+    ####
+    
+    ## makes list mapping reference signed intervals to chromosomal interval coordinates
+    .rid2cid = function(intervals)
+      {
+        out = split(c(1:nrow(intervals), -(1:nrow(intervals))), c(intervals[, '+'], intervals[, '-']))
+        out = out[1:max(c(intervals[, '+'], intervals[, '-']))]
+        return(out)
+      }
+    
+    ## updates state with chrom gain or loss
+    .chrom_change = function(state, gain = NULL, loss = NULL)
+      {
+        if (is.null(gain))
+          gain = c()
+
+        if (is.null(loss))
+          loss = c()
+        
+        keep = !(state$intervals[, 'i'] %in% loss)
+        gain = state$intervals[, 'i'] %in% gain;
+
+        gain.intervals = state$intervals[gain, , drop = F]
+        gain.intervals[, 'i'] = gain.intervals[, 'i'] + 0.01 ## give these new intervals a unique new chrom name
+
+        ## conatenate and rename
+        tmp.intervals = rbind(state$intervals[keep, ], gain.intervals)        
+        tmp.intervals = .munlist(lapply(split(1:nrow(tmp.intervals), tmp.intervals[,'i']), function(x) tmp.intervals[x, 3:ncol(tmp.intervals), drop = F]))
+        
+        out = list(
+          intervals = tmp.intervals,
+          rid2cid = .rid2cid(tmp.intervals),
+          cid2prev = c(which(keep), which(gain))
+          )
+        
+        return(out)
+      }
+
+    ## unlists and cbinds matrices (if dim = 2) or rbinds matrices (if dim = 1)
+    ## whose first column specifies the list item index of the entry
+    ## and second column specifies the sublist item index of the entry
+    ## and the remaining columns specifies the value(s) of the vector
+    ## or matrices.
+    .munlist = function(x, dim = 1)
+      {
+        if (dim == 2)
+          return(t(rbind(i = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
+                         j = unlist(lapply(1:length(x), function(y) 1:ncol(x[[y]]))),
+                         do.call('cbind', x))))
+        else
+          return(cbind(i = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
+                       j = unlist(lapply(1:length(x), function(y) 1:nrow(x[[y]]))),
+                       do.call('rbind', x)))
+      }
+    
+    
+    ## takes k vectors of length n_1 , ... , n_k and outputs a matrix
+    ## of dimension (n_1 x ... x n_k) x k representing their cartesian product
+    .cartprod = function(...)
+      {
+        vecs = list(...)
+        if (length(vecs)==0)
+          return(NULL)
+        out = matrix(vecs[[1]], ncol = 1)
+        if (length(vecs)==1)
+          return(out)
+        if (length(vecs)>1)
+          for (i in 2:length(vecs))
+            {
+              y = vecs[[i]]
+              ix = cbind(rep(1:nrow(out), length(y)), rep(1:length(y), each = nrow(out)))
+              out = cbind(out[ix[,1], ], y[ix[,2]])
+            }
+        return(out)
+      }
+        
+    ## main data structure to keep track of current state of chromosomal evolution
+    current.state = list(
+      intervals = list(),     ## matrix of n signed reference intervals on k chromosomes of current reference genome
+                              ## "i" maps current chromosome, and "j" maps position in that chromosome
+                              ## '+' col has rids on positive strand and '-' rids on negative strand of current genome
+      rid2cid = list(), ## list mapping reference interval ids to signed current ids 
+      cid2prev = c()   ## vector mapping current ids (cids) to signed cids of previous genome (prev)
+      )
+    
+    ix = order(as.character(seqnames(kag$tile)), as.character(strand(kag$tile)))
+    ix.pos = ix[which(as.logical( strand(kag$tile)[ix]=='+'))]
+    ix.neg = ix[which(as.logical( strand(kag$tile)[ix]=='-'))]      
+    current.state$intervals = .munlist(mapply(function(x, y) cbind("+"=x, "-"=y),
+      split(ix.pos, as.character(seqnames(kag$tile)[ix.pos])),
+      split(ix.neg, as.character(seqnames(kag$tile)[ix.neg]))))      
+    current.state$rid2cid = .rid2cid(current.state$intervals)
+    current.state$cid2prev = 1:nrow(current.state$intervals)
+    
+    ## map reference intervals to their rev comp
+    int2rc = suppressWarnings(match(kag$tile, gr.flipstrand(kag$tile)))
+
+    ## keep track of telomeric reference intervals (todo: specify centromeric intervals as input or other customizable characteristics
+    ## that will specify chromosomes that are kept from timepoint to timepoint in the simulation)    
+    is.tel = kag$tile$is.tel
+    
+    if (!is.null(neo.tel))
+      is.tel = is.tel || gr.in(kag$tile, gr.stripstrand(neo.tel))
+    
+    if (!is.null(req.gr))
+      is.req = gr.in(kag$tile, gr.stripstrand(req.gr))
+    
+    ## if we are in haploid land, first step is a "whole genome doubling" that will give us homologues   
+    if (haploid)
+      current.state = .chrom_change(current.state, gain = unique(current.state$intervals[, 'i']))
+
+
+    ## history is a list of current.states
+    history = list()
+    
+    step = 0;  ## step in evolution
+    
+#'    done.events = rowSums(event2junction)==0
+    done.events = rep(F, length(events))
+    done.this.round = rep(F, length(done.events)) ## also keep track of events that have been done this round
+    
+    while (!all(done.events | done.this.round)) ## only finish when we have done all events or at least tried them once in this round
+      {
+        if (verbose)
+          cat(sprintf('Evolution step %s\n', step))
+            
+        history = c(history, list(current.state))
+        step = step +1
+        
+        ## rearrangement event triggered either randomly based on p.chrom
+        ## or non-randomly if our event[[step]] is non empty
+
+        if (random.event)
+          k = sample(which(!done.events), 1)
+        else
+          k = step
+
+        force.cn = is(events[[k]], 'GRanges')
+                
+        ## if random.event = F and event is empty, then will trigger (random) chromosomal loss / gain (see else statement below)
+        if (!force.cn & runif(1)>=p.chrom)
+          {
+            if (verbose)
+              cat(sprintf('trying event %s: %s\n', k, sapply(done.events, function(x) paste('(', x, ')', collapse = ', '), collapse = ', ')))
+            
+            done.this.round[k] = T
+            done.events = done.events | rowSums(event2junction[, events[[k]], drop = FALSE])!=0
+            last.qrs = NULL ## will store last.qrs in current coordinates if we have a multi-qrs event
+            
+            this.event = events[[k]]
+            
+            if (!is.list(this.event))
+              this.event = list(this.event)
+
+            qrs.i = 0
+            abort = F
+            while (qrs.i < length(this.event) & !abort) ## iterate through qrs's in this event
+              {
+                if (verbose)
+                  cat(sprintf('QRS %s of event %s\n', k, qrs.i))
+                
+                qrs.i = qrs.i+1
+                this.qrs = this.event[[i]] ## vector of junctions
+                is.cycle = this.qrs[length(this.qrs)] == this.qrs[1]
+                
+                ## instantiate this QRS
+                ## i.e. assign the reference-centric junctions.kg with pairs of intervals in current genome
+                
+                ## first enumerate all paths involving instantiations of junctions in qrs 
+                ## qrs.paths k x m matrix of k QRS instantiations, each consisting of a sequence of
+                ## (signed) cids m across n junction id (n < m)
+                ##
+                ## qrs.juncid maps the columns of qrs paths to junction id in the sequence
+                ##
+                qrs.paths = array()
+                qrs.juncid = c()
+                qrs.fid = c() ## keeps track of "fragments" (in case force.event = F, and we are not
+
+                j = 0
+                while (j < length(this.qrs) & !abort)
+                  {                    
+                    j = j+1
+                    
+                    if (j == 1)
+                      {
+                        if (verbose)
+                          cat(sprintf('junction  %s of qrs %s event %s in step %s\n', j, qrs.i, k, step))
+
+                        ## take cartesian product of all instantiations of node 1 and node 2 in junction
+                        qrs.paths = do.call(.matcart, current.state$rid2cid[junctions.kg[abs(this.qrs[j]), ,ifelse(this.qrs[j]>0, 1, 2)]])
+                        qrs.juncid = rep(j, dim(qrs.paths)[3]) ## this keeps
+                        qrs.fid = rep(1, dim(qrs.paths)[3])
+
+                        ## if we have multi qrs event and last.qrs is defined, then we constrain
+                        ## the first event to be in cis (i.e. on the same chromosome) as the previous
+                        if (!is.null(last.qrs))
+                          qrs.paths = qrs.paths[qrs.paths[, 1] %in% current.state$intervals[abs(last.qrs), 'i'], ]
+
+                        if (verbose)
+                          cat(sprintf('\t dim of qrs.paths: (%s, %s)\n', nrow(qrs.paths), ncol(qrs.paths)))
+
+                        if (nrow(qrs.paths)==0)
+                          {
+                            abort = T
+                            break
+                          }
+                      }
+                    else
+                      {
+                        if (verbose)
+                          cat(sprintf('junction %s of qrs %s event %s in step %s\n', j, qrs.i, k, step))
+                        
+                        qrs.paths.old = qrs.paths
+                        tmp = do.call(.cartprod, c(list(1:nrow(qrs.paths)), current.state$rid2cid[junctions.kg[this.qrs[j],]]))
+                        qrs.paths = cbind(qrs.paths[tmp[,1], ], tmp[, 2:ncol(tmp)])
+
+                        if (verbose)
+                          cat(sprintf('\t dim of qrs.paths: (%s, %s)\n', nrow(qrs.paths), ncol(qrs.paths)))
+                        
+                        ## ensure that instantiations of source of current .cid in qrs is in cis with previous (including strand)
+                        ## we check if the instantation of the first interval in this cid
+                        ## is on the same chromosome as the instantiation of the last interval in the
+                        ## last cid.  If not, then we throw them out
+                        ## TODO: will check whether instantiations are within some threshold distance of each other
+                        ## 
+                        ## if we run out of instantiations (i.e. the qrs cannot be fully instantiated) then we can 
+                        ## either implement a fragmented qrs (if force.event = T) or abort and try a different event
+                        ##
+                        
+                        keep = current.state$intervals[abs(qrs.paths[,length(qrs.juncid)+1]), 'i'] ==
+                          current.state$intervals[abs(qrs.paths[,length(qrs.juncid)]), 'i'] ## check which have same chromosome
+                        keep = keep & sign(qrs.paths[,length(qrs.juncid)+1]) == sign(qrs.paths[,length(qrs.juncid)]) ## check which have same strand
+
+                        qrs.juncid = c(qrs.juncid, rep(j, length(junctions.kg[this.qrs[j],, '+'])))
+                        if (!any(keep)) 
+                          {
+                            if (!force.event)                              
+                              {
+                                if (verbose)
+                                  cat(sprintf('Aborting event %s at qrs %s\n', k, qrs.i))
+                                abort = T
+                                break
+                              }
+                            else ## if can't keep any, then we keep all and just start a new "fragment"
+                              qrs.fid = c(qrs.fid, rep(qrs.fid[length(qrs.fid)]+1, length(junctions.kg[this.qrs[j],, '+'])))
+                          }
+                        else
+                          {
+                            qrs.paths = qrs.paths[keep, ]
+                            qrs.fid = c(qrs.fid, rep(qrs.fid[length(qrs.fid)], length(junctions.kg[this.qrs[j],, '+'])))
+                          }                        
+                      }
+                  }
+                
+                if (abort)
+                  break                    
+                
+                qrs.score = junction.score = rep(0, nrow(qrs.paths))
+                
+                if (local.junction | local.qrs) 
+                  {
+                    ## score how many pairs are on same chromosome
+                    tmp = do.call('cbind',
+                      lapply(split(1:length(qrs.juncid), qrs.juncid),
+                             function(x) current.state$intervals[abs(qrs.paths[,x[1]]), 'i'] == current.state$intervals[abs(qrs.paths[,x[length(x)]]), 'i']))
+                    
+                    if (local.junction)                      
+                      junction.score = junction.score + rowSums(tmp)
+                    
+                    ## check if entire event is on a single chromosome
+                    if (local.qrs)
+                      qrs.score = qrs.score + apply(tmp, 1, prod)
+                  }
+
+                if (verbose)
+                  cat(sprintf('\t final dim of qrs.paths: (%s, %s)\n', nrow(qrs.paths), ncol(qrs.paths)))
+                
+                ## sort with respect to score, keep best, sample uniformly from best
+                ord.ix = order(qrs.score, junction.score, decreasing = T)
+                keep = sample(ord.ix[qrs.score[ord.ix] == qrs.score[ord.ix[1]] & junction.score[ord.ix] == junction.score[ord.ix[1]]], 1)
+
+                ## this.qrs.path is vector of signed cid's
+                this.qrs.path = qrs.paths[keep,]
+                
+                ## apply junctions
+                
+                ## first "check out" the relevant chromosomes, we will replace these in the output genome
+                ## these are only chromosomes on which junction instantiations (instantations of intervals
+                ## at ends of junctions) lie, and not any internal junction interval
+                tmp.ix = which(diff(c(0, qrs.juncid, 0))!=0)
+                internal = !c(1:length(qrs.juncid) %in% c(tmp.ix, tmp.ix-1))
+                qrs.adj = !(1:length(current.state$intervals) %in% c(tmp.ix, tmp.ix + 1))
+                                
+                ## make new "fragments" data structure initially representing
+                ## all strands of "checked out" chromosomes, which we will break and join
+                
+                ## chroms and strands to "check out" of the current genome
+                check.out = cbind(chr = current.state$intervals[abs(this.qrs.path[!internal]), 'i'], str = sign(this.qrs.path[!internal]))
+                check.out = check.out[!duplicated(check.out), ]
+
+                if (verbose)
+                  cat(sprintf('\t checked out chroms: (%s)\n', paste(sign(this.qrs.path)[!internal]*current.state$intervals[abs(this.qrs.path[!internal]), 'i'], collapse = ',')))
+
+                ## cook up list of fragment ids
+                tmp.fid = split(cumsum(unlist(lapply(current.state$intervals[check.out[,1]], function(x) rep(1, length(x))))),
+                  unlist(lapply(1:nrow(check.out), function(x) rep(x, ncol(current.state$intervals[[check.out[x,1]]])))))
+
+                ## fragments is n x 4 matrix representing n "checked out" single strand DNA intervals across k fragments
+                ## and their fragment number (i), fragment pos (j), signed current genome interval id (cid),
+                ## flags specifying whether it is an amp bridge (is.bridge) and to be broken (to.break)
+                ##                
+                fragments = .munlist(mapply(function(chr, str) {
+                  cid = which(current.state$intervals[, 'i'] == chr)
+                  if (str==1)
+                    cbind(cid = cid, to.break = F, is.bridge = F)
+                  else ## rev prev strands
+                    cbind(cid = -cid, to.break = F, is.bridge = F)
+                  }, check.out[, 'chr'], to.break = F, check.out[, 'str']), dim = 1)
+
+                if (verbose)
+                  cat(sprintf('\t checked out %s fragments comprising %s intervals on %s chromosomes\n', length(unique(fragments[, 'i'])), nrow(fragments)), length(unique(check.out[, 'chr'])))
+               
+                ## this k x 2 matrix will keep track of left and right (current genome) neighbors of fragments
+                ## "left" and "right" store either NA or the fragment number of the neighbor
+                fragment.partners = array(NA, dim = c(unique(fragments[, 'i']), 2), dimnames = list(NULL, c('left', 'right')))
+
+                ## current2frag = n x 2 matrix mapping signed cid --> fid
+                ## we also keep mapping of current genome signed intervals to (non bridge) fragment interval,
+                ## within a single QRS, this mapping will be one to one, since the only signed intervals
+                ## that get duplicated are within amp bridges.
+                ## 
+                ## note: BFB's are implemented by connecting signed intervals to their reciprocal, which will result
+                ## in duplication only after we "strand complete" the fragments produced by the QRS,
+                ## however, during the implementation of the QRS, there will be a one to one mapping
+                ## between current genome signed intervals and single stranded fragments
+                ##
+                current2frag = matrix(NA, nrow = length(current.state$cid2prev), ncol = 2,
+                  dimnames = list(NULL, c('+', '-')))
+                current2frag[cbind(abs(fragments[, 'cid']), ifelse(fragments[, 'cid']>0, 1, 2))] = 1:nrow(fragments)
+                current2frag.nna = !is.na(current2frag) ## will be useful for updating this
+                
+                is.start = c(T, diff(qrs.fid)!=0) ## vector of qrs fragment starts (will only be one T entry if force.event = F)
+                qrs.iter = split(1:length(qrs.juncid), qrs.juncid)
+                                
+                k = 0
+                ## iterate through all the adjacencies / junctions in this qrs
+                for (k in 1:(length(qrs.iter) - !is.cycle)) ## stop at next to last if is.cycle
+                  {                
+                    ## if first in qrs (or first in qrs fragment), then apply both breaks, and no amp bridge
+                    ## if last in qrs cycle, then apply no breaks, and possibly two amp bridges (from previous, to first)
+                    ## otherwise apply one break, and possibly one amp bridge (from previous)
+
+                    if (verbose)
+                      cat(sprintf('current fragments: \n%s\n',
+                                  paste(paste('[', sapply(split(fragments[, 'cid'], fragments[, 'i']), paste, collapse = ' '), ']', sep = ''), collapse = '\n')))
+                    
+                    fragments[, 'to.break'] = F
+                    
+                    ## junction.cid = signed cid of instantiations of current junction intervals on genome
+                    this.junction = this.qrs.path[qrs.iter[[k]]]
+
+                    ## we locate their fragment locations (flocs) fragment_id fragment_pos
+                    this.junction.fids = current2frag[cbind(abs(this.junction), ifelse(this.junction>0, 1, 2))]
+                                        
+                    if (is.start[k])
+                      {
+                        fragments[this.junction.fids, 'to.break'] = T
+
+                        if (verbose)
+                          {
+                            frag.ix = fragments[, 'i'] == fragments[this.junction.fids, 'i']
+                            frag1 = fragments[frag.ix[fragments[frag.ix, 'j'] <= fragments[this.junction.fids, 'j']], 'cid']
+                            frag2 = fragments[frag.ix[fragments[frag.ix, 'j'] > fragments[this.junction.fids, 'j']], 'cid']
+                            cat(sprintf('[%s] --> [%s], [%s]\n',
+                                        paste(fragments[frag.ix, 'cid'], collapse = ' '),
+                                        paste(frag1, collapse = ' '),
+                                        paste(frag2, collapse = ' ')))
+                          }                                                
+                      }
+                    else  
+                      {
+                        ## if not start, check for backward amp bridge between target
+                        ## adj of previous junction and source adj of current
+                        ##
+                        ## amp bridge occurs only if last adj targ is upstrand of this edge source on current genome
+                        last.adj.targ.qix = qrs.iter[[k-1]][length(qrs.iter[[k-1]])]
+                        last.adj.targ = this.qrs.path[, last.adj.targ.qix]
+                        this.adj.source = this.qrs.path[, qrs.iter[[k]][1]]
+
+                        ## sanity check: last adj targ and this edge source should be on the same
+                        ## chromosome and strand in the current genome
+                        if (!(last.adj.targ[1] == this.adj.source[1] & last.adj.targ[3] == this.adj.source[3]))
+                          stop('something wrong: last.adj.targ and current.adj are not on same chr and strand')
+
+                        ## amp.bridge only if targ at or before source, which is left on pos strand and right on neg 
+                        is.amp.bridge = ((last.adj.targ[3] == 1 & last.adj.targ[2] <= this.adj.source[2]) |
+                                         (last.adj.targ[3] == 2 & last.adj.targ[2] >= this.adj.source[3]))
+                        
+                        ## backward amp bridge will be added to fragment opposite last target
+                        ## amp bridge consists of intervals between last target and current source (inclusive)
+                        if (is.amp.bridge)
+                          {                                                                                                                
+                            ## find interval where to add amp.bridge
+                            ## this interval is opposite last target in current genome
+                            ## which is left of last.adj.targ for neg strand and right of last.adj.targ for positive
+                            this.chr = which(current.state$intervals[, 'i'] == last.adj.targ[1])
+                            to.add.fid = current2frag[this.chr[last.adj.targ[2]], last.adj.targ[3]]
+                            
+                            ## make amp.bridge frag (i j cid is.bridge to.break)
+                            amp.bridge.frag = cbind(cid = c(1, -1)[last.adj.targ[3]] * this.chr[last.adj.targ[2]:this.adj.source[2]])
+                          
+                            amp.bridge.frag = cbind(
+                              i = fragments[to.add.fid, 'i'],
+                              j = fragments[to.add.fid, 'j'] + 1:nrow(amp.bridge.frag), ## we are adding to the right so j will be the new index
+                              amp.bridge.frag, is.bridge = T, to.break = F)
+                          
+                            if (verbose)
+                              cat(sprintf('Making amp bridge %s\n', amp.bridge.frag))
+                            
+                            ## sanity check: is there something wrong, i.e. the interval that we are adding to
+                            ## is not at the right end of its fragment
+                            if (to.add.fid != nrow(fragments))
+                              if (fragments[to.add.fid, 'i'] == fragments[to.add.fid+1, 'i'])
+                                stop('something is wrong: right amp bridge to be added to internal fragment')
+                            
+                            ## add amp.bridge to right of to.add.fid in fragments
+                            aft.ix = c()                            
+                            bef.ix = 1:to.add.fid
+                            if (to.add.fid != nrow(fragments))
+                              aft.ix = (to.add.fid+1):nrow(fragments)
+                            fragments = cbind(fragments[bef.ix, ], amp.bridge, fragments[aft.ix, ])
+                            
+                            ## update current2frag
+                            pix = c(bef.ix, rep(NA, nrow(amp.bridge)), aft.ix)
+                            current2frag[current2frag.nna] = match(current2frag[current2frag.nna], pix)
+                            
+                            ## remove any reference neighbors from the right side of this frag
+                            ## (i.e. it can only be attached through a subsequent adjacency)
+                            fragment.partners[flocs[to.add.fid,'i'], 'right'] = NA 
+                          }                                                                        
+                      }
+                   
+                    if (!(is.cycle & k == (length(qrs.iter)-1))) ## unless next to last in cycle, break target adjacency in junction
+                      {
+                        tmp.fid = this.junction.fids[length(this.junction.fids)]+1
+                        if (fragments[tmp.fid, 'i'] != fragments[tmp.fid-1, 'i'])
+                          stop('Something is wrong, we are breaking at the beginning of a fragment')                                                    
+                        fragments[tmp.fid, ] = T
+                      }
+                    else 
+                      {
+                        ## if we are next to last iteration of cycle QRS,
+                        ## check for forward amp bridge between target
+                        ## adj of this junction and source adj of next (i.e. first)
+                        ##
+                        ## amp bridge occurs only if this adj target is upstrand of next edge source
+                        ## on current genome
+                        this.adj.targ = this.qrs.path[, qrs.iter[[k]][1]]
+                        next.adj.source = this.qrs.path[, qrs.iter[[k+1]][1]]
+                        
+                        ## sanity check: this adj targ and next edge source should be on the same
+                        ## chromosome and strand in the current genome
+                        if (!(next.adj.source[1] == this.adj.targ[1] & next.adj.source[3] == this.adj.targ[3]))
+                          stop('something wrong: next.adj.source and this.adj.targ are not on same chr and strand')
+
+                        ## amp.bridge only if source at or before targ, which is left on pos strand and right on neg 
+                        is.amp.bridge = ((this.adj.targ[3] == 1 & this.adj.targ[2] <= next.adj.source[2]) |
+                                         (this.adj.targ[3] == 2 & this.adj.targ[2] >= next.adj.source[3]))
+                                                
+                        ## forwards amp bridge extends fragment opposite <next> source with intervals from 
+                        ## <this target> until <next source>
+                        if (is.amp.bridge)
+                          {
+                            ## find interval where to add amp.bridge
+                            ## this interval is opposite last target in current genome
+                            ## which is right of next.adj.source for neg strand and left of next.adj.source for positive
+                            this.chr = which(current.state$intervals[, 'i'] == next.adj.source[1])
+                            tmp.cid = ifelse(next.adj.source[3] == 1, this.chr[next.adj.source[2]-1], this.chr[next.adj.source[2]+1])
+                            to.add.fid = current2frag[tmp.cid, next.adj.source[3]]
+                                                        
+                            ## make amp.bridge frag (rid fid is.bridge to.break)
+                            amp.bridge.frag = cbind(cid = c(1, -1)[this.adj.targ[3] * this.adj.targ[3]] * this.chr[this.adj.targ[2]:next.adj.source[2]])
+
+                            amp.bridge.frag = cbind(
+                              i = fragments[to.add.fid, 'i'],
+                              j = 1:nrow(amp.bridge.frag), ## we are adding to the left 
+                              amp.bridge.frag, is.bridge = T, to.break = F)
+                                                        
+                            ## check to see if there is something wrong
+                            if (fragments[to.add.fid, 'j'] != 1)
+                              warning('something is wrong: left amp bridge to be added to internal fragment')
+
+                            ## shift j on the current fragments
+                            tmp.ix = fragments[, 'i'] == fragments[to.add.fid, 'i']
+                            fragments[tmp.ix, 'j'] = fragments[tmp.ix, 'j'] + nrow(amp.bridge.frag) 
+                            
+                            ## add amp.bridge to <left> of to.add.fid in fragments                                                        
+                            bef.ix = c()
+                            if (to.add.fid != 1 )
+                              bef.ix = 1:(to.add.fid-1)
+                            aft.ix = to.add.fid:nrow(fragments)
+                            
+                            fragments = cbind(fragments[bef.ix, ], amp.bridge, fragments[aft.ix, ])
+                            
+                            pix = c(bef.ix, rep(NA, nrow(amp.bridge)), aft.ix)
+                            current2frag[current2frag.nna] = match(current2frag[current2frag.nna], pix)
+                            
+                            ## remove reference partners from left side of this frag
+                            fragment.partners[flocs[to.add.fid, 'i'], 'left'] = NA
+                          }
+                      }
+
+                    ### so far, we have applied no breaks in <this> QRS iteration, we have only selected fragments to break
+                    ### (and appended amp bridges to fragments broken in previous iterations)
+
+                    ## to apply a break, we split and re-.munlist the old fragments list using to.break field and update fragment.partners
+
+                    ## obtaining new fragments only requires relabeling the 'i' fields
+                    old.fragments = fragments;
+                    fragments = .munlist(lapply(split(1:ncol(fragments), fragments[, 'i'] + fragments[, 'to.break']/10),
+                      function(x) fragments[x, ]), dim = 1)
+
+                    ## updating fragment.partners requires letting separated partners
+                    ## remember who they were just joined to, so they can be later rejoined
+                    ## if they don't find a new partner
+                    ## (unless they are amp bridges or their partner was re-fused)
+                    new2old.frag = rep(NA, nrow(fragment.partners))
+                    new2old.frag[fragments[,'i']] = old.fragments[, 'i']                    
+                    fragment.partners = fragment.partners[new2old.frag, ]
+                    fragment.partners[fragments[fragments[, 'to.break'], 'i'], 'right'] = fragments[fragments[, 'to.break'], 'i']+1
+                    tmp.ix = which(fragments[, 'to.break'])+1
+                    fragment.partners[fragments[tmp.ix, 'i'], 'left'] = fragments[tmp.ix, 'i'] - 1
+                             
+                    ## to apply fusion, we only have to move rows around in the fragments matrix
+                    ## moving the left fragment in the fusion immediately before the right fragment in the fusion
+
+                    ## update this junction.fids to current fragments matrix
+                    this.junction.fids = current2frag[this.junction[, c('cid','str')]] 
+
+                    ## junction connects fragment ending in interval junction.fids[1] to the fragment
+                    ## beginning with junction.fids[length(junction.fids)] (with any other intervals connected in between)
+                    ## (NOTE: current implementation treats junction only as interval pair)
+                    left.ix = range(which(fragments[, 'i'] == fragments[junction.fids[1], 'i']))
+                    right.ix = range(which(fragments[, 'i'] == fragments[junction.fids[length(junction.fids)], 'i']))
+
+                    old.fragments = fragments;
+                    fragments[c(left.ix, right.ix), ] =  fragments[left.ix[1], 'i'] ## rename fused fragment according to the left partner
+                    pix = c(c(left.ix, right.ix), (1:nrow(fragments))[-c(left.ix, right.ix)]) ## save permutation
+
+                    ## apply permutation to fragments and current2frag
+                    fragments = fragments[pix, ]
+                    current2frag[current2frag.nna] = match(current2frag[current2frag.nna], pix)
+
+                    ## rename fragments so they are numbered in order (to make compatible with fragment partners)
+                    fragments[, 'i'] = 1 + cumsum(c(0, diff(fragments[, 'i'])))
+
+                    ## let the new fragment inheriting the name of the left partner inherit the partner of the right partner
+                    fragment.partners[old.fragments[left.ix[1], 'i'], 'right'] = fragment.partners[old.fragments[right.ix[1], 'i'], 'right'] 
+
+                    ## rewire fragment partners so that new fragment is first
+                    fragment.partners = rbind(fragment.partners[old.fragments[left.ix[1], 'i'], ],
+                      fragment.partners[-(old.fragments[c(left.ix[1], right.ix[1]), 'i']), ])
+                  }
+
+                ## now we have finished processing QRS
+                
+                ############
+                ## Rejoin
+                ############
+                    
+                ## match up and rejoin "left" and "right" partners
+                ## to.rejoin is adj.matrix of directed graph that should only have paths
+                to.rejoin = matrix(0, nrow = nrow(fragment.partners), ncol = nrow(fragment.partners))
+                to.rejoin[cbind(fragment.partners[, 'left'],
+                                fragment.partners[, 'right'][match(fragment.partners[, 'left'], fragment.partners[, 'right'])])] = 1            
+                
+                sources = which(colSums(to.rejoin,1)==0 & rowSums(to.rejoin,1)>0)
+                rejoined.paths = list();
+                for (s in 1:length(sources))
+                  {                        
+                    rejoined.paths[[s]] = sources[s]
+                    next.v = which(to.rejoin[rejoined.paths[[s]][length(rejoined.paths[[s]])], ]!=0)
+                    while (length(next.v)>0)
+                      {                            
+                        rejoined.paths[[s]] = c(rejoined.paths[[s]], next.v)
+                        next.v = which(to.rejoin[rejoined.paths[[s]][length(rejoined.paths[[s]])], ]!=0)
+                      }
+                  }
+                
+                ## all other fragments will be in single fragment paths
+                tmp.ix = setdiff(1:nrow(fragments.partners), unlist(rejoined.paths))
+                non.rejoined.paths = split(tmp.ix, 1:length(tmp.ix))
+                
+                ## now permute and relabel fragment matrix according to paths
+                all.paths = c(rejoined.paths, non.rejoined.paths)
+
+                new.frag.ix = mapply(function(x, y) unlist(x[y]), split(1:nrow(fragments), fragments[, 'i']), all.paths, SIMPLIFY = F)
+                fragments = .munlist(lapply(new.frag.ix, function(x) fragments[x, ]), dim = 1)
+
+                ## update current2frag
+                current2frag[current2frag.nna] = match(current2frag[current2frag.nna], unlist(new.frag.ix))
+                
+                ############
+                ## Clean up
+                ############
+                
+                ## now remove fragments that (1) do not have a "legal" telomeric interval at both ends and (2) (if is.req is not NULL)
+                ## do not contain and do not contain an is.req interval 
+                frag.rid = split(fragments[, 'rid'], fragments[, 'i'])
+                
+                keep = sapply(frag.rid, function(x) is.tel[x[1]] & is.tel(x[length(x)]))                
+                if (!is.null(is.req))
+                  keep = keep & sapply(frag.rid, function(x) any(is.req[x]))
+
+                new.ix = fragments[,'i'] %in% which(keep)
+                
+                fragments = fragments[new.ix, ]
+                current2frag[current2frag.nna] = match(current2frag[current2frag.nna], new.ix)
+
+                if (verbose)
+                  cat(sprintf('current fragments: \n%s\n',
+                              paste(paste('[', sapply(split(fragments[, 'cid'], fragments[, 'i']), paste, collapse = ' '), ']', sep = ''), collapse = '\n')))
+                
+                ############
+                ## update current.state
+                ############
+                
+                ## we essentially are doing "DNA replication", since we are pulling both strands of fragments
+                ## that we have joined here 
+
+                ## double stranded intervals are format i j + -
+                remove = current.state$intervals[, 'i'] %in% check.out[, 'chr'] ## mark current state chromosomes to remove
+
+                ## construct intervals to check in 
+                intervals.check.in = cbind(
+                  i = fragments[, 'i']+0.1, ## provide fake chromosome label
+                  j = fragments[, 'j'],
+                  '+'  = sapply(fragments[, 'cid'], function(x) if (x>0) current.state$intervals[abs(x), '+'] else current.state$intervals[abs(x), '-']),
+                  '-'  = sapply(fragments[, 'cid'], function(x) if (x>0) current.state$intervals[abs(x), '-'] else current.state$intervals[abs(x), '+'])
+                  )
+
+                ## renumber chromosomes
+                tmp.intervals = rbind(intervals.check.in, current.state$intervals[!remove,])
+                new.intervals = .munlist(split(1:nrow(tmp.intervals), tmp.intervals[, 'i']), function(x) tmp.intervals[x, c('+', '-')])
+
+                if (verbose)
+                  cat(sprintf('----------------------------\nChecking in chromosomes: \n%s\n-----------------------------\n',
+                              paste(sapply(split(1:nrow(intervals.check.in), fragments[, 'i']),
+                                           function(x) paste(new.intervals[x, '+'], new.intervals[x, '-'], sep = '\t', collapse = '\n'),
+                                           collapse = '\n==========================\n'))))
+                
+                ## construct new state, including mapping to previous id's
+                current.state = list(                  
+                  intervals = new.intervals,
+                  rid2cid = .rid2cid(new.intervals)
+                  )
+                
+                ## if this is the second or later qrs in a multi-qrs event, then maintain "cid2prev" to map to the
+                ## last current state in the history
+                if (qrs.i>1) 
+                  current.state$cid2prev = current.state$cid2prev[c(fragments[, 'cid'], which(!remove))]
+                else
+                  current.state$cid2prev = c(fragments[, 'cid'], which(!remove))
+
+                ## map last element in qrs.paths to new current.state cid
+                ## this is where the next event in a multi qrs event will attempt to be instantiated
+                last.qrs = current2frag[qrs.paths[length(qrs.paths)], ifelse(qrs.paths[length(qrs.paths)]>0, 1, 2)]                
+              }
+            
+            ## if we have aborted, then roll history back to last current.state
+            ## since done.this.round[k] = T, we won't redo this event in this round
+            if (abort)
+              {
+                current.state = history[[length(history)]]
+                history = history[[-length(history)]]
+                step = step - 1
+              }
+            else ## otherwise, update done.events with all events that intersect with an junction covered by this event
+              {
+                done.events = done.events | rowSums(event2junction[, which(event2junction[k, ])]) != 0
+                done.this.round = rep(F, length(done.events)) ## reset set of events that have been done this round
+              }            
+          }
+        else ## do a chromosomal event
+          {
+            if (force.cn) ## then need to instantiate GRanges event
+              {
+                this.event = events[[k]]
+
+                if (verbose)
+                  cat(sprintf('Implementing event %s (CN event) on chroms %s\n', k, unique(as.character(seqnames(this.event)))))
+                
+                if (is.null(this.event$type))
+                  stop('All GRanges specifying copy number events must have $type field set to "gain" or "loss"')
+
+                ev2tile = gr.findoverlaps(this.event, kag$tile, pintersect = T)
+                
+                ## match each row of this event to possible instantiations
+                ev2cid = lapply(split(current.state$rid2cid[ev2tile$subject.id], ev2tile$query.id), function(x) do.call('c', x))
+                ev2cid.type = this.event$type[unique(ev2tile$query.id)] ## gain or loss                
+
+                ## now pick a random instantiation per event
+                ev.cid = lapply(ev2cid, function(x) if (length(x)>0) x[sample(length(x))] else c())
+
+                gain.cid = loss.cid = c()
+                ev.gain = which(ev2cid.type == 'gain')
+                ev.loss= which(ev2cid.type == 'loss')
+
+                ## choose randomly among instantiations to choose chromosomes to lose or gain
+                ## (choosing with replacement,so if a cid exists in multiple rows in this.event then they
+                ## may be both chosen)
+                if (length(ev.gain)>0)
+                  gain.cid = unlist(lapply(ev.cid[ev.gain], function(x) if (length(x)>0) abs(x[sample(length(x),1)]) else c()))
+                
+                if (length(ev.loss)>0)
+                  loss.cid = unlist(lapply(ev.cid[ev.loss], function(x) if (length(x)>0) abs(x[sample(length(x),1)]) else c()))
+
+                gain  = current.state$intervals[gain.cid, 'i']
+                loss  = current.state$intervals[loss.cid, 'i']
+                
+                current.state = .chrom_change(current.state, gain = gain, loss = loss)
+
+                done.events[k] = T
+              }
+            else ## otherwise, random event 
+              {            
+                if (runif(1)<p.wgd & !force.cn)
+                  current.state = .chrom_change(current.state, gain = 1:length(current.state$intervals))
+                else
+                  {
+                    if (runif(1)<p.chromgain)
+                      {
+                        num.chrom = pmin(length(current.state$intervals), rpois(1, lambda = lambda.chromgain))
+                        prob = sapply(current.state$intervals, function(x, w) sum(w[x[1, ]]), w = as.numeric(width(kag$tile)))
+                        gain = sample(1:length(current.state$intervals), replace = F, prob = prob, size = num.chrom)
+                        current.state = .chrom_change(current.state, gain = gain)
+                      }
+                    else
+                      {
+                        num.chrom = pmin(length(current.state$intervals), rpois(1, lambda = lambda.chromloss))
+                        prob = sapply(current.state$intervals, function(x, w) sum(w[x[1, ]]), w = as.numeric(width(kag$tile)))
+                        loss = sample(1:length(current.state$intervals), replace = F, prob = prob, size = num.chrom)
+                        current.state = .chrom_change(current.state, loss = loss)
+                      }
+                  }
+              }
+          }
+      }
+    if (full)
+      return(history)
+    else
+      return(current.state)
+  }
+          
+#' @name all.paths
+#' @title all.paths
+#' @description
+#' 
+#'
+#' Low level function to enumerate all elementary paths and cycles through graph
+#' 
+#' takes directed graph represented by n x n binary adjacency matrix  A and outputs all cycles and paths between source.vertices, sink.vertices
+#' 
+#' 
+#' @param A nxn adjacency matrix
+#' @param all logical flag, if all = T, will include all sources (parentless vertices) and sinks (childless vertices) in path computati
+#' @param ALL logical flag, if ALL = T, will also include vertices without outgoing and incoming edges in paths
+#' @param sources graph indices to treat as sources (by default is empty)
+#' @param sinks graph indices to treat as sinks (by default is empty)
+#' @param verbose logical flag
+#' @return list of integer vectors corresponding to indices in A (i.e. vertices)
+#' $paths = paths indices
+#' $cycles = cycle indices
+#' @export
+all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.vertices = sources, sink.vertices = sinks,
+  exclude = NULL, ## specifies illegal subpaths, all such paths / cycles and
+                  ## their supersets will be excluded, specified as k x nrow(A) matrix of vertex sets
+  verbose = FALSE,...)
+  {
+    require(igraph)
+
+    blank.vertices = which(Matrix::rowSums(A)==0 & Matrix::colSums(A)==0)
+    
+    if (ALL)
+      all = T
+    
+    if (all)
+      {
+        source.vertices = which(Matrix::rowSums(A)>0 & Matrix::colSums(A)==0)
+        sink.vertices = which(Matrix::colSums(A)>0 & Matrix::rowSums(A)==0)
+      }
+
+    out = list(cycles = NULL, paths = NULL)
+    
+    node.ix = which(Matrix::rowSums(A!=0)>0 | Matrix::colSums(A!=0)>0)
+    if (length(node.ix)==0)
+      return(out)
+
+    A = A[node.ix, node.ix]
+    
+    if (!is.null(exclude))
+      exclude = sign(abs(exclude[, node.ix]))
+    
+    ij = which(A!=0, arr.ind = T)   
+    B = sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))    
+    I = diag(rep(1, nrow(A)))
+
+    source.vertices = setdiff(match(source.vertices, node.ix), NA)
+    sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
+
+    B2 = cBind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    
+    if (verbose)
+      cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
+    
+    K = convex.basis(B2, verbose = verbose, exclude.range = exclude, ...)
+
+    if (all(is.na(K)))
+      return(out)
+    
+    K = K[, Matrix::colSums(K[1:ncol(B), ,drop = FALSE])!=0, drop = FALSE] ## remove any pure source to sink paths
+    
+    is.cyc = Matrix::colSums(B %*% K[1:ncol(B), ,drop = FALSE]!=0)==0
+    
+    out$cycles = lapply(which(is.cyc),
+      function(i)
+      {
+        k = which(K[1:ncol(B), i]!=0)
+        v.all = unique(as.vector(ij[k, , drop = FALSE]))
+        sG = graph.edgelist(ij[k, , drop = FALSE])
+        tmp.v = v.all[c(1,length(v.all))]
+        p.fwd = get.shortest.paths(sG, tmp.v[1], tmp.v[2])
+        p.bwd = get.shortest.paths(sG, tmp.v[2], tmp.v[1])
+        return(node.ix[unique(unlist(c(p.fwd, p.bwd)))])
+      })
+
+    out$paths = lapply(which(!is.cyc),
+      function(i)
+      {        
+        k = K[1:ncol(B), i]
+        eix = which(k!=0)
+        v.all = unique(as.vector(ij[eix, , drop = FALSE]))
+        sG = graph.edgelist(ij[eix, , drop = FALSE])
+        io = B %*% k
+        v.in = which(io<0)[1]
+        v.out = which(io>0)[1]
+        return(node.ix[unlist(get.shortest.paths(sG, v.in, v.out))])
+      })
+
+    if (length(out$cycles)>0)
+      {
+        tmp.cix = cbind(unlist(lapply(1:length(out$cycles), function(x) rep(x, length(out$cycles[[x]])))), unlist(out$cycles))
+        out$cycles = out$cycles[!duplicated(as.matrix(sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
+      }
+
+    if (length(out$paths)>0)
+      {
+        tmp.pix = cbind(unlist(lapply(1:length(out$paths), function(x) rep(x, length(out$paths[[x]])))), unlist(out$paths))
+        out$paths = out$paths[!duplicated(as.matrix(sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
+      }
+    
+    if (ALL & length(blank.vertices)>0)
+      out$paths = c(out$paths, lapply(blank.vertices, identity))
+    
+    return(out)
+  }
+
+
+
+#' @name collapse.paths 
+#' @title collapse.paths 
+#' @description
+#' 
+#' collapse simple paths in a graph G (adjacency matrix or igraph object)
+#' returns m x m new adjacency matrix and map of old vertex id's to new ones
+#' $adj = m x m matrix
+#' #map = length n with indices 1 .. m
+#' 
+###############################################
+collapse.paths = function(G, verbose = T)
+{
+  if (inherits(G, 'igraph'))
+      G = G[,]
+
+  out = G!=0
+
+  if (verbose)
+      cat('graph size:', nrow(out), 'nodes\n')
+  
+  ## first identify all nodes with exactly one parent and child to do initial collapsing of graph
+  singletons = which(Matrix::rowSums(out)==1 & Matrix::colSums(out)==1)
+
+  if (verbose)
+      cat('Collapsing simple paths..\n')
+
+  sets = split(1:nrow(G), 1:nrow(G))
+  if (length(singletons)>0)
+      {
+          tmp = out[singletons, singletons]
+          cl = clusters(graph(as.numeric(t(which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
+          dix = unique(cl)
+          if (length(dix)>0)
+              {
+                  for (j in dix)
+                      {
+                          if (verbose)
+                              cat('.')
+
+                          ## grab nodes in this cluster
+                          setj = singletons[which(cl == j)]
+
+                          ## move all members into a single set
+                          sets[setj[1]] = list(setj)
+                          sets[setj[-1]] = list(NULL)
+
+                          ## connect this node to the parent and child of the set                         
+                          parent = setdiff(which(Matrix::rowSums(out[, setj, drop = FALSE])>0), setj)
+                          child = setdiff(which(Matrix::colSums(out[setj, , drop = FALSE])>0), setj)
+                          out[setj, c(setj, child)] = FALSE
+                          out[c(setj, parent), setj] = FALSE
+                          out[parent, setj[1]] = TRUE
+                          out[setj[1], child] = TRUE
+                      }
+              }
+      }
+
+  if (verbose)
+      cat('done\nnow fixing branches\n')
+  
+  todo = rep(FALSE, nrow(G))
+  todo[Matrix::rowSums(out)==1 | Matrix::colSums(out)==1] = TRUE
+
+  while (sum(todo)>0)
+      {
+        sets.last = sets
+        out.last = out
+          
+        if (verbose)
+            if ((sum(todo) %% 200)==0)
+                cat('todo:', sum(todo), 'num sets:', sum(!sapply(sets, is.null)), '\n')
+        
+        i = which(todo)[1]
+        
+        todo[i] = F
+        
+        child = which(out[i, ])
+        parent = which(out[,i])
+ 
+        if (length(child)==1 & length(parent)==1) ## if there is exactly one child and one parent then we want to merge with one or both
+            {
+                ## if i-child has no other parents and i-parent has no other child
+                ## then merge i, i-parent and i-child              
+                if (sum(out[,  child])==1 & sum(out[parent, ])==1)  
+                    {                      
+                        grandch = which(out[child, ])
+                        if (length(grandch)>0)
+                            {
+                                out[parent, grandch] = TRUE  ## parent inherits grandchildren of i
+                                out[child, grandch] = FALSE
+                            }
+                        out[parent, i] = FALSE ## remove node i's edges
+                        out[i, child] = FALSE
+                        sets[[parent]] = c(sets[[parent]], sets[[child]], sets[[i]])
+                        sets[c(i, child)] = list(NULL)
+                        todo[child] = F ## no longer have to do i-child, since they have already been merged with parent
+                    }
+                ## otherwise if either i-child has no other parent or i-parent has no other children (but not both)
+                ## then connect i-parent to i-child, but do not merge them (but merge ONE of them with i)
+                else if (sum(out[,  child])==1 | sum(out[parent, ])==1)
+                    {
+                        ## if parent has no other children then merge with him
+                        if (sum(out[parent, ])==1)                            
+                            sets[[parent]] = c(sets[[parent]], sets[[i]])
+                        else
+                            sets[[child]] = c(sets[[child]], sets[[i]])
+
+                        out[parent, child] = TRUE
+                        out[parent, i] = FALSE ## remove node i's edges
+                        out[i, child] = FALSE
+                        sets[i] = list(NULL)                        
+                    }
+            }
+        else if (length(child)==1 & length(parent)>1) ## if i has more than one parent but one child, we merge with child if child has no other parents
+            {
+                if (sum(out[, child])==1)
+                    {
+                        sets[[child]] = c(sets[[child]], sets[[i]])
+                        out[parent, child] = TRUE
+                        out[parent, i] = FALSE ## remove node i's edges
+                        out[i, child] = FALSE ## remove node i's edges
+                        sets[i] = list(NULL)
+                    }
+
+        
+            }        
+        else if (length(child)>1 & length(parent)==1) ## if i has more than one child but one parent, then merge with parent if parent has no other children
+            {
+                if (sum(out[parent, ])==1)
+                    {
+                        sets[[parent]] = c(sets[[parent]], sets[[i]])
+                        out[parent, child] = TRUE
+                        out[parent, i] = FALSE ## remove node i's edges
+                        out[i, child] = FALSE ## remove node i's edges
+                        sets[i] = list(NULL)
+                    }
+            }
+    }          
+
+  slen = sapply(sets, length)
+  ix = which(slen>0)
+  map = rep(NA, nrow(G))
+  map[unlist(sets)] = match(rep(1:length(sets), slen), ix)
+  out = out[ix, ix]
+  colnames(out) = rownames(out) = NULL  
+
+  return(list(adj = out, map = map, sets = split(1:length(map), map)))
+}
+
+
+##############################################
+#' @name sparse_subset
+#' @title sparse_subset
+#' @description
+#' 
+#' given k1 x n matrix A and k2 x n matrix B
+#' returns k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i of A is
+#' a (+/- strict) subset of the nonzero components of row j of B
+#' 
+sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
+  {
+    nz = Matrix::colSums(as.matrix(A)!=0, 1)>0
+    
+    if (is.null(dim(A)) | is.null(dim(B)))
+      return(NULL)
+
+    C = sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
+    
+    for (i in seq(1, nrow(A), chunksize))
+      {
+        ixA = i:min(nrow(A), i+chunksize-1)
+        for (j in seq(1, nrow(B), chunksize))
+          {
+            ixB = j:min(nrow(B), j+chunksize-1)
+
+            if (length(ixA)>0 & length(ixB)>0 & !quiet)
+              cat(sprintf('\t interval A %s to %s (%d) \t interval B %d to %d (%d)\n', ixA[1], ixA[length(ixA)], nrow(A), ixB[1], ixB[length(ixB)], nrow(B)))
+            if (strict)
+              C[ixA, ixB] = (sign((A[ixA, , drop = FALSE]!=0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))) * (sign((A[ixA, , drop = FALSE]==0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))>0)
+            else
+              C[ixA, ixB] = (sign(A[ixA, nz, drop = FALSE]!=0) %*% sign(t(B[ixB, nz, drop = FALSE]==0)))==0
+          }
+      }
+    
+    return(C)
+  }
+
+
+
+
+##############################################
+#' @name reads.to.walks
+#' @title reads.to.walks
+#' @description
+#' 
+#' Utility function to realign reads to walks.
+#' 
+#' Takes bam and collection of walks (GRanges list of signed intervals on hg19 or other BSgenome)
+#' pulls reads in regions of walks, then uses bwa mem to realign reads to walks, returns paths to new bams
+#' These bams are in "walk coordinates"
+#'
+#' Assumes bwa mem installed an runnable from command line.
+#' 
+#' @param bam path to bam file
+#' @param walks GRangesList of walks
+#' @param outdir outdir to compute into 
+#' @param hg human genome sequence BSGenome or ffTrack
+#' @param mc.cores number of cores
+#' @param insert.size >= max insert size of library so that all relevant read pairs are extracted from the original bam
+#' @return paths to new bams
+#' These bams are in "walk coordinates"
+#' @export
+##############################################
+reads.to.walks = function(bam, walks, outdir = './test', hg = skidb::read_hg(fft = T), mc.cores = 1, insert.size = 1e3, verbose = T)
+  {
+    system(paste('mkdir -p', outdir))
+    
+    .pairs2fq = function(x)
+      {
+        x.gr = grl.unlist(x)
+        x.gr = x.gr[!is.na(x.gr$seq)]
+        x.gr$first = bamflag(x.gr$flag)[,'isFirstMateRead']!=0
+        x.gr$unmapped = bamflag(x.gr$flag)[,'isUnmappedQuery']!=0
+        x.gr1 = x.gr[x.gr$first]
+        x.gr2 = x.gr[!x.gr$first]
+        x.gr1 = x.gr1[x.gr1$qname %in% x.gr2$qname]
+        x.gr2 = x.gr2[match(x.gr1$qname, x.gr2$qname), ]
+        if (any(ix <- as.logical(strand(x.gr1)=='-') & !x.gr1$unmapped)) ## rev comp sequence and reverse quality scores
+          {
+            x.gr1$seq[ix] = as.character(reverseComplement(DNAStringSet(x.gr1$seq[ix])))
+            x.gr1$qual[ix] = sapply(x.gr1$qual[ix], function(x) rawToChar(rev(charToRaw(x))))
+          }
+        
+        if (any(ix <- as.logical(strand(x.gr2)=='-') & !x.gr1$unmapped)) ## rev comp sequence and reverse quality scores
+          {
+            x.gr2$seq[ix] = as.character(reverseComplement(DNAStringSet(x.gr2$seq[ix])))
+            x.gr2$qual[ix] = sapply(x.gr2$qual[ix], function(x) rawToChar(rev(charToRaw(x))))
+          }                   
+        fq1 = as.vector(t(cbind(paste('@', x.gr1$qname, sep = ''), x.gr1$seq, '+', x.gr1$qual)))
+        fq2 = as.vector(t(cbind(paste('@', x.gr2$qname, sep = ''), x.gr2$seq, '+', x.gr2$qual)))
+        return(list(fq1 = fq1, fq2 = fq2))
+      }
+
+    if (is.null(names(walks)))
+      names(walks) = paste('walk', 1:length(walks))
+
+    outdir = normalizePath(outdir)
+    
+    reads.fq = paste(outdir, '/reads.', 1:2, '.fq', sep = '')
+    walk.fa = paste(outdir, '/', names(walks), '.fa', sep = '')
+    walks.gff = paste(outdir, '/walks.gff', sep = '')
+      
+    if (!all(file.exists(walk.fa)))
+      {
+        if (verbose)
+          cat('Fetching walk sequences\n')
+        
+        walk.seq = ffTrack::get_seq(hg, walks, mc.cores = mc.cores)
+        names(walk.seq) = names(walks)
+                
+        sapply(1:length(walks), function(x) writeXStringSet(walk.seq[x], walk.fa[x]))
+                
+        if (is.list(walk.seq))
+          {
+            c(walk.seq[[1]], walk.seq[[2]]) ## weird R ghost
+            walk.seq = do.call('c', walk.seq)
+          }
+
+        ## write compiled fasta
+        writeXStringSet(walk.seq, paste(outdir, '/walks.fa', sep = ''))
+      }
+
+    if (!all(file.exists(walks.gff)))
+      {
+        tmp = spChain(walks)$y;
+        export.gff(split(tmp, seqnames(tmp)), walks.gff)
+      }
+       
+    ## grab reads from region and output to fq
+    if (!all(file.exists(reads.fq)))
+      {
+        if (verbose)
+          cat(sprintf('Fetching mapped and unmapped reads associated with region from %s\n', bam))
+        
+        reads = read.bam(bam, intervals = streduce(unlist(walks)+insert.size))
+        reads.seq = .pairs2fq(reads)
+        
+        ## write read fastqs
+        if (verbose)
+          cat(sprintf('Writing fastqs for %s read pairs\n', length(reads[[1]])))
+        
+        bla = mapply(function(x, y) writeLines(x, y), reads.seq, reads.fq)
+      }
+    
+    if (verbose)
+      cat('Indexing walk fastas')
+
+    walks.faidx = paste(walk.fa, '.bwt', sep = '')
+
+    if (any(ix <- !file.exists(walks.faidx)))      
+      mclapply(walk.fa[ix], function(x) system(paste('bwa index', x)), mc.cores = mc.cores)
+    
+    if (verbose)
+      cat('Running bwa mem\n')
+      
+    mclapply(1:length(walk.bam), function(x)
+             {
+               cmd = sprintf('bwa mem %s %s %s | samtools view -bSh -F4 - > %s; samtools sort %s %s; samtools index %s',
+                     walk.fa[x], reads.fq[1], reads.fq[2], walk.bam[x], walk.bam[x], gsub('.bam$', '', walk.bam[x]), walk.bam[x])
+               if (verbose)
+                 cat(cmd, '\n')
+               system(cmd)
+               }, mc.cores = mc.cores)
+
+    if (verbose)
+      cat('Done\n')
+    
+    return(walk.bam)    
+  }
+
+
+
+
+
+
+
+#' @name gr.breaks
+#' @title gr.breaks 
+#' @description
+#'
+#' Break GRanges at given breakpoints into disjoint gr
+#'
+#' @author Xiaotong Yao
+#' @import GenomicRanges
+#' @param bps \code{GRanges} of width 1, locations of the bp; if any element width
+#' larger than 1, both boundary will be considered individual breakpoints
+#' @param query a disjoint \code{GRanges} object to be broken
+#' @return \code{GRanges} disjoint object at least the same length as query,
+#' with a metadata column \code{qid} indicating input index where new segment is from
+#' @export
+gr.breaks = function(bps=NULL, query=NULL){
+   ## ALERT: big change! input parameter shuffled!
+
+   ## if bps not provided, return back-traced disjoin wrapper
+   if (is.null(bps)) {
+       return(query)
+   } 
+   else {
+       ## only when bps is given do we care about what query is
+       if (is.null(query)){
+           message("Trying chromosomes 1-22 and X, Y.")
+           query = hg_seqlengths()
+           if (is.null(query)){
+               message("Default BSgenome not found, let's hardcode it.")
+               cs = system.file("extdata",
+                                "hg19.regularChr.chrom.sizes", package = "gUtils")
+               sl = read.delim(cs, header=FALSE, sep="\t")
+               sl = setNames(sl$V2, sl$V1)
+               query = gr.stripstrand(si2gr(sl))
+           }
+       }
+
+       ## preprocess query
+       if (!isDisjoint(query)){
+           warning("Warning: Query GRanges not disjoint.")
+           queryDj = disjoin(query)
+           queryDj$qid = queryDj %N% query ## only retain the first occurence
+           values(queryDj) = cbind(values(queryDj),
+                                   as.data.table(values(query))[queryDj$qid])
+           query = queryDj
+       } 
+       else {
+           if ("qid" %in% colnames(values(query))){
+               warning("Warning: 'qid' col in query overwritten.")
+           }
+           query$qid = seq_along(query)
+       }
+
+       ## preprocess bps
+       ## having meta fields? remove them!
+       bps = bps[, c()]
+
+       ## remove things outside of ref
+       oo.seqlength = which(start(bps)<1 | end(bps)>seqlengths(bps)[as.character(seqnames(bps))])
+       if (length(oo.seqlength)>0){
+           warning("Warning: Some breakpoints out of chr lengths. Removing.")
+           bps = bps[-oo.seqlength]
+       }
+
+       if (any(!is.null(names(bps)))){
+           warning("Removing row names from bps.")
+           names(bps) = NULL
+       }
+
+       ## having strand info? remove it!
+       if (any(strand(bps)!="*")){
+           warning("Some breakpoints have strand info. Force to '*'.")
+           bps = gr.stripstrand(bps)
+       }
+
+       ## solve three edge cases
+       if (any(w.0 <- (width(bps)<1))){
+           warning("Some breakpoint width==0.")
+           ## right bound smaller coor
+           ## and there's no negative width GR allowed
+           bps[which(w.0)] = gr.start(bps[which(w.0)]) %-% 1
+       }
+       if (any(w.2 <- (width(bps)==2))){
+           warning("Some breakpoint width==2.")
+           ## this is seen as breakpoint by spanning two bases
+           bps[which(w.2)] = gr.start(bps[which(w.2)])
+       }
+       if (any(w.l <- (width(bps)>2))){
+           ## some not a point? turn it into a point
+           warning("Some breakpoint width>1.")
+           rbps = gr.end(bps[which(w.l)])
+           lbps = gr.start(bps[which(w.l)])
+           start(lbps) = pmax(start(lbps)-1, 1)
+           bps = c(bps[which(!w.l)], streduce(c(lbps, rbps)))
+       }
+
+       bps$inQuery = bps %^% query
+       if (any(bps$inQuery==F)){
+           warning("Some breakpoint not within query ranges.")
+       }
+
+       ## label and only consider breakpoints not already at the boundary of query
+       bps$inner = bps$inQuery
+       bps$inner[which(bps %^% gr.start(query) | bps %^% gr.end(query))]=F
+       ## maybe no inner bp at all, then no need to proceed
+       if (!any(bps$inner)){
+           return(query)
+       }
+       bpsInner = bps %Q% (inner==T)
+       ## map query and inner breakpoints
+       qbMap = gr.findoverlaps(query, bpsInner)
+       mappedQ = seq_along(query) %in% qbMap$query.id
+       ## raw coors to construct ranges from
+       tmpRange = data.table(qid2 = qbMap$query.id,
+                             startFrom = start(query[qbMap$query.id]),
+                             breakAt = start(bpsInner[qbMap$subject.id]),
+                             upTo = end(query[qbMap$query.id]))
+       tmpCoor = tmpRange[, .(pos=sort(unique(c(startFrom, breakAt, upTo)))), by=qid2]
+
+       ## construct new ranges
+       newRange = tmpCoor[, .(start=pos[-which.max(pos)],
+                              end=pos[-which.min(pos)]), by=qid2]
+       newRange[, ":="(chr = as.vector(seqnames(query)[qid2]),
+                       strand = as.vector(strand(query)[qid2]))]
+       newRange$start = newRange[, ifelse(start==min(start), start, start+1)]
+
+       ## put together the mapped and broken
+       newGr = GRanges(newRange, seqinfo = seqinfo(query))
+       values(newGr) = values(query)[newGr$qid2, , drop=F] ## preserve the input metacol
+       ## with the intact not mapped part of query
+       output = sort(c(newGr, query[!mappedQ]))
+       ## %Q% (order(strand, seqnames, start))
+       ## browser()
+       return(output)
+   }
+}
+
+
+
+
+ra.dedup = function(grl, pad=500, ignore.strand=FALSE){
+
+   if (!is(grl, "GRangesList")){
+       stop("Error: Input must be GRangesList!")
+   }
+
+   if (any(elementNROWS(grl)!=2)){
+       stop("Error: Each element must be length 2!")
+   }
+
+   if (length(grl)==0 | length(grl)==1){
+       return(grl)
+   }
+
+   if (length(grl) > 1){
+       ix.pair = as.data.table(
+          ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
+       if (nrow(ix.pair)==0){
+           return(grl)
+       } 
+       else {
+           dup.ix = unique(rowMax(as.matrix(ix.pair)))
+           return(grl[-dup.ix])
+       }
+   }
+}
+
+
+
+ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
+
+   if (!is(grl, "GRangesList")){
+       stop("Error: Input must be GRangesList!")
+   }
+
+   if (any(elementNROWS(grl)!=2)){
+       stop("Error: Each element must be length 2!")
+   }
+
+   if (length(grl)==0){
+       return(logical(0))
+   }
+
+   if (length(grl)==1){
+       return(FALSE)
+   }
+
+   if (length(grl)>1){
+
+       ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
+
+       if (nrow(ix.pair)==0){
+           return(rep(FALSE, length(grl)))
+       } 
+       else {
+           dup.ix = unique(rowMax(as.matrix(ix.pair)))
+           return(seq_along(grl) %in% dup.ix)
+       }
+   }
+}
 
 #############################
 #' @name rrbind
@@ -10303,7 +12295,33 @@ get.varcol = function()
 
 
 
+#' @name ra.overlaps
+#' @title ra.overlaps
+#' @description
+#'
+#' Determines overlaps between two piles of rearrangement junctions ra1 and ra2 (each GRangesLists of signed locus pairs)
+#' against each other, returning a sparseMatrix that is T at entry ij if junction i overlaps junction j.
+#'
+#' if argument pad = 0 (default) then only perfect overlap will validate, otherwise if pad>0 is given, then
+#' padded overlap is allowed
+#'
+#' strand matters, though we test overlap of both ra1[i] vs ra2[j] and gr.strandflip(ra2[j])
+#'
+#' @param ra1 \code{GRangesList} with rearrangement set 1
+#' @param ra2 \code{GRangesList} with rearrangement set 2
+#' @param pad Amount to pad the overlaps by. Larger is more permissive. Default is exact (0)
+#' @param arr.ind Default TRUE
+#' @param ignore.strand Ignore rearrangement orientation when doing overlaps. Default FALSE
+#' @param ... params to be sent to \code{\link{gr.findoverlaps}}
+#' @name ra.overlaps
+#' @export
+ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, ...)
+{
+    bp1 = grl.unlist(ra1) + pad
+    bp2 = grl.unlist(ra2) + pad
+    ix = gr.findoverlaps(bp1, bp2, ignore.strand = ignore.strand, ...)
 
+<<<<<<< HEAD
 ## #' @name counts2rpkm
 ## #' @title Compute rpkm counts from counts
 ## #' @description
@@ -10405,11 +12423,46 @@ oneoffs = function(out.file, bam, ref, min.bq = 30, min.mq = 60, indel = FALSE, 
     }
 }
 
+=======
+    .make_matches = function(ix, bp1, bp2)
+    {
+        if (length(ix) == 0){
+            return(NULL)
+        }
+        tmp.match = cbind(bp1$grl.ix[ix$query.id], bp1$grl.iix[ix$query.id], bp2$grl.ix[ix$subject.id], bp2$grl.iix[ix$subject.id])
+        tmp.match.l = lapply(split(1:nrow(tmp.match), paste(tmp.match[,1], tmp.match[,3])), function(x) tmp.match[x, , drop = F])
+>>>>>>> 31f21ff73612d14499b353bd9d2a65088371d2ef
+
+        matched.l = sapply(tmp.match.l, function(x) all(c('11','22') %in% paste(x[,2], x[,4], sep = '')) | all(c('12','21') %in% paste(x[,2], x[,4], sep = '')))
+
+        return(do.call('rbind', lapply(tmp.match.l[matched.l], function(x) cbind(x[,1], x[,3])[!duplicated(paste(x[,1], x[,3])), , drop = F])))
+    }
 
 
+    tmp = .make_matches(ix, bp1, bp2)
 
+    if (is.null(tmp)){
+        if (arr.ind){
+            return(matrix())
+        }
+        else{
+            return(Matrix::sparseMatrix(length(ra1), length(ra2), x = 0))
+        }
+    }
 
+    rownames(tmp) = NULL
 
+    colnames(tmp) = c('ra1.ix', 'ra2.ix')
 
-
-
+    if (arr.ind) {
+        ro = tmp[order(tmp[,1], tmp[,2]), ]
+        if (class(ro)=='integer'){
+            ro <- matrix(ro, ncol=2, nrow=1, dimnames=list(c(), c('ra1.ix', 'ra2.ix')))
+        }
+        return(ro)
+    } 
+    else {
+        ro = Matrix::sparseMatrix(tmp[,1], tmp[,2], x = 1, dims = c(length(ra1), length(ra2)))
+        return(ro)
+    }
+}

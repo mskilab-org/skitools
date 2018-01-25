@@ -14,9 +14,6 @@ setxor(A, B)
 \value{
 elements in A or B that are not in the intersection of A and B
 }
-\description{
-setxor
-}
 \author{
 Marcin Imielinski
 }
