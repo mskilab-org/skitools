@@ -12494,3 +12494,131 @@ grl.stripnames = function(grl)
     return(out)
 }
 
+
+
+
+#' @name hets
+#' @title Simple het "caller" meant to be used at validated het SNP sites for tumor / normal pairs
+#' @description 
+#'
+#' hets() outputs a tsv file of ALT ($alt.count.t, $alt.count.n) and REF ($ref.count.t, $ref.count.n) read counts to out.file
+#' for a tumor / normal pair across a set of sites specified by an input VCF
+#'
+#' @param tum.bam string path to tumor sample, input to Bamfile()
+#' @param norm.bam string path to normal sample, input to Bamfile()(optional) (default = NULL)
+#' @param out.file string path to TSV output file to be generated 
+#' @param vcf.file string path to VCF file of sites (eg hapmap or 1000G) at which to compute read counts
+#' @param chunk.size1 integer Number of variants to process from VCF file at a time (default = 1e3)
+#' @param chunk.size2 integer Number of variants to access from BAM file in a single iteration (default = 1e2)
+#' @param mc.cores integer Number of cores in mclapply (default = 1)
+#' @param verbose boolean Flag to increase verbosity (default = TRUE)
+#' @param na.rm logical Flag to remove rows with NA counts (default = TRUE)
+#' @param filt.norm logical Flag to remove any sites that have allele fraction of 0 or 1 or NA in MAF; if TRUE will remove any sites that have allele fraction 0 or 1 or NA in MAF 
+#' @return nil
+#' @author Marcin Imielinski
+#' @export
+hets = function(tum.bam, norm.bam = NULL, out.file, vcf.file, chunk.size1 = 1e3, chunk.size2 = 1e2, mc.cores = 1, verbose = TRUE, na.rm = TRUE, filt.norm = TRUE)
+{    
+    f = file(vcf.file, 'r')
+      
+    if (grepl('VCF', readLines(f, 1))){
+        vcf = TRUE
+    }
+    else{
+        vcf = FALSE
+    }
+
+    sl = hg_seqlengths()
+
+    if (verbose){
+        st = Sys.time()
+    }
+
+    nprocessed = 0
+    nhets = 0
+    first = TRUE
+    ## get past headers
+
+    ## while (grepl('^#', last.line <<- readLines(f, n=1))){}
+
+    if (verbose){
+        cat('Opened vcf, writing hets to text file', out.file, '\n')
+    }
+
+    out.cols = c('seqnames', 'start', 'end', 'Tumor_Seq_Allele1', 'Reference_Allele', 'ref.count.t', 'alt.count.t', 'ref.count.n', 'alt.count.n', 'alt.frac.t', 'ref.frac.t', 'alt.frac.n', 'ref.frac.n')
+
+    if (vcf){
+        col.ix = 1:5
+    }
+    else{
+        col.ix = match(c("Chromosome", "Start_position", "End_position", "Reference_Allele", "Tumor_Seq_Allele1", "Tumor_Seq_Allele2"), strsplit(last.line, '\t')[[1]])
+        if (any(is.na(col.ix))){
+            stop('Error: failure processing variant file: must be valid VCF or MAF')
+        }
+    }
+      
+    while (!is.null(tmp <- tryCatch(read.delim(file = f, as.is = T, header = F, nrows = chunk.size1)[, col.ix], error = function(x) NULL))){
+        
+        if (vcf){
+            names(tmp) = c('chr', 'start', 'name', 'ref', 'alt')
+        }
+        else{
+            names(tmp) = c('chr', 'start', 'name', 'ref', 'alt', 'alt2')
+            ## just in case the first tumor seq allele is equal to reference .. which happens in mafs
+            tmp$alt = ifelse(tmp$alt==tmp$ref, tmp$alt2, tmp$alt)
+        }
+              
+        loc = seg2gr(tmp, seqlengths = sl)    
+        clock({loc.count = mafcount(tum.bam, norm.bam, loc, indel = T, chunk.size = chunk.size2, mc.cores = mc.cores)})
+        nprocessed = nprocessed + length(loc.count)
+              
+        if (filt.norm & !is.null(loc.count$alt.frac.n)){
+            loc.count = loc.count[which(loc.count$alt.frac.n != 1 & loc.count$alt.frac.n != 0)]
+        }
+              
+        nhets = nhets + length(loc.count)
+        if (length(loc.count)>0){
+
+            df = as.data.frame(loc.count)
+            ## remove any entries with 0 ref or alt reads in tumor or normal
+            if (na.rm){
+                if (!is.null(norm.bam)){
+                    naix = apply(df[, c('alt.count.t', 'ref.count.t', 'alt.count.n', 'ref.count.n')], 1, function(x) all(is.na(x)))
+                }
+                else{
+                    naix = apply(df[, c('alt.count.t', 'ref.count.t')], 1, function(x) all(is.na(x)))
+                }
+                df = df[which(!naix), ]
+            }
+
+            out.cols = intersect(out.cols, names(df))
+
+            if (first){
+                write.tab(df[, out.cols], out.file, append = F, col.names = T)
+                first = F
+            }
+            else{
+                write.tab(df[, out.cols], out.file, append = T, col.names = F)
+            }                     
+              
+            if (verbose){
+                cat(sprintf('Processed %s sites, wrote %s candidate hets\n', nprocessed, nhets))
+            }
+
+            if (verbose){
+                cat('Time elapsed:\n')
+                print(Sys.time() - st)
+            }              
+        }
+    }
+      
+    close(f)
+     
+    if (verbose){
+        cat('Finished het processing wrote to file', out.file, '\n')
+    }
+}
+
+
+
+
