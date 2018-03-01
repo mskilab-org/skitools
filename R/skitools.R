@@ -12384,6 +12384,109 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
     bp2 = grl.unlist(ra2) + pad
     ix = gr.findoverlaps(bp1, bp2, ignore.strand = ignore.strand, ...)
 
+
+## #' @name counts2rpkm
+## #' @title Compute rpkm counts from counts
+## #' @description
+## #'
+## #' Takes 'Rsamtools::countBam()'' (or 'bam.cov.gr()') output "counts" and computes RPKM by aggregating across "by" variable
+## #'
+## #' @param counts data.table or data.frame with records, width fields
+## #' @param by string Field to group counts by
+## #' @note The denominator (i.e. total reads) is just the sum of counts$records
+## #' @return TO BE DONE
+## #' @export
+counts2rpkm = function(counts, by)
+{
+    if (missing(counts) | missing(by)){
+        stop('Error: "counts2rpkm()" requires both arguments "counts" and "by". Please see documentation for details.')
+    }
+    out = aggregate(1:nrow(counts), by = list(by), FUN = function(x) sum(counts$records[x])/sum(counts$width[x]/1000))
+    out[,2] = out[,2] / sum(counts$records) * 1e6
+    names(out) = c('by', 'rpkm')
+    return(out)
+}
+
+
+
+
+
+#' @name oneoffs
+#' @title Calls samtools mpileup to dump tsv of "one off" variants / sites
+#' @description
+#'
+#' Calls samtools mpileup to dump tsv of "one off" variants / sites (i.e. that are present in exactly one read per site)
+#'
+#' @param out.file string Path to file in which to dump tsv 
+#' @param bam string Path to BAM file 
+#' @param ref tring Path to reference FASTA
+#' @param min.bq integer Minimum base quality
+#' @param min.mq integer Minimum mapping quality
+#' @param indel boolean Flag whether to collect one off indels (default is substitution)
+#' @param chunksize integer Number of mpileup lines to put into memory
+#' @param verbose boolean Flag to increase verbosity (default = TRUE)
+#' @note The denominator (i.e. total reads) is just the sum of counts$records
+#' @export
+oneoffs = function(out.file, bam, ref, min.bq = 30, min.mq = 60, indel = FALSE, chunksize = 1e4, verbose = TRUE)
+{   
+    if (indel){
+        cmd = sprintf('samtools mpileup -x -B -Q %s -q %s -s -f %s %s | grep -P "\\w+\\s\\w+\\s\\w+\\s[\\,\\.]*[\\+\\-]\\d+[ACGTNacgtn]+[\\,\\.]*\\s"', min.bq, min.mq, ref, bam)
+    }
+    else{
+        cmd = sprintf('samtools mpileup -x -B -Q %s -q %s -s -f %s %s | grep -P "\\w+\\s\\w+\\s\\w+\\s[\\,\\.]*[ACGTacgt][\\,\\.]*\\s"', min.bq, min.mq, ref, bam)
+    }
+  
+    p = pipe(cmd, open = 'r')
+
+    start = Sys.time()
+    fields = c('chr', 'pos', 'ref', 'cov', 'alt', 'bq', 'mq')
+
+    i = nv = nl = 0
+
+    while (length(chunk <- readLines(p, n = chunksize)) > 0){
+
+        tab = fread(paste(chunk, collapse = '\n'), sep = '\t', header = FALSE)
+        setnames(tab, fields)
+        tab[ ,varnum := 1:.N]
+
+        if (indel){
+
+            tab[, left.pad := nchar(gsub("[\\+\\-].*", '', alt))]
+            tab[, wid := as.numeric(gsub('.*([\\+\\-]\\d+).*', '\\1', alt))]
+            tab[, var := mapply(function(x,i) substr(x, 1, i),
+                gsub('.*[\\+\\-]\\d+([ACGTNacgtn]+).*', '\\1', alt),
+                abs(wid))]
+            tab[wid>0, bq := mapply(function(x, i) substr(x, i, i), bq, wid)]
+            tab[wid<0, bq := NA]
+            varb = tab[, .(chr, pos, alt, wid, mq = NA, bq = NA)]                          
+        }
+        else{
+            varb = tab[, .(chr = chr, pos = pos, alt = unlist(strsplit(alt, '')),
+                wid = 0,
+                bq = utf8ToInt(unlist(strsplit(bq, '')))-33,
+                mq = utf8ToInt(unlist(strsplit(mq, '')))-33), by = varnum][!(alt %in% c(".", ",")), ]
+        }
+
+    
+        fwrite(varb, out.file, append = (i>0))
+        nv = nv + nrow(varb)
+        nl = nl + length(chunk)
+        i = i+1
+        if (verbose){
+            message('Wrote total of ',
+                nl, ' variants to ", out.file, ". Now at coordinate ',
+                varb[nrow(varb), sprintf("chr%s %s", chr, prettyNum(pos, ','))])
+            print(Sys.time() - start)
+        }
+    }
+  
+    close(p)
+    if (verbose){
+        message('Done writing ', out.file)
+    }
+}
+
+
     .make_matches = function(ix, bp1, bp2)
     {
         if (length(ix) == 0){
@@ -12391,6 +12494,7 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
         }
         tmp.match = cbind(bp1$grl.ix[ix$query.id], bp1$grl.iix[ix$query.id], bp2$grl.ix[ix$subject.id], bp2$grl.iix[ix$subject.id])
         tmp.match.l = lapply(split(1:nrow(tmp.match), paste(tmp.match[,1], tmp.match[,3])), function(x) tmp.match[x, , drop = F])
+
 
         matched.l = sapply(tmp.match.l, function(x) all(c('11','22') %in% paste(x[,2], x[,4], sep = '')) | all(c('12','21') %in% paste(x[,2], x[,4], sep = '')))
 
@@ -12425,6 +12529,7 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
         return(ro)
     }
 }
+
 
 anno.gwalk = function(gwalks, hop.thresh = 1e5, bighop.thresh = 1e8)
 {
@@ -12983,4 +13088,268 @@ match.bs = function(query, dict, midpoint = FALSE)
 
   return(out)
 }
+
+## not exported in dev branch, gUtils
+## #' @name grl.stripnames
+## # ' @title Remove \code{GRanges} names inside a \code{GRangesList}
+## #' @description
+## #'
+## #' Remove \code{GRanges} names inside a \code{GRangesList}
+## #'
+## #' @param grl \code{GRangesList} with names elements
+## #' @return \code{GRangesList} where \code{GRanges} have no names
+grl.stripnames = function(grl)
+{
+    ele = tryCatch(as.data.frame(grl)$element, error = function(e) NULL)
+    if (is.null(ele)){
+        ele = unlist(lapply(1:length(grl), function(x) rep(x, length(grl[[x]]))))
+    }
+
+    gr = unlist(grl);
+    names(gr) = NULL;
+
+    out = split(gr, ele);
+    values(out) = values(grl)
+    names(out) = names(grl)
+
+    return(out)
+}
+
+
+
+
+#' @name hets
+#' @title Simple het "caller" meant to be used at validated het SNP sites for tumor / normal pairs
+#' @description 
+#'
+#' hets() outputs a tsv file of ALT ($alt.count.t, $alt.count.n) and REF ($ref.count.t, $ref.count.n) read counts to out.file
+#' for a tumor / normal pair across a set of sites specified by an input VCF
+#'
+#' @param tum.bam string path to tumor sample, input to Bamfile()
+#' @param norm.bam string path to normal sample, input to Bamfile()(optional) (default = NULL)
+#' @param out.file string path to TSV output file to be generated 
+#' @param vcf.file string path to VCF file of sites (eg hapmap or 1000G) at which to compute read counts
+#' @param chunk.size1 integer Number of variants to process from VCF file at a time (default = 1e3)
+#' @param chunk.size2 integer Number of variants to access from BAM file in a single iteration (default = 1e2)
+#' @param mc.cores integer Number of cores in mclapply (default = 1)
+#' @param verbose boolean Flag to increase verbosity (default = TRUE)
+#' @param na.rm logical Flag to remove rows with NA counts (default = TRUE)
+#' @param filt.norm logical Flag to remove any sites that have allele fraction of 0 or 1 or NA in MAF; if TRUE will remove any sites that have allele fraction 0 or 1 or NA in MAF 
+#' @return nil
+#' @author Marcin Imielinski
+#' @export
+hets = function(tum.bam, norm.bam = NULL, out.file, vcf.file, chunk.size1 = 1e3, chunk.size2 = 1e2, mc.cores = 1, verbose = TRUE, na.rm = TRUE, filt.norm = TRUE)
+{    
+    f = file(vcf.file, 'r')
+      
+    if (grepl('VCF', readLines(f, 1))){
+        vcf = TRUE
+    }
+    else{
+        vcf = FALSE
+    }
+
+    sl = hg_seqlengths()
+
+    if (verbose){
+        st = Sys.time()
+    }
+
+    nprocessed = 0
+    nhets = 0
+    first = TRUE
+    ## get past headers
+
+    ## while (grepl('^#', last.line <<- readLines(f, n=1))){}
+
+    if (verbose){
+        cat('Opened vcf, writing hets to text file', out.file, '\n')
+    }
+
+    out.cols = c('seqnames', 'start', 'end', 'Tumor_Seq_Allele1', 'Reference_Allele', 'ref.count.t', 'alt.count.t', 'ref.count.n', 'alt.count.n', 'alt.frac.t', 'ref.frac.t', 'alt.frac.n', 'ref.frac.n')
+
+    if (vcf){
+        col.ix = 1:5
+    }
+    else{
+        col.ix = match(c("Chromosome", "Start_position", "End_position", "Reference_Allele", "Tumor_Seq_Allele1", "Tumor_Seq_Allele2"), strsplit(last.line, '\t')[[1]])
+        if (any(is.na(col.ix))){
+            stop('Error: failure processing variant file: must be valid VCF or MAF')
+        }
+    }
+      
+    while (!is.null(tmp <- tryCatch(read.delim(file = f, as.is = T, header = F, nrows = chunk.size1)[, col.ix], error = function(x) NULL))){
+        
+        if (vcf){
+            names(tmp) = c('chr', 'start', 'name', 'ref', 'alt')
+        }
+        else{
+            names(tmp) = c('chr', 'start', 'name', 'ref', 'alt', 'alt2')
+            ## just in case the first tumor seq allele is equal to reference .. which happens in mafs
+            tmp$alt = ifelse(tmp$alt==tmp$ref, tmp$alt2, tmp$alt)
+        }
+              
+        loc = seg2gr(tmp, seqlengths = sl)    
+        clock({loc.count = mafcount(tum.bam, norm.bam, loc, indel = T, chunk.size = chunk.size2, mc.cores = mc.cores)})
+        nprocessed = nprocessed + length(loc.count)
+              
+        if (filt.norm & !is.null(loc.count$alt.frac.n)){
+            loc.count = loc.count[which(loc.count$alt.frac.n != 1 & loc.count$alt.frac.n != 0)]
+        }
+              
+        nhets = nhets + length(loc.count)
+        if (length(loc.count)>0){
+
+            df = as.data.frame(loc.count)
+            ## remove any entries with 0 ref or alt reads in tumor or normal
+            if (na.rm){
+                if (!is.null(norm.bam)){
+                    naix = apply(df[, c('alt.count.t', 'ref.count.t', 'alt.count.n', 'ref.count.n')], 1, function(x) all(is.na(x)))
+                }
+                else{
+                    naix = apply(df[, c('alt.count.t', 'ref.count.t')], 1, function(x) all(is.na(x)))
+                }
+                df = df[which(!naix), ]
+            }
+
+            out.cols = intersect(out.cols, names(df))
+
+            if (first){
+                write.tab(df[, out.cols], out.file, append = F, col.names = T)
+                first = F
+            }
+            else{
+                write.tab(df[, out.cols], out.file, append = T, col.names = F)
+            }                     
+              
+            if (verbose){
+                cat(sprintf('Processed %s sites, wrote %s candidate hets\n', nprocessed, nhets))
+            }
+
+            if (verbose){
+                cat('Time elapsed:\n')
+                print(Sys.time() - st)
+            }              
+        }
+    }
+      
+    close(f)
+     
+    if (verbose){
+        cat('Finished het processing wrote to file', out.file, '\n')
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+#' Merges rearrangements represented by \code{GRangesList} objects
+#'
+#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
+#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
+#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
+#' (or "seen.by.ra" and the argument number)
+#'
+#' @param ... GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
+#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
+#' @name ra.merge
+#' @examples
+#'
+#' # generate some junctions
+#' gr1 <- GRanges(1, IRanges(1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' gr2 <- GRanges(1, IRanges(4 + 1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' ra1 = split(gr1, rep(1:5, each = 2))
+#' ra2 = split(gr2, rep(1:5, each = 2))
+#'
+#' ram = ra.merge(ra1, ra2)
+#' values(ram) # shows the metadata with TRUE / FALSE flags
+#'
+#' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
+#' values(ram2)
+#'
+#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
+#' values(ram3)
+#' @export
+ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
+    ra = list(...)
+    ra = ra[which(!sapply(ra, is.null))]
+    nm = names(ra)
+    if (is.null(nm)){
+        nm = paste('ra', 1:length(ra), sep = '')
+    }
+    nm = paste('seen.by', nm, sep = '.')
+    if (length(nm)==0){
+        return(NULL)
+    }
+    out = ra[[1]]
+    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
+
+    if (!ind){
+        values(out)[, nm[1]] = TRUE
+    } else{
+        values(out)[, nm[1]] = 1:length(out)
+    }
+
+    if (length(ra)>1){
+        for (i in 2:length(ra)){
+            this.ra = ra[[i]]
+            if (length(this.ra)>0){
+                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
+                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
+
+                if (!ind){
+                    values(this.ra)[[nm[i]]] = TRUE
+                } else{
+                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
+                }
+
+                if (!ind){
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = TRUE
+                    }
+                } else{
+                    values(out)[, nm[i]] = NA
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
+                    }
+                }
+                ## which are new ranges not already present in out, we will add these
+                if (!all(is.na(ovix))){
+                    nix = setdiff(1:length(this.ra), ovix[,2])
+                } else{
+                    nix = 1:length(this.ra)
+                }
+
+                if (length(nix)>0){
+                    val1 = values(out)
+                    val2 = values(this.ra)
+                    if (ind){
+                        val2[, nm[1:(i-1)]] = NA
+                    }
+                    else{
+                        val2[, nm[1:(i-1)]] = FALSE
+                    }
+                    values(out) = NULL
+                    values(this.ra) = NULL
+                    out = grl.bind(out, this.ra[nix])
+                    values(out) = rrbind(val1, val2[nix, ])
+                }
+            }
+        }
+    }
+    return(out)
+}
+
+
+
 
