@@ -3957,8 +3957,8 @@ dirr = function(x, pattern = NULL, rep = '', full = TRUE,  ...)
   }
 
 ###################
-#' @name pad
-#' @title pad
+#' @name padding
+#' @title padding
 #'
 #' @description
 #' pads an (integer) vector with k places below and above its lowest and highest value
@@ -3974,7 +3974,7 @@ dirr = function(x, pattern = NULL, rep = '', full = TRUE,  ...)
 #' @author Marcin Imielinski
 #' @export
 ###################
-pad = function(x, k, clip = T)
+padding = function(x, k, clip = T)
   {
     out = unique(as.vector(rbind(
       apply(cbind(x), 1, function(y) (y-k):(y-1)),
