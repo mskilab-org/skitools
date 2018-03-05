@@ -5,21 +5,24 @@
 \alias{cameraplot}
 \title{cameraplot}
 \usage{
-cameraplot(camera.res, gene.sets, voom.res, design, contrast = ncol(design),
+cameraplot(camera.res, gene.sets, voom.res = NULL, design = NULL,
+  genes = NULL, contrast = ncol(design),
   title = "Camera Gene set notch plot", cex.space = 1,
   col.axis = alpha("gray20", 0.8), col.ramp = c("blue", "red"),
   cex.slab = 1, cex.glab = 1, lwd.notch = 1, tick.w = 0.1,
   max.genes = 10, text.shift = 0.5, height.wf = 0.1, min.corr = 0.1,
-  min.dist = 10, max.gene.sets = 20, gtext.shift = 0.2)
+  min.dist = 10, middle = NULL, max.gene.sets = 20, gtext.shift = 0.2)
 }
 \arguments{
-\item{camera.res}{output of camera from limma}
+\item{camera.res}{output of camera from limma, or data.table with fields $name, $P, $Direction, $FDR}
 
 \item{gene.sets}{gene set input to camera (named list of indices into the voom.res gene expression matrix)}
 
-\item{voom.res}{output of voom from limma}
+\item{voom.res}{output of voom from limma (default NULL)}
 
-\item{design}{design matrix input to camera}
+\item{design}{design matrix input to camera (default NULL)}
+
+\item{genes}{alternate to voom.res and design can just provide a named numeric vector of effect sizes, named by genes}
 
 \item{cex.space}{label spacing expansion factor (use if labels get too crowded}
 

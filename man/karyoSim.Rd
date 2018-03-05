@@ -34,7 +34,7 @@ Each event consists of either
   in at least some interval loss.  We restrict QRS's to contain at most one repeated junction, and this has to be the first
   and the last item in the sequence.  "Quasi" reciprocal means that we allow some sequence to be lost or gained in between breaks.
 - Every QRS is instantiated in the current genome, by mapping junctions, which are specified in haploid reference
-  coordinates to intervals on the current genome.  By default, instantiation is chosen so that the source interval of 
+  coordinates to intervals on the current genome.  By default, instantiation is chosen so that the source interval of
   every junction in the QRS is on the same chromosome as the target interval on the previous junction in the QRS.  If this is the
   case, then we say that the current junction  "follows" the previous one in this WQRS instantiation.  Quasi-reciprocality is then applied
   by possibly adding intervals at the site of a break (i.e. if the target interval of the previous junction is upstream of the
@@ -54,7 +54,7 @@ Each event consists of either
   products in the current iteration.
 - Every junction is implemented <exactly once> during the evolutionary history, i.e. lightning does not strike twice, infinite
   sites model
-  
+
 p.chrom = prob of chrom event at each simulation step
 p.chromloss = probability of chromosomal loss | chrom event (default 0.5)
 p.chromgain = probability of chromosomal gain | chrom event (default 0.5)
@@ -73,7 +73,7 @@ Output is provided as
                 $gChain = gChain mapping reference to tumor genome
                 $cn = gRanges in reference genome of copy counts of reference intervals
                 $events = data frame of event indices with field $id (for event id), $desc (see below for description)
-- (if full = T) List of lists, each item k corresponding to each stage k of evolution and 
+- (if full = T) List of lists, each item k corresponding to each stage k of evolution and
                 containing the following fields:
                 $chroms = Named GRangesList of tumor chromosomes at that stage in terms of reference intervals
                 $gChain = gChain mapping reference to current genome k

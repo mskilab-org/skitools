@@ -6,7 +6,8 @@
 \usage{
 pmGSEA(gene.sets, sig.table, min.perms = 100, max.perms = 1e+05,
   positive.selection = T, length.filter = F, length.range = c(5, 50),
-  plot.hist = F, verbose = F, bootstrap = T, rank.test = F)
+  mc.cores = 1, plot.hist = F, verbose = F, bootstrap = T,
+  rank.test = F)
 }
 \arguments{
 \item{gene.sets}{a named list of character vectors, each list item is a gene set, i.e. a character vector of genes}

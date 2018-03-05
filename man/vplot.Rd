@@ -6,12 +6,13 @@
 \usage{
 vplot(y, group = "x", facet1 = NULL, facet2 = NULL, transpose = FALSE,
   flip = FALSE, mapping = NULL, stat = "ydensity", position = "dodge",
-  trim = TRUE, sample = NA, scale = "area", log = FALSE, count = TRUE,
-  xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA, scatter = FALSE,
-  text = NULL, cex.scatter = 1, col.scatter = NULL, alpha = 0.3,
-  title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE,
-  vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1,
-  plotly = FALSE, print = TRUE)
+  trim = TRUE, sample = NA, scale = "width", log = FALSE,
+  count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
+  scatter = FALSE, text = NULL, reorder = FALSE, reorder.fun = mean,
+  cex.scatter = 1, col.scatter = NULL, alpha = 0.3, title = NULL,
+  legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE,
+  dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE,
+  print = TRUE)
 }
 \arguments{
 \item{y}{numeric data vector}
@@ -26,7 +27,7 @@ vplot(y, group = "x", facet1 = NULL, facet2 = NULL, transpose = FALSE,
 
 \item{mapping}{mapping of groups to colors (=NULL)}
 
-\item{scale}{scale parameter to geom_vplot (=area)}
+\item{scale}{scale parameter to geom_vplot (=width), can also be "area" and "count"}
 
 \item{log}{logical flag whether to log transform (=FALSE)}
 
@@ -39,6 +40,10 @@ vplot(y, group = "x", facet1 = NULL, facet2 = NULL, transpose = FALSE,
 \item{minsup}{minimum support to include in a group (=NA)}
 
 \item{scatter}{logical flag whether to include scatter of points (=FALSE)}
+
+\item{reorder}{logical flag whether to reorder groups by order.fun (which by default is mean)}
+
+\item{reorder.fun}{function on which to order from left to right (default mean)}
 
 \item{alpha}{numeric vector between 0 and 1 to specify alpha transparency of points if scatter is TRUE (0.3)}
 

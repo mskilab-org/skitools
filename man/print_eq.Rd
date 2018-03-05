@@ -6,3 +6,6 @@
 \usage{
 print_eq(Ab, xlabels = NULL)
 }
+\description{
+Prints and formats equations Ax = b in matrix Ab whose last column is the vector B
+}

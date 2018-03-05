@@ -2,8 +2,11 @@
 % Please edit documentation in R/skitools.R
 \name{match.bs}
 \alias{match.bs}
+\alias{match.bs}
 \title{Identify matches between query and dictionary}
 \usage{
+match.bs(query, dict, midpoint = FALSE)
+
 match.bs(query, dict, midpoint = FALSE)
 }
 \arguments{
@@ -13,12 +16,25 @@ match.bs(query, dict, midpoint = FALSE)
 
 \item{midpoint}{Flag for output the coordinates of the match as the location,
 where the midpoint of the dict string matches the given query. Default FALSE}
+
+\item{query}{Query XStringSet / DNAStringSet}
+
+\item{dict}{Dictionary}
+
+\item{midpoint}{Flag for output the coordinates of the match as the location,
+where the midpoint of the dict string matches the given query. Default FALSE}
 }
 \value{
 a vector of indices of length width(query) that contains
 indices of the (starting) dictionary in the query string
+
+a vector of indices of length width(query) that contains
+indices of the (starting) dictionary in the query string
 }
 \description{
+Wrapper around matchPdict to identify matches between a query
+string query and dictionary dict (both BString objects or subclasses)
+
 Wrapper around matchPdict to identify matches between a query
 string query and dictionary dict (both BString objects or subclasses)
 }
