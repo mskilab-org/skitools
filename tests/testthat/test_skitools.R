@@ -42,6 +42,8 @@ test_that("test is.dup()", {
     
 })
 
+
+
 test_that("test charToDec()", {
     
     expect_equal(charToDec("BRCA2"), c(66, 82, 67, 65, 50))
