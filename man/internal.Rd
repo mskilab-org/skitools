@@ -7,6 +7,7 @@
 \alias{karyotrack}
 \alias{anno.hop}
 \alias{jabba.kid}
+\alias{ra_tier}
 \title{jabba.gwalk}
 \usage{
 jabba.gwalk(jab, verbose = FALSE, return.grl = TRUE)
@@ -21,6 +22,9 @@ karyotrack(kag, paths = NULL, col = "red", pad = 0)
 anno.hop(walks)
 
 jabba.kid(gwalks, pad = 5e+05, min.ab = 5e+05, min.run = 2)
+
+ra_tier(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10,
+  min.treads2 = 3, max.nreads = Inf)
 }
 \arguments{
 \item{jab}{JaBbA object
@@ -63,6 +67,12 @@ between "hops"
 
 Given a set of gwalks (grangeslist outputs of jabba.gwalk) identifies strings "kidnapped" fragments i.e.
 strings of tempaled insertions, which are outputted as a grangeslist
+
+Classify full set of dRanger rearrangements into "tiers" of confidence
+
+(1) Tier 1 BPresult>0 and somatic_score>min.score1
+(2) Tier 2 BPresult=0 and somatic_score>min.score1
+(3) Tier 3 min.score2<=somatic_score<=min.score2 & tumreads>min.reads
 }
 \details{
 Takes karyograph and outputs gTrack +/- highlighting of one or more paths defined as GRanges or GRangesList (for multiple paths)
