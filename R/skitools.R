@@ -16165,7 +16165,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
         ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
         ##
 
-        seg.edges = as.data.frame(matrix::which(A!=0, arr.ind = T))
+        seg.edges = as.data.frame(Matrix::which(A!=0, arr.ind = T))
         colnames(seg.edges) = c('from.seg', 'to.seg')
         edges = merge(merge(data.frame(i = 1:length(all.frags), from.seg = all.frags$subject.id),
             seg.edges), data.frame(j = 1:length(all.frags), to.seg = all.frags$subject.id))
