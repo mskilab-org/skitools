@@ -6,6 +6,9 @@
 \usage{
 rrbind(..., union = T)
 }
+\arguments{
+\item{union}{logical flag whether to take union of columns (if FALSE takes intersection)}
+}
 \description{
 like rbind, but takes the intersecting columns of the dfs
 
