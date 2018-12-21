@@ -32,6 +32,9 @@ Depends:
     data.table,
     reshape2, 
     igraph
+Remotes: 
+  github::mskilab/gUtils,
+  github::mskilab/gTrack
 Suggests:
     testthat,
     parallel,
