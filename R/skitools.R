@@ -1,4 +1,4 @@
-1;2D## Marcin Imielinski
+## Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
 ##
