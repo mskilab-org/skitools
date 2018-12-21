@@ -13813,6 +13813,19 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
                     values(this.ra) = NULL
                     out = grl.bind(out, this.ra[nix])
                     values(out) = rrbind(val1, val2[nix, ])
+                } else if (length(setxor(1:length(this.ra), ovix[, 2])) == 0) { ## fix if there is perfect overlap... this case was previously not dealt with
+                    merge_cols = setdiff(colnames(values(this.ra)), nm)
+                    if (length(merge_cols) > 0) {
+                        tmp_field = "out_ix_50169346127375946273"
+                        val1 = values(out)
+                        val2 = values(this.ra)
+                        val1[[tmp_field]] = seq_along(out)
+                        val2[ovix[,2],tmp_field] = ovix[,1]
+                        new_val = merge(val1, val2[,c(tmp_field, merge_cols)], by = tmp_field, all.x = TRUE)
+                        new_val = new_val[order(new_val[[tmp_field]]),]
+                        new_val[[tmp_field]] = NULL
+                        values(out) = new_val
+                    }
                 }
             }
         }
