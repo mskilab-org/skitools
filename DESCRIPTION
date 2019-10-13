@@ -9,7 +9,6 @@ Description: R miscellaneous utilities for basic data manipulation, debugging,
 Imports:
     gplots,
     hwriter,
-    plotrix,
     S4Vectors,
     RColorBrewer,
     methods,		

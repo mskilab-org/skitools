@@ -251,6 +251,31 @@ dedup = function(x, suffix = '.')
 }
 
 
+#' @name nona
+#' @title nona
+#'
+#' @description
+#'
+#' Given data.frame / data.table dt outputs only the columns that are non.na 
+#' in at least thresh fraction of the rows
+#' 
+#' @param dt
+#' @param thresh
+#' @return data.table with a subset of columns that have at least a given fraction of non NA entries
+#' @author Marcin Imielinski
+#' @export
+################################
+nona = function(dt, thresh = 0.1)
+{
+  na = colSums(is.na(dt))/nrow(dt)
+  if (inherits(dt, 'data.table'))
+    dt[, which(!na), with = FALSE]
+  else
+    dt[, which(!na), with = FALSE]
+}
+
+
+
 #' @name qq_pval
 #' @title qq plot given input p values
 #' @param obs vector of pvalues to plot, names of obs can be intepreted as labels
@@ -268,7 +293,7 @@ dedup = function(x, suffix = '.')
 #' @param titleText title for plotly (html) graph only
 #' @author Marcin Imielinski, Eran Hodis, Zoran Gajic
 #' @export
-qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=T, max=NULL, max.x = NULL, max.y = NULL, qvalues=NULL, label = NULL, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
+qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=FALSE, max=NULL, max.x = NULL, max.y = NULL, qvalues=NULL, label = NULL, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
 {
     if(!(plotly)){
         is.exp.null = is.null(exp)
@@ -374,7 +399,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                 setkey(dat, names)
             }
 
-        if (nrow(dat)>1e5) ## rough guide to subsmapling the lower p value part of the plot
+        if (nrow(dat)>1e5) ## rough guide to subsampling the lower p value part of the plot
             subsample = 5e4/nrow(dat)
 
         if (is.na(subsample[1]))
@@ -842,8 +867,8 @@ lsf_query = lsf_out_query = query_lsf_out = function(dir = NULL, jname = NULL, d
       {
           if (!is.null(jname))
               {
-                  dir = file.dir(jname)
-                  jname = file.name(jname)
+                  dir = dirname(jname)
+                  jname = basename(jname)
               }
           else
               dir = ''
@@ -1397,17 +1422,18 @@ gr.peaks = function(gr, field = 'score',
                         peak.gr = peel.gr[in.peak1 & in.peak2] ## want to be more strict with segments used for peeling
                         peak.hood = reduce(peak.gr) ## actual peak will be a subset of this, and we can this in further iterations to limit peak revision
 
-                        if (bootstrap)
+                        in.peak = rep(FALSE, length(gr))
+                        if (bootstrap && length(peak.gr))
                             {
                                 ## asking across bootstrap smaples how does the intersection fluctuate
                                 ## among segments contributing to the peak
 
                                 if (!is.null(id.field))
                                     {
-                                        peak.gr = seg2gr(gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
-                                            eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
-                                            by = eval(id.field)])
-                                        names(values(peak.gr))[] = field ## not sure why I need to do this line, should be done above
+                                      peak.gr = seg2gr(gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
+                                                                             eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
+                                                                      by = eval(id.field)])
+                                      names(values(peak.gr))[ncol(values(peak.gr))] = field ## not sure why I need to do this line, should be done above
                                     }
 
                                 B = matrix(sample(1:length(peak.gr), nbootstrap * length(peak.gr), prob = abs(values(peak.gr)[, field]), replace = TRUE), ncol = length(peak.gr))
@@ -2450,6 +2476,8 @@ write.htab = function(tab, file = NULL,
     # require(hwriter)
     # require(gplots)
 
+    if (is.data.table(tab))
+      tab = as.data.frame(tab)
 
     if (!is.data.frame(tab))
       tab = as.data.frame(tab)
@@ -2473,13 +2501,13 @@ write.htab = function(tab, file = NULL,
           }
       }
 
-      if (nchar(file.dir(file))==0)
+      if (nchar(dirname(file))==0)
           file = paste0('./', file)
 
-      if (!file.exists(file.dir(file)))
-          system(paste('mkdir -p', file.dir(file)))
+      if (!file.exists(dirname(file)))
+          system(paste('mkdir -p', dirname(file)))
 
-      file = paste(normalizePath(file.dir(file)), file.name(file), sep = '/')
+      file = paste(normalizePath(dirname(file)), basename(file), sep = '/')
 
      if (dt)
      {
@@ -2502,7 +2530,7 @@ write.htab = function(tab, file = NULL,
              for (i in which(lix))
                  tab[, i] = sapply(tab[, i], function(x) paste(x, collapse = ','))
 
-         dir.create(dirname(normalizePath(file.dir(file))), recursive=TRUE, showWarnings = FALSE)
+         dir.create(dirname(normalizePath(dirname(file))), recursive=TRUE, showWarnings = FALSE)
          p = hwriter::openPage(file, link.css = 'hwriter.css')
          if (!is.null(title))
              hwriter::hwrite(title, p, style = sprintf('font-weight:bold; font-size:%spx; margin-top;50px', title.size), center = TRUE, div = TRUE, br = TRUE);
@@ -2850,7 +2878,7 @@ img.html = function(paths, text = names(paths), height = 1024, width = 768, head
 html_link = function(href, text = NULL)
   {
     if (is.null(text))
-      text = file.name(href)
+      text = basename(href)
 
     return(mapply(function(x,y) html_tag('a', href = x,  text = y), href, text))
   }
@@ -3593,53 +3621,75 @@ levapply = function(x, by, FUN = 'order')
 #' @return length(n) character vector of colors
 #' @author Marcin Imielinski
 #' @export
-brewer.master = function(n, palette = 'Accent')
+brewer.master = function(n, palette = NULL, wes = TRUE,  list = FALSE)
 {
-    nms = NULL
+
+    if (wes)
+    {
+      palettes = c("Royal2"=5, "Chevalier1"=4, "Darjeeling1"=5, "IsleofDogs1"=6, "Darjeeling2"=5, "Moonrise1"=4, "BottleRocket1"=7, "Rushmore"=5, "Moonrise3"=5, "Cavalcanti1"=5, "Rushmore1"=5, "FantasticFox1"=5, "BottleRocket2"=5, "Royal1"=4, "IsleofDogs2"=5, "Moonrise2"=4, "GrandBudapest1"=4, "GrandBudapest2"=4, "Zissou1"=5)
+    }
+    else
+    {
+    palettes = list(
+      sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
+      diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
+          qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
+        );
+      }
+
+  palettes = unlist(palettes);
+  if (list)
+    return(palettes)
+
+
+  if (is.null(palette))
+    palette = names(palettes)[1]
+
+  nms = NULL
     if (is.character(n))
     {
         nms = unique(n)
         n = length(nms)
     }
+  
+    names(palettes) = gsub('\\w+\\.', '', names(palettes))
 
-  # library(RColorBrewer)
-  palettes = list(
-    sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
-    diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
-    qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
-  );
+    if (palette %in% names(palettes))
+      i = match(palette, names(palettes))
+    else
+      i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
 
-  palettes = unlist(palettes);
-  names(palettes) = gsub('\\w+\\.', '', names(palettes))
+    col = c();
+    col.remain = n;
 
-  if (palette %in% names(palettes))
-    i = match(palette, names(palettes))
-  else
-    i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
-
-  col = c();
-  col.remain = n;
-
-  while (col.remain > 0)
+    while (col.remain > 0)
     {
       if (col.remain > palettes[i])
+      {
+        next.n = palettes[i]
+        col.remain = col.remain-next.n;
+      }
+      else
+      {
+        next.n = col.remain
+        col.remain = 0;
+      }
+
+      if (!wes)
         {
-          next.n = palettes[i]
-          col.remain = col.remain-next.n;
+          col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
         }
       else
-        {
-          next.n = col.remain
-          col.remain = 0;
-        }
+      {
+        col = c(col, wesanderson::wes_palettes[[names(palettes[i])]])
+      }
 
-      col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
       i = ((i) %% length(palettes))+1
     }
 
     col = col[1:n]
     names(col) = nms
-  return(col)
+    return(col)
 }
 
 #' @name charToDec
@@ -4380,9 +4430,9 @@ dirr = function(x, pattern = NULL, rep = '', full = TRUE,  ...)
   {
       out = dir(x, pattern, full.names = full, ...)
       if (!is.null(pattern))
-          names(out) = gsub(pattern, rep, file.name(out))
+          names(out) = gsub(pattern, rep, basename(out))
       else
-          names(out) = file.name(out)
+          names(out) = basename(out)
     return(out)
   }
 
@@ -4482,11 +4532,11 @@ ppng = function(expr, filename = 'plot.png', height = 1000, width = 1000, dim = 
     if (!grepl('^[~/]', filename))
         filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
 
-    if (!file.exists(file.dir(filename)))
-        system(paste('mkdir -p', file.dir(filename)))
+    if (!file.exists(dirname(filename)))
+        system(paste('mkdir -p', dirname(filename)))
 
     cat('rendering to', filename, '\n')
-    png(filename, height = height, width = width, pointsize = 24*cex.pointsize, ...)
+    png(filename, height = height, width = width, pointsize = 24*cex.pointsize, ...) ## R default for pointsize is 12...
 
     if (!is.null(dim))
     {
@@ -4538,8 +4588,8 @@ ppdf = function(expr, filename = 'plot.pdf', height = 10, width = 10, cex = 1, t
     if (!grepl('^[~/]', filename))
         filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
 
-    if (!file.exists(file.dir(filename)))
-        system(paste('mkdir -p', file.dir(filename)))
+    if (!file.exists(dirname(filename)))
+        system(paste('mkdir -p', dirname(filename)))
 
     cat('rendering to', filename, '\n')
     pdf(filename, height = height, width = width, ...)
@@ -4585,13 +4635,13 @@ wij = function(expr, filename = 'plot.html', zoom = NULL, cex = 1, force = FALSE
                     filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
             }
 
-        if (nchar(file.dir(filename))==0)
+        if (nchar(dirname(filename))==0)
           filename = paste0('./', filename)
 
-        if (!file.exists(file.dir(filename)))
-            system(paste('mkdir -p', file.dir(filename)))
+        if (!file.exists(dirname(filename)))
+            system(paste('mkdir -p', dirname(filename)))
 
-        filename = paste(normalizePath(file.dir(filename)), file.name(filename), sep = '/')
+        filename = paste(normalizePath(dirname(filename)), basename(filename), sep = '/')
 
         widg = eval(expr)
 
@@ -4698,8 +4748,8 @@ sortable = function(x, filename = 'list.html', title = NULL)
         if (!grepl('^[~/]', filename))
             filename = paste(DEFAULT.OUTDIR, filename, sep = '/')
 
-        if (!file.exists(file.dir(filename)))
-            system(paste('mkdir -p', file.dir(filename)))
+        if (!file.exists(dirname(filename)))
+            system(paste('mkdir -p', dirname(filename)))
 
         cat('dropping list to', filename, '\n')
         head1 = '<!doctype html>
@@ -4779,22 +4829,22 @@ plop = function(fn, prefix = NULL, force = NULL)
       if (!is.character(fn))
           {
               new.fn = paste('~/public_html/', prefix, gsub('\\W+', '_', deparse(substitute(fn)), perl = TRUE), '.rds', sep = '')
-              if (!file.exists(file.dir(new.fn)))
-                  system(paste('mkdir -p', file.dir(new.fn)))
+              if (!file.exists(dirname(new.fn)))
+                  system(paste('mkdir -p', dirname(new.fn)))
 
               saveRDS(fn, new.fn)
 
               return(new.fn)
           }
 
-      new.fn = paste(prefix, file.name(fn), sep = '')
+      new.fn = paste(prefix, basename(fn), sep = '')
 
       DEFAULT.OUTDIR = Sys.getenv('PLOP.DIR')
       if (nchar(DEFAULT.OUTDIR)==0)
           DEFAULT.OUTDIR = normalizePath('~/public_html/')
 
       if (!file.exists(DEFAULT.OUTDIR))
-          system(paste('mkdir -p', file.dir(filename)))
+          system(paste('mkdir -p', dirname(filename)))
 
       if (!is.null(force))
           {
@@ -4805,9 +4855,9 @@ plop = function(fn, prefix = NULL, force = NULL)
 
       new.fn = paste(DEFAULT.OUTDIR, new.fn, sep = '/')
 
-      if (any(ix <- !file.exists(file.dir(new.fn))))
+      if (any(ix <- !file.exists(dirname(new.fn))))
           sapply(new.fn[ix], function(x)
-              system(paste('mkdir -p', file.dir(x))))
+              system(paste('mkdir -p', dirname(x))))
 
       mapply(function(x, y) system(paste('cp', x, y)), fn, new.fn)
 
@@ -4848,6 +4898,7 @@ plop = function(fn, prefix = NULL, force = NULL)
 #' @export
 ###################################
 splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
+                 intercept = TRUE, 
     xlim = quantile(x, na.rm = T, prob = c(poutlier[1], 1-poutlier[length(poutlier)])),
     ylim = quantile(y, na.rm = T, prob = c(poutlier[1], 1-poutlier[length(poutlier)])),
     label = NULL,
@@ -4912,33 +4963,45 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 
         if (fit)
             {
-                dat = data.frame(x, y)
-                ix = rowSums(is.infinite(as.matrix(dat)), na.rm = TRUE)>0 | rowSums(is.na(dat))
-                dat = as.data.table(dat[!ix, ])[ x>=xlim[1] & x<=xlim[2] & y>=ylim[1] & y<=ylim[2], ]
+              dat = data.frame(x, y)
+              ix = rowSums(is.infinite(as.matrix(dat)), na.rm = TRUE)>0 | rowSums(is.na(dat))
+              dat = as.data.table(dat[!ix, ])[ x>=xlim[1] & x<=xlim[2] & y>=ylim[1] & y<=ylim[2], ]
 
+              if (intercept)
+              {
                 m = lm(y ~ x, dat)
-                abline(m, lwd = 3, lty = 2, col = col.fit)
+                a = coef(m)[1]
+                b = coef(m)[2]
+              }
+              else
+              {
+                m = lm(y ~ x-1, dat)
+                a = 0
+                b = coef(m)[1]
+              }
 
-                eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2,
-                                 list(a = format(coef(m)[1], digits = 2),
-                                      b = format(coef(m)[2], digits = 2),
-                                      r2 = format(summary(m)$r.squared, digits = 3)))
-
-
-                if (coef(m)[2]>0)
-                    {
-                        adj = c(1, 0.5)
-                        xpos = par('usr')[1] + diff(par('usr')[1:2])*0.8
-                        ypos = par('usr')[3] + diff(par('usr')[3:4])*0.2
-                    }
-                else
-                    {
-                        adj = c(0, 0.5)
-                        xpos = par('usr')[1] + diff(par('usr')[1:2])*0.2
-                        ypos = par('usr')[3] + diff(par('usr')[3:4])*0.2
-                    }
-
-                text(xpos, ypos, eq, col = col.fit, cex = cex.fit, adj = adj)
+              abline(m, lwd = 3, lty = 2, col = col.fit)
+              
+              eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2,
+                               list(a = format(a, digits = 2),
+                                    b = format(b, digits = 2),
+                                    r2 = format(summary(m)$r.squared, digits = 3)))
+              
+              
+              if (b>0)
+              {
+                adj = c(1, 0.5)
+                xpos = par('usr')[1] + diff(par('usr')[1:2])*0.8
+                ypos = par('usr')[3] + diff(par('usr')[3:4])*0.2
+              }
+              else
+              {
+                adj = c(0, 0.5)
+                xpos = par('usr')[1] + diff(par('usr')[1:2])*0.2
+                ypos = par('usr')[3] + diff(par('usr')[3:4])*0.2
+              }
+              
+              text(xpos, ypos, eq, col = col.fit, cex = cex.fit, adj = adj)
             }
     }
 
@@ -4994,6 +5057,45 @@ pscatter = function(x, y, text = '', color = NULL, size = NULL, mode = 'markers'
 }
 
 
+#' @name bubblemap
+#' @title bubblemap
+#'
+#' @description
+#' Quick bubble heatmap from matrix mat, use cex to tweak bubble size. 
+#' @export
+bubblemap = function(mat, col = 'darkgreen', cluster = TRUE, cex = 1, cex.text = 1, zlim = cex*c(0, 10), col.text = 'white', show.legend = FALSE)
+{
+  if (is.null(rownames(mat)))
+    rownames(mat) = 1:nrow(mat)
+
+  if (is.null(colnames(mat)))
+    colnames(mat) = 1:ncol(mat)
+
+  rowind = 1:nrow(mat)
+  colind = 1:ncol(mat)
+  if (cluster)
+    {
+      rowind = hclust(dist(mat))$order
+      colind = hclust(dist(t(mat)))$order
+    }
+  uv1 = rownames(mat)[rowind]
+  uv2 = colnames(mat)[colind]
+
+  res = as.data.table(melt(mat))
+  res[, Var1 := factor(Var1, uv1)]
+  res[, Var2 := factor(Var2, uv2)]
+
+  gg = ggplot(res, aes(Var1, Var2)) +
+    geom_point(aes(size = cex*value), alpha=0.8, color=col, show.legend=show.legend) +
+    geom_text(aes(label = signif(value,2), size = cex*cex.text*value/10), color=col.text) +
+    #geom_text(aes(label = signif(value,2), size = cex*cex.text/10), color=col.text) +
+    scale_size(range = zlim) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          panel.background = element_rect(fill = 'white', colour = 'white')
+          )
+  print(gg)
+}
+
 #' @name vplot
 #' @title vplot
 #'
@@ -5025,10 +5127,18 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
     position = "dodge",
     trim = TRUE, sample = NA, scale = "width", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
     scatter = FALSE,
+    wes = 'Royal1',
+    col = NULL, 
+    method = 'count',
+    sina = FALSE,
+    sina.scale = FALSE,
     text = NULL,
     reorder = FALSE,
     reorder.fun = mean,
-    cex.scatter = 1,
+    cex = 1,
+    cex.axis = 1,
+    cex.title = 1, 
+    cex.scatter = cex,
     col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE)
     {
         # require(ggplot2)
@@ -5070,73 +5180,78 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
       suppressWarnings(dat[, facet2 := facet2])
 
       dat = dat[rowSums(is.na(dat))==0, ]
+      
+      ## remove 0 variance groups
+      dat$vgroup = paste(dat$group, dat$facet1, dat$facet2)
 
-            ## remove 0 variance groups
-        dat$vgroup = paste(dat$group, dat$facet1, dat$facet2)
+      vgroup = NULL ## NOTE fix
+      good = as.data.table(dat)[, list(var = var(y)), keyby = vgroup][var>0, vgroup]
+      dat = dat[, vfilter := dat$vgroup %in% as.character(good)]
+      
+      if (!is.na(minsup))
+      {
+        num = NULL ## NOTE fix
+        good = as.data.table(dat)[, list(num = length(y)), keyby = vgroup][num>minsup, vgroup]
+        dat = dat[(dat$vgroup %in% as.character(good)), ]
+      }
+      
+      if (nrow(dat)==0)
+        stop('No groups exist with >0 variance')
+      
+      if (count)
+      {
+        tmp = table(dat$group)
+        ix = match(levels(dat$group), names(tmp))
+        newnames =  paste(names(tmp)[ix], '\n(', tmp[ix], ')', sep = '')
+        if (!is.null(col))
+          names(col)[match(levels(dat$group), names(col))] = newnames
+        levels(dat$group) = newnames
+      }
+      
+      if (is.null(mapping))
+        mapping = aes(fill=group)
+      
+      g = ggplot(dat[vfilter!=0, ], aes(y = y, x = group)) + theme_bw(base_size = 15*cex.axis) %+replace% theme(plot.title = element_text(size = 11*cex.axis*cex.title))
 
-        ## if (vfilter)
-        ##     {
-        vgroup = NULL ## NOTE fix
-        good = as.data.table(dat)[, list(var = var(y)), keyby = vgroup][var>0, vgroup]
-        dat = dat[, vfilter := dat$vgroup %in% as.character(good)]
-        ## }
-
-        if (!is.na(minsup))
+      if (vplot)
+        g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
+      
+      scatter = sina | scatter
+      if (scatter)
+      {
+        if (sina)
+        {
+          g = g + ggforce::geom_sina(scale = sina.scale, method = method, size = 2*cex.scatter, alpha = alpha)
+        }
+          else if (dot)
+          {
+            if (is.null(text))
+              g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+            else
+              g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group, text = text), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+          }
+          else
+          {
+            if (is.null(text))
             {
-                num = NULL ## NOTE fix
-                good = as.data.table(dat)[, list(num = length(y)), keyby = vgroup][num>minsup, vgroup]
-                dat = dat[(dat$vgroup %in% as.character(good)), ]
+              if (is.null(col.scatter))
+                g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+              else
+                g = g + geom_jitter(data = dat, fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
+              
             }
-
-        if (nrow(dat)==0)
-            stop('No groups exist with >0 variance')
-
-        if (count)
+            else
             {
-                tmp = table(dat$group)
-                ix = match(levels(dat$group), names(tmp))
-                levels(dat$group) = paste(names(tmp)[ix], '\n(', tmp[ix], ')', sep = '')
+              if (is.null(col.scatter))
+                g = g + geom_jitter(data = dat, mapping = aes(fill = group, text = text), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+              else
+                g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
             }
+          }
 
-        if (is.null(mapping))
-            mapping = aes(fill=group)
-
-        g = ggplot(dat[vfilter!=0, ], aes(y = y, x = group)) + theme_bw()
-
-        if (vplot)
-            g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
-
-        if (scatter)
-            {
-                if (dot)
-                    {
-                        if (is.null(text))
-                            g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
-                        else
-                            g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group, text = text), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
-                    }
-                else
-                    {
-                        if (is.null(text))
-                            {
-                                if (is.null(col.scatter))
-                                    g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
-                                else
-                                    g = g + geom_jitter(data = dat, fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
-
-                            }
-                        else
-                            {
-                                if (is.null(col.scatter))
-                                    g = g + geom_jitter(data = dat, mapping = aes(fill = group, text = text), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
-                                else
-                                    g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
-                            }
-                    }
-
-            }
-
-
+        }
+      
+      
 
         if (log)
             {
@@ -5176,34 +5291,45 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
             g = g + guides(fill = guide_legend(nrow = legend.nrow, byrow = TRUE))
 
 
+      if (!is.null(col))
+      {
+        g = g + scale_fill_manual(values = col)
+      }
+      else if (!is.null(wes))
+      {
+        g = g + scale_fill_manual(values = wesanderson::wes_palette(wes))
+      }
+     
+
       if (flip)
         g = g + coord_flip()
-
-        if (!is.null(dat$facet1))
-            {
-                if (!is.null(dat$facet2))
-                    {
-                        if (transpose)
-                            g = g + facet_grid(facet2 ~ facet1)
-                        else
-                            g = g + facet_grid(facet1 ~ facet2)
-                    }
-                else
-                    {
-                        if (transpose)
-                            g = g + facet_grid(. ~ facet1)
-                        else
-                            g = g + facet_grid(facet1 ~ .)
-                    }
-            }
-
-        if (plotly)
-            return(ggplotly(g))
-
-        if (print)
-            print(g)
+      
+      if (!is.null(dat$facet1))
+      {
+        if (!is.null(dat$facet2))
+        {
+          if (transpose)
+            g = g + facet_grid(facet2 ~ facet1)
+          else
+            g = g + facet_grid(facet1 ~ facet2)
+        }
         else
-            g
+        {
+          if (transpose)
+            g = g + facet_grid(. ~ facet1)
+          else
+            g = g + facet_grid(facet1 ~ .)
+        }
+      }
+
+      if (plotly)
+        return(ggplotly(g))
+      
+      if (print)
+        print(g)
+      else
+        g
+      
     }
 
 
@@ -6254,7 +6380,7 @@ gatk_oncotate = function(gatk.dir, jname = 'gatk.oncotate', mem = 3, queue = 'we
   system(sprintf('mkdir -p %s', oncotator.dir))
   system(sprintf('cp %s/chrs/*/*recal*vcf %s', gatk.dir, oncotator.dir))
 
-  vcf.paths = dir(oncotator.dir, 'vcf', ful.names = TRUE)
+  vcf.paths = dir(oncotator.dir, 'vcf', full.names = TRUE)
   cmd = paste(ONCOTATOR.PATH, '-v', vcf.paths, '--output-format MAF', paste(vcf.paths, '.maf', sep = ''), 'hg19')
   bcmd = bsub_cmd(cmd, jname, mem = mem, queue = queue, ...)
 
@@ -6383,7 +6509,7 @@ pindel = function(outdir, bams, intervals = NULL, isizes = NULL, hg = Sys.getenv
       }
     bams = normalizePath(bams)
     if (is.null(names(bams)))
-      names(bams) = file.name(bams)
+      names(bams) = basename(bams)
 
     write.tab(data.frame(bams, isizes, names(bams)), config.file, col.names = F)
 
@@ -7598,8 +7724,8 @@ igv = function(
 
     if (!is.null(snapshot))
         {
-            igv.cmd(paste('snapshotDirectory', gsub('^\\~', '$HOME', file.dir(snapshot))), con)
-            igv.cmd(paste('snapshot', file.name(snapshot)), con)
+            igv.cmd(paste('snapshotDirectory', gsub('^\\~', '$HOME', dirname(snapshot))), con)
+            igv.cmd(paste('snapshot', basename(snapshot)), con)
         }
 
     close(con)
@@ -8491,61 +8617,6 @@ gr.isdisc <- function(gr, isize=1000, unmap.only=FALSE) {
 }
 
 
-#' Minimal overlaps for GRanges/GRangesList
-#'
-#' Takes any number of GRanges or GRangesList and reduces them to the minimal
-#' set of overlapping windows, ignoring strand (optional).  Can also
-#' collapse only within levels of a meta data field "by"
-#'
-#' Will populate output with metadata of first row of input contributing the reduced output range.
-#'
-#' @param ... \code{GRanges} or \code{GRangesList}
-#' @return GRanges
-#' @export
-gr.reduce <- function(..., by = NULL, ignore.strand = TRUE, span = FALSE) {
-    input <- do.call(grbind, list(...))
-    if (length(input)==0)
-        return(input)
-    input.meta = values(input)
-    if (is.null(by))
-        values(input) = data.frame(i = 1:length(input), bykey = 1)
-    else
-        values(input) = data.frame(i = 1:length(input), bykey = values(input)[, by])
-
-    if (span)
-    {
-        if (ignore.strand)
-            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, bykey)])
-        else
-            out = seg2gr(gr2dt(input)[, data.frame(i = i[1], start = min(start), end = max(end)), keyby = list(seqnames, strand, bykey)])
-    }
-    else
-    {
-        if (ignore.strand)
-            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, bykey)])
-        else
-            out = seg2gr(gr2dt(input)[, cbind(i = i[1], as.data.frame(reduce(IRanges(start, end)))), keyby = list(seqnames, strand, bykey)])
-    }
-
-    values(out) = input.meta[out$i, ]
-
-                                        #input = do.call(grbind, input)
-    ## for (i in seq_along(input)) {
-    ##   if (inherits(input[[i]], 'GRanges'))
-    ##     input[[i]] <- reduce(gr.stripstrand(input[[i]]))
-    ##   else if (inherits(input[[i]], 'GRangesList'))
-    ##     input[[i]] <- reduce(gr.stripstrand(unlist(input[[i]])))
-    ##   else
-    ##     stop('reduce.window: Need to input GRanges or GRangesList objects')
-    ##   seqlengths(input[[i]]) <- seqlengths(input[[i]])*NA
-    ## }
-
-    ## output <- do.call('c', input)
-
-    return(out)
-                                        #return(sort(reduce(output)))
-}
-
 
 #' Return windows with minimal coverage
 #'
@@ -9060,7 +9131,6 @@ qstat = function(full = FALSE, numslots = TRUE, resources = full)
         }
       }
 
-
         if (!full)
             {
                 states = unique(c('r', 'qw', sort(unique(tmp$state))))
@@ -9170,7 +9240,7 @@ qhost = function(full = FALSE, numslots = TRUE)
 #'
 #' @author Marcin Imielinski
 #' @export
-qviz = function(res = NULL, queue = NULL, field = "h_vmem", frac = FALSE, all = FALSE, plot = TRUE)
+qviz = function(res = NULL, queue = NULL, field = "global_mem", frac = FALSE, all = FALSE, plot = TRUE)
 {
   if (is.null(res))
     res = qstat(full = TRUE)
@@ -10130,7 +10200,7 @@ parsesnpeff = function(vcf, id = NULL)
             ##            out$ALT = sapply(out$ALT, as.character)
             out$ALT = as.character(unstrsplit(vcf$ALT))
             out$REF = sapply(out$REF, as.character)
-            out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
+            out$vartype = ifelseong(nchar(out$REF) == nchar(out$ALT), 'SNV',
                 ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))
             tmp = lapply(out$ANN, function(y) do.call(rbind, strsplit(y, '\\|'))[, 1:15, drop = FALSE])
             tmpix = rep(1:length(out), sapply(tmp, nrow))
@@ -10315,6 +10385,37 @@ staveRDS = function(object, file, note = NULL, ..., verbose = FALSE)
   }
 }
 
+#' @name stavePDF
+#' @title stavePDF
+#' @description
+#'
+#' Stamps and saves PDF file .. i.e. saving datestamped filename and
+#' and soft link to the datestamped file
+#'
+#' @export
+stavePDF = function(object, file, note = NULL, ..., verbose = FALSE)
+{
+  stamped.file = gsub('.pdf$', paste('.', timestamp(), '.pdf', sep = ''), file, ignore.case = TRUE)
+  ppdf(object, stamped.file, ...)
+
+  if (file.exists(file))
+  {
+    if (verbose)
+      message('Removing existing ', file)
+    system(paste('rm', file))
+  }
+
+  if (verbose)
+    message('Symlinking ', file, ' to ', stamped.file)
+
+  system(paste('ln -sfn', normalizePath(stamped.file), file))
+
+  if (!is.null(note))
+  {
+    writeLines(note, paste0(stamped.file, '.readme'))
+  }
+}
+
 #' @name label.runs
 #' @title label.runs
 #' @description
@@ -10464,13 +10565,33 @@ dflm = function(x, last = FALSE, nm = '')
           coef$ci.upper= exp(coef$ci.upper)
           coef$ci.lower= exp(coef$ci.lower)
         }
-      }
+    }
     else
       fam = 'Unknown'
 
     if (!last)
       nm = paste(nm, rownames(coef))
     out = data.frame(name = nm, method = fam, p = signif(coef$p, 3), estimate = coef$estimate, ci.lower = coef$ci.lower, ci.upper = coef$ci.upper, effect = paste(signif(coef$estimate, 3), ' [',  signif(coef$ci.lower,3),'-', signif(coef$ci.upper, 3), ']', sep = ''))
+  }
+  else if (class(x) == 'htest')
+  {
+    if (is.null(x$estimate))
+      x$estimate = x$statistic
+    if (is.null(x$conf.int))
+      x$conf.int = c(NA, NA)
+    out = data.table(name = nm, method = x$method, estimate = x$estimate, ci.lower = x$conf.int[1], ci.upper = x$conf.int[2], effect = paste(signif(x$estimate, 3), ' [',  signif(x$conf.int[1],3),'-', signif(x$conf.int[2], 3), ']', sep = ''), p = x$p.value)
+  }
+  else if (class(x) == 'polr')
+  {
+    coef = coef(summary(x)) %>% as.data.frame
+    nm = paste(nm, rownames(coef))
+    coef = as.data.table(coef)
+    setnames(coef, c('estimate', 'se', 't'))
+    out = data.table(name = nm) %>% cbind(coef)
+    out$p =  pnorm(abs(out$t), lower.tail = FALSE) * 2
+    out[, ci.lower := estimate-1.96*se]
+    out[, ci.upper := estimate+1.96*se]
+    out[, effect := paste(signif(estimate, 3), ' [',  signif(ci.lower,3),'-', signif(ci.upper, 3), ']', sep = '')]
   }
   else
   {
@@ -10551,8 +10672,7 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
     {
       out = suppressWarnings(read_vcf(x))
       if (is.na(label))
-        label = x
-    }
+        label = x    }
   else
     out = x
 
@@ -10591,17 +10711,22 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         out$ALT = as.character(unstrsplit(out$ALT))
         out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
                       ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))
-        tmp = lapply(out$ANN, function(y) do.call(rbind, strsplit(y, '\\|'))[, 1:15, drop = FALSE])
-        tmpix = rep(1:length(out), sapply(tmp, nrow))
+        out$eff = unstrsplit(out$ANN)
+        out$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', out$eff)
+        if (!keep.modifier)
+              out = out[!out$modifier]
+        tmp = lapply(out$ANN, function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
+        tmpix = rep(1:length(out), elementNROWS(tmp))
         meta = as.data.frame(do.call(rbind, tmp))
         colnames(meta) = fn
         meta$varid = tmpix
-        meta$file = x
+        meta$file = label
         out2 = out[tmpix]
         rownames(meta) = NULL
         values(out2) = cbind(values(out2), meta)
         names(out2) = NULL
         out2$ANN = NULL
+        
         if (oneliner)
           out2$oneliner = paste(
             ifelse(!is.na(out2$gene),
@@ -10613,6 +10738,108 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
     }
     return(out2)
 }
+
+
+#' @name grok_bcf
+#' @rdname
+#' @title Reads and parses bcf via bcftools call
+#' @param bcf path to bcf file
+#' @param gr optional granges to query
+#' @param bpath path to bcftools binary executable
+#' @export
+grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcftools", label = NA, filter = 'PASS', snv = FALSE, indel = FALSE, het = FALSE, hom = FALSE, keep.modifier = TRUE, long = FALSE, oneliner = FALSE, verbose = FALSE)
+{
+  cmd = sprintf('%s view %s', bpath, bcf)
+
+  if (is.na(label))
+    label = bcf
+
+  if (!is.null(gr))
+  {
+    wins = paste(gr.string(gr.stripstrand(gr)), collapse = ',')
+    cmd = paste(cmd, '-r', wins)
+  }
+
+  if (!is.null(filter) && !is.na(filter))
+  {
+    cmd = paste(cmd, sprintf('-i \'FILTER="%s"\'', filter))
+  }
+
+  if (het)
+  {
+    cmd = paste(cmd, '-g het')
+  }
+
+  if (indel)
+  {
+    cmd = paste(cmd, '-v indels')
+  }
+
+  if (snv)
+  {
+    cmd = paste(cmd, '-v snps')
+  }
+
+  if (het)
+  {
+    cmd = paste(cmd, '-g het')
+  }
+
+  if (hom)
+  {
+    cmd = paste(cmd, '-g hom')
+  }
+
+  if (verbose)
+    message(cmd)
+    
+  p = pipe(cmd)
+  lines = readLines(p)
+  close(p)
+
+  is.header = grepl('^\\#', lines)
+  header = lines[is.header]
+  contigs = strsplit(gsub('^\\#\\#', '', grep('contig', header, value = TRUE)), ',')
+  sl = structure(names = gsub('.*ID=\\<', '', sapply(contigs, '[', 1)),
+                 as.numeric(gsub('>$', '', gsub('.*length=\\<', '', sapply(contigs, '[', 2)))))
+  
+  other = lines[!is.header]
+  if (length(other))
+    {
+      out = fread(paste(other, collapse = '\n'), header = FALSE)
+      sn = unlist(strsplit(gsub('^\\#', '', header[length(header)]), '\\t'))
+      sfields = sn[-c(1:9)]
+      setnames(out, sn)
+      out[, seqnames := as.character(CHROM)]
+      out[, start := POS]
+      out[, end := POS]
+      out[, listid := as.character(1:.N)]
+
+      ## unpack bcf "format" + sample fields
+      fdat = dunlist(strsplit(out$FORMAT, ':'))
+      setnames(fdat,2,'field')
+      out$FORMAT = NULL
+      for (sfield in sfields) ## can be more than one sample field
+      {        
+        fdat$value = dunlist(strsplit(out[[sfield]], ':'))$V1
+        fdatc = dcast.data.table(copy(fdat)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'value')
+        out = merge(out, fdatc, by = 'listid', all.x = TRUE)
+      }
+      
+      ## unpack "info" field
+      idat = dunlist(strsplit(out$INFO, ';'))
+      idat = cbind(idat, colsplit(idat$V1, pattern = "=", names = c("field","value")))
+      idatc = dcast.data.table(idat, listid ~ field, value.var = 'value')
+      out$INFO = NULL
+      out = merge(out, idatc, by = 'listid', all.x = TRUE)
+      out = dt2gr(out, seqlengths = sl)
+      out = grok_vcf(out, keep.modifier = keep.modifier, long = long, oneliner = oneliner, verbose = verbose, label = label)
+    }
+  else
+    out = GRanges(seqlengths = sl)
+  return(out)
+}
+
 
 
 #' multicoco
@@ -18686,214 +18913,580 @@ spmelt = function(A, baseval = 0) {
 }
 
 
-#' @name homeology
-#' @title detect homeology
+#' @name dtt
+#' @title dtt
+#'
+#' @description
+#' Easy to type shortcut for setDTthreads
+#'
+#' @export
+#' @param numthreads number of threads to set setDTthreads
+#' @author Marcin Imielinski
+dtt = function(threads = 1) setDTthreads(threads)
+
+
+#' @name ggjs
+#' @title ggjs
 #' @description
 #'
-#' Analysis of homeology or approximate sequence homology using pairwise alignment of sequences. 
+#' Deploys a gGnome.js by downloaded the js / node source code from mskilab.com
+#' and then dumping json / csv files corresponding to the graph and coverage
+#' data.
+#'
+#' Easiest way is to use pairs= argument which is a data.table with columns $pair, $jabba_rds, $cov_rds, $headline, $description
+#' where $headline is a character vector of the headline that will be displayed in the search bar and $description is the information that will be shown when the graph is loaded. 
 #' 
-#' Returns a gTrack object gt with field mat = mdat(gt)[[1]] showing matrix
-#' of granges gr = dat(gt)[[1]] where each entry i,j represents the microhomology
-#' between the given interval pair gr[i] and gr[j] or (if flip = TRUE) the interval pair
-#' gr[i] and gr.flipstrand(gr[i]).
+#' Takes gGraph objects or lists whose first item (or $graph) item is
+#' a gGraph, second optional item (or $cov) is a GRanges of coverage
+#' (where coverage data is specified by argument "field")
 #'
-#' Homeology is detected by a pairwise alignment of each seq1 and seq2 pair.  If all = TRUE
-#' will perform alignment between all cartesian products of seq1 and seq2.  If seq2 = NULL
-#' then seq2 = seq1 and all is set to TRUE. 
-#'
-#' All inputted ij pairwise homologies are aggregated by "coordinate pair".  By default if seq1 and seq2
-#' are unnamed, then all seq1 homologies will be aligned to a coordinate system that begins with
-#' the first (i.e. leftmost letter of seq1) (similarly for seq2).  i.e. you can imagine that the
-#' unnamed seq1 sequences are variants of a chromosome named "seq1" and the unnamed seq2 sequences
-#' are variants of a chromosome named "seq2".  If seq1 = NULL
-#'
-#' If self = TRUE, then we will also include seq1 vs seq1 and seq2 vs seq2 homologies.
-#'
-#' seq1 and seq2 can be optionally associated with names which will then change the output gr and mat structure
-#' by aggregating different coordinate pairs.  Finally, the user can provide gr1 and gr2 (which must match the
-#' width / nchar of seq1 and seq2) which will then re-orient the output granges appropriately.
-#'
-#' If flip = TRUE, then we will compare each seq1 to the reverse complement of seq2, but then output the ranges
-#' in "forward coordinates". 
+#' If arguments are named then these will be the name of the resulting object
+#' in the deployed gGnome.js app, otherwise they will be given default names
+#' (ie graph1, graph 2).
 #' 
+#' Dumps the app to a directory where to which user can navigate and deploy the app
+#' (instructions provided at runtime), default path is public_html/ggjs
+#'
+#' Note: coverage should be less than 1e6 bins per file, if binsize is not NULL
+#' (default = 5000) then coverage data will be aggregated prior to dumping. 
 #' 
-homeology = function(seq1, seq2 = NULL,
-                     gr1 = NULL, gr2 = NULL,
-                     blur =0,  ## padding to add to pixels to enhance signal
-                     min.wid = 0, ## min width of homology to consider
-                     min.hom = 0, ## number of bases of minimum homology to consider, must be between 0 and 1
-                     flip = FALSE, all = FALSE,
-                     self = FALSE, ## mostly useless
-                     substitutionMatrix = nucleotideSubstitutionMatrix(match = 1, mismatch = 0, baseOnly = FALSE, type = "DNA"),
-                     gapOpening = 1,
-                     type = 'local',
-                     gapExtension = 1)
+#' example argument:
+#' ggjs(path = gg, graph2 = list(gg2, cov2), list(cov = cov3, graph = gg3))
+#' 
+#' @param ... gGnome objects of list
+#' @param field field of coverage GRanges that will be used to dump out the coverage data, default "ratio"
+#' @param binsize binsize to aggregate coverage (default 5000)
+#' @param skip.download skip download (useful if dumping files to existing directory)
+#' @param web whether to dump web version which will update datafiles.csv and dump files to json and coverage subfolders of path (FALSE)
+#' @param pairs data.table with $pair, $jabba_rds, $cov_rds field to dump, can have optional fields $headline and $description
+#' @param path  path to dump app to, this will also be the command that will be run to deloy the app  ~/public_html/ggjs
+#' @export
+ggjs = function(...,
+                pairs = NULL,
+                field = 'ratio', path = '~/public_html/ggjs',
+                binwidth = 5e3,
+                mc.cores = 1,
+                web = FALSE,
+                skip.dl = FALSE,
+                force = FALSE,
+                win = NULL,
+                ggjs.url = 'http://mskilab.com/gGnome.js/ggjs.tar.gz',
+                verbose = TRUE)
 {
-  if (length(seq1)==0)
-    return(NULL)
-  
-  if (is.null(names(seq1)))
-    names(seq1) = rep('seq1', length(seq1))
-  
-  if (is.null(seq2))
-    seq2 = seq1
+  if (verbose)
+    message('Deploying gGnome.js app to ', path)
 
-  if (is.null(names(seq2)))
-    names(seq2) =  rep('seq2', length(seq2))
 
-  if (!is(seq1, 'DNAStringSet'))
-    seq1 = DNAStringSet(seq1)
-
-  if (!is(seq2, 'DNAStringSet'))
-    seq2 = DNAStringSet(seq2)
-
-  if (is.null(gr1))
-    gr1 = gr.fix(GRanges(names(seq1), IRanges(start = 1, width = width(seq1))))
-  
-  if (is.null(gr2))
-    gr2 = gr.fix(GRanges(names(seq2), IRanges(start = 1, width = width(seq2))))
-
-  if (any(width(gr1) != width(seq1)))
-    stop('Width mismatch between seq1 and gr1, please provide compatible GRanges to the inputted sequences')
-
-  if (any(width(gr2) != width(seq2)))
-    stop('Width mismatch between seq2 and gr2, please provide compatible GRanges to the inputted sequences')
-  
-  if (all == TRUE)
+  if (!web)
   {
-    ij = expand.grid(1:length(seq1), 1:length(seq2))
-    seq1 = seq1[ij$Var1]
-    seq2 = seq2[ij$Var2]
-    gr1 = gr1[ij$Var1]
-    gr2 = gr2[ij$Var2]
-  } else 
-  {
-    if (length(seq1) != length(seq2))
-      stop('length of seq1 must equal length of seq2 unless all = TRUE')
+    if (file.info(path)$isdir)
+      path = paste0(path, '/ggjs')
 
-    ## add seq1-seq1 and seq2-seq2 pairs
-    if (self == TRUE)
+    ggjs.dir = paste0(path, '_files')
+    system(paste('mkdir -p', ggjs.dir))
+
+    if (!skip.dl)
     {
-        seq1.new = c(seq1, seq1, seq2)
-        seq2.new = c(seq2, seq1, seq2)
-        gr1.new = suppressWarnings(grbind(gr1, gr1, gr2))
-        gr2.new = suppressWarnings(grbind(gr2, gr1, gr2))
-        gr1 = gr1.new
-        gr2 = gr2.new
-        seq1 = seq1.new
-        seq2 = seq2.new
-      }
-  }
+      if (verbose)
+        message('Downloading and decompressing app code from ', ggjs.url)
+      
+      system(paste0('cd ', ggjs.dir, '; wget -q ', ggjs.url, '; tar xfz ', basename(ggjs.url)))
+    }
 
-  if (flip == TRUE)
-    seq2 = reverseComplement(seq2)
-
-
-  pa = pairwiseAlignment(unname(seq1), unname(seq2),
-                         substitutionMatrix = substitutionMatrix,
-                         gapOpening = gapOpening, gapExtension = gapExtension, type = type)
-
-
-  matdt = as.data.table(melt(substitutionMatrix))
-  setkeyv(matdt, c('Var1', 'Var2'))
-
-  ## make sure this is working the way we want it to
-  dunlist = function (x) 
-  {
-    nm = names(x)
-  if (is.null(nm))
-    nm = 1:length(x)
-    tmp = lapply(x, as.data.table)
-    out = cbind(data.table(listid = rep(nm, elementNROWS(x)), 
-                           rbindlist(tmp, fill = TRUE)))
-    setkey(out, listid)
-    return(out)
-  }
-
-  ## unlist pairwise alignment result will have one row per letter / gap
-  ## which we can then rescore vs the substitution matrix
-  pat = alignedPattern(pa)  
-  subj = alignedSubject(pa)
-  starts = data.table(pid = 1:length(pat),
-                      starts1 = start(pa@pattern@range),
-                      starts2 = start(pa@subject@range)
-                    , key = 'pid')
-
-  dt = cbind(dunlist(pat),dunlist(subj))[, c(1,2,4)]
-             
-  ## dt = cbind(dunlist(unname(strsplit(as.character(alignedPattern(pa)), ''))),
-  ##            dunlist(unname(strsplit(as.character(alignedSubject(pa)), ''))))[, c(1,2,4)]
-  setnames(dt, c('pairid', 's1', 's2'))
-  dt[s1 != '-', pos1 := 1:.N + starts[.(pairid), starts1]-1 , by = pairid]
-
-
-  if (flip) ## flip coordinates if reverse complement match
-    dt[s2 != '-', pos2 := .N:1 - starts[.(pairid), starts2] + 1, by = pairid]
+    writeLines(sprintf('open http://localhost:8080/index.html; cd %s; npm start', basename(ggjs.dir)), path)
+    system(paste('chmod +x', path))
+    }
   else
-    dt[s2 != '-', pos2 := 1:.N + starts[.(pairid), starts2] - 1 , by = pairid]
+  {
+
+    if (is.null(pairs))
+      stop('Publishing to web server only supported with pairs table argument')
+
+    if (!dir.exists(path))
+      {
+        warning(sprintf('Creating fresh directory %s for web deployment', path))
+        system(paste('mkdir -p', path))
+      }
+    ##      stop(sprintf('For publishing to web server, path must be an existing directory with gGnome.js app code deployed: please check path %s', path))
+    
+    
+    ggjs.dir = path
+    if (!file.exists(paste(path, 'js/server.js', sep = '/')))
+    {
+      warning(sprintf('Downloading app code from %s', ggjs.url))
+      system(paste0('cd ', ggjs.dir, '; wget -q ', ggjs.url, '; tar xfz ', basename(ggjs.url)))
+      ##        stop('For publishing to web server, path must exist and already have gGnome.js app code deployed: please check dir contents or reclone into path from https://github.com/mskilab/gGnome.js')
+    }
+
+    if (!(all(c('pair', 'jabba_rds', 'cov_rds') %in% names(pairs))))
+    {
+      stop('pairs must contain fields $pair, $jabba_rds, and $cov_rds')
+    }
+
+    pairs$description = paste0('', pairs$description)
+    if (is.null(pairs$headline))
+      pairs$headline = pairs$description
+
+    datafiles = pairs[, .(datafile = paste0(pair, '.json'), description = paste0(headline))]
+
+    datafiles.csv = paste(normalizePath(path), 'datafiles.csv', sep = '/')
+    if (!file.exists(datafiles.csv))
+    {
+      warning('datafiles.csv missing from web server directory: creating')
+    }
+    else
+    {
+      if (verbose)
+        message('reading datafiles.csv from gGnome.js web server deploy path ', datafiles.csv)
+
+      datafiles = unique(rbind(datafiles, fread(datafiles.csv, sep = ',')), by = "datafile")      
+    }
+
+    fwrite(datafiles, datafiles.csv)
+  }
+
+  system(sprintf('mkdir -p %s/coverage %s/json', ggjs.dir, ggjs.dir))
   
-  ## label runs of non gap
-  dt[, block := label.runs(s1!='-' & s2 != '-'), by = pairid]
-  dt = dt[s1 != '-' & s2 != '-', ]
+  args = list(...)
+  if (length(args)>0)
+    {
+      if (is.null(names(args)))
+        names(args) = 1:length(args)
+    }
+
+  if (!is.null(pairs))
+  {
+    if (!(all(c('pair', 'jabba_rds', 'cov_rds') %in% names(pairs))))
+    {
+     stop('pairs must contain fields $pair, $jabba_rds, and $cov_rds')
+    }
+
+    ## optional argument
+    pairs$description = paste0('', pairs$description)      
+
+    setkey(pairs, pair)
+    new.args = lapply(pairs$pair, function(p) as.list(pairs[.(p), list(id = pair, graph = jabba_rds, cov = cov_rds, description = description)]))
+    names(new.args) = pairs$pair
+    args = c(args, new.args)    
+  }
+
+  if (length(args)==0)
+    stop('Either arguments or pairs data.table must be provided')
+      
+  if (any(nchar(names(args))==0))
+    names(args)[nchar(names(args))==0] = "graph"
   
-  ## use gr to adjust seqnames and pos for the first and second pair in the match
-  dt[, seqnames1 := as.character(seqnames(gr1))[pairid]]
-  dt[, seqnames2 := as.character(seqnames(gr2))[pairid]]
+  if (any(duplicated(names(args))))
+    names(args) = dedup(names(args))
 
-  dt[, pos1 := start(gr1)[pairid] + pos1 - 1]
-  dt[, pos2 := start(gr2)[pairid] + pos2 - 1]
+  mclapply(names(args), function(nm)
+  {   
+    if (verbose)
+      message('Dumping graph ', nm)
 
-  dt$score = matdt[.(dt$s1, dt$s2), value]
-  dt = dt[score>0,]
-  new.gr1 = dt2gr(dt[, .(seqnames = seqnames1, start = pos1, end = pos1, block = block, score = score, pairid = pairid)], seqlengths= seqlengths(gr1))
-  new.gr2 = dt2gr(dt[, .(seqnames = seqnames2, start = pos2, end = pos2, block = block, pairid = pairid)], seqlengths(gr2))
+    if (!is.list(args[[nm]]))
+      arg = list(args[[nm]])
+    else
+      arg = args[[nm]]
 
-  setkeyv(dt, c("pos1"))
-  tmp.gr = dt2gr(dt[, .(start = pos1[1], end = pos1[.N], score = mean(score)), by = .(seqnames = seqnames1, pairid, block)])
+    if (is.null(names(arg)))
+      names(arg) = c('graph', 'cov', 'walks')[1:length(arg)]
 
-  ## filter out using min.wid and min.hom criteria
-  keep = paste(tmp.gr$pairid, tmp.gr$block)[width(tmp.gr)>=min.wid & tmp.gr$score>=min.hom]
-  new.gr1 = new.gr1[paste(new.gr1$pairid, new.gr1$block) %in% keep] + blur
-  new.gr2 = new.gr2[paste(new.gr2$pairid, new.gr1$block) %in% keep] + blur
+    if (is.character(arg$graph))
+      {
+        if (!is.na(arg$graph) && file.exists(arg$graph))
+          arg$graph = readRDS(arg$graph)
+        else
+        {
+          warning(sprintf('Provided graph file for sample %s is NA or does not exist', nm))
+          arg$graph = NULL
+        }
+      }
 
-  ## now we need to aggregate (ie sum) all gr1 and gr2 pairs based on coordinates and symmetrize
-  ## basically if gr1a and gr1b intersect AND gr2a and gr2b intersect then we create a new pair for
-  ## (gr1a intersection gr1b) x (gr2a intersect gr2b) and add their composite scores
-  ugr = disjoin(grbind(new.gr1, new.gr2))
+    if (!is.null(arg$graph) && !inherits(arg$graph, 'gGraph'))
+    {
+      if (!inherits(arg$graph, 'gGraph'))
+        arg$graph = suppressWarnings(gGnome::gG(jab = arg$graph))
+      else
+        arg$graph = gGnome:::refresh(arg$graph)
 
-  ugr1 = suppressWarnings(new.gr1[, 'score'] %*% ugr)
-  ugr2 = suppressWarnings(new.gr2[, c()] %*% ugr)
+      arg$graph$set(description = paste0('', arg$description), name = paste0('', arg$id))
+    }
 
-  out.dt = merge(data.table(i = ugr1$subject.id, query.id = ugr1$query.id, score = ugr1$score),
-                 data.table(j = ugr2$subject.id, query.id = ugr2$query.id), by = 'query.id', allow.cartesian = TRUE)
+    graph.json = paste0(ggjs.dir, '/json/', nm, '.json')
+    if (!is.null(arg$graph))
+    {
+      if (!is.null(win) & inherits(win, 'GRanges'))
+        arg$graph = arg$graph[arg$graph$nodes$gr %^% win]
+      sl = as.character(unique(seqnames(arg$graph$nodes$gr)))
+      arg$graph$json(graph.json, seqlevels = sl)
+    }
 
-  out = as.matrix(dcast.data.table(out.dt, factor(i, 1:length(ugr)) ~ factor(j, 1:length(ugr)), fun.aggregate = sum,
-                                   value.var = "score", fill = 0, drop = FALSE)[, -1])
+    cov.csv = paste0(ggjs.dir, '/coverage/', nm, '.csv')
+    if (is.character(arg$cov))
+    {
+      if (!is.na(arg$cov) && file.exists(arg$cov) && (force | !file.exists(cov.csv)))
+        {
+          arg$cov = readRDS(arg$cov)
+          if (!is.null(win) & inherits(win, 'GRanges'))
+            arg$cov = arg$cov[arg$cov %^% win]
+        }
+      else
+        {
+          arg$cov = NULL
+        }
+    }
 
+    if (!is.null(arg$cov))
+    {
+      if (!inherits(arg$cov, 'GRanges'))
+        stop('Coverage must be GRanges')
 
-  ## ugr = GenomicRanges::disjoin(grbind(new.gr1, new.gr2), with.revmap = FALSE, ignore.strand = TRUE) ## these will be rows of our (soon to be symmetric) matrix
+      if (!(field %in% names(values(arg$cov))))
+        stop(paste0('field ', field, ' not found in provided coverage track'))
 
-  ## ## now join using coordinates vs gr1 and gr2 pairs
-  ## ugr1 = suppressWarnings(ugr %*% new.gr1[, c('score', 'pairid')])
-  ## ugr1$qid1 = ugr1$query.id
+      if (verbose)
+        message('Dumping coverage ', field, ' to binwidth of ', binwidth)
 
-  ## ugr2 = suppressWarnings(ugr %*% new.gr2[, 'pairid'])
-  ## ugr2$qid2 = ugr2$query.id
+      ## trimming ranges to seqlengths of gg$gr
+      arg$cov = arg$cov %&% si2gr(seqinfo(arg$graph))
+      cov.dt = as.data.table(arg$cov[, field])
+      setnames(cov.dt, field, 'coverage')
 
-  ## ## every subject.id here represents a homology ie pair id
-  ## ## so what we want to do is (1) merge on 'subject.id'
-  ## ## then aggregate on qid1, qid2 pairs
+      if (!is.null(binwidth))
+      {
+        cov.dt = cov.dt[, .(coverage = sum(coverage*width, na.rm = TRUE)/sum(as.numeric(width)*(0*coverage+1), na.rm = TRUE)), by = .(seqnames, start = floor(start/binwidth)*binwidth+1)]
+        cov.dt = cov.dt[!is.na(coverage), ][!is.infinite(coverage), ]
+        if (verbose)
+          message('Aggregating coverage via field ', field, ' to binwidth of ', binwidth, ' (from ', length(arg$cov), ' to ', nrow(cov.dt), ' bins)')
+        
+      }
+      fwrite(cov.dt[, .(x= start, y = coverage, chromosome = seqnames)], cov.csv)
+    }
+  }, mc.cores = mc.cores, mc.preschedule = FALSE)
 
-  ## out.dt = merge(as.data.table(ugr1)[, .(qid1, pairid, score)],
-  ##             as.data.table(ugr2)[, .(qid2, pairid)], by = 'pairid', allow.cartesian = TRUE)
-
-  ## out = as.matrix(dcast.data.table(out.dt, factor(qid1, 1:length(ugr)) ~ factor(qid2, 1:length(ugr)), fun.aggregate = sum,
-  ##                                  value.var = "score", fill = 0, drop = FALSE)[, -1])
-
-  out = (out + t(out))
-
-  browser()
-  gt = gTrack(ugr, mdata = out, colormap = c('white', 'red', 'black'), cmap.max = max(out))
-  return(gt)
+  if (verbose)
+  {
+    if (!web)
+      message('App deployed! Navigate via terminal to ', ggjs.dir, ' and type "./', basename(path), '" in MacOS command line to launch.')
+    else
+      message('App deployed! Navigate via web to URL pointing to directory ', ggjs.dir)
+  }
 }
+       
+#' @name gr.eval
+#' @title gr.eval
+#' @description
+#'
+#' Evaluate a scalar expression on the metadata of a subject, returning
+#' a vector of the same length as query with the values populated for
+#' matching value (or fill value for non matching)
+#'
+#' @param query GRanges of intervals that we are interested in populating
+#' @param subject GRanges of interval that has metadata that we want to aggregate / query
+#' @param expr expression on subject metadata that we want to evaluate
+#' @param fill flll value for empty / non overlapping intervas
+#' @return vector of length query with expr evaluated on each overlapping interval
+#' @export
+gr.eval = function(query, subject, expr, fill = NA, ignore.strand = TRUE)
+{
+  if (ignore.strand)
+    ov = query[, c()] %*% subject[, c()]
+  else
+    ov = query[, c()] %**% subject[, c()]
+
+  ovdt = as.data.table(ov)
+  ovdt = cbind(ovdt[, .(query.id, subject.id)], as.data.table(subject)[ovdt$subject.id, ])
+
+  cmd = sprintf('ovdt[, .(V1 = %s, subject.id = subject.id[1]), keyby = query.id]', deparse(substitute(expr)))
+  res = eval(parse(text = cmd))[.(1:length(query)), ]
+  res[is.na(subject.id), V1 := fill]
+  return(res$V1)  
+}
+
+
+
+#' @name rebin
+#' @rdname internal
+#' @title reaggregate WGS bins around a new target value
+#' @description 
+#' 
+#' Given GRanges of bins will aggregate around new bin width. 
+#' 
+#' @param cov GRanges of binned genome-wide coverage
+#' @param binwidth new binwidth
+#' @return GRanges of binned genome-wide coverage at new bin
+#' @export
+#' @author Marcin Imielinski
+rebin = function(cov, binwidth, field = names(values(cov))[1], na.rm = TRUE)
+{
+  tmp = as.data.table(cov[, c()])
+  tmp$value =  values(cov)[[field]]
+  outdt = tmp[, mean(value, na.rm = na.rm), by = .(seqnames,
+                                                   start = ceiling(start/binwidth)*binwidth)]
+  outdt[, end := start + binwidth -1]
+  out = dt2gr(outdt)
+  names(values(out)) = field
+  return(out)
+}
+
+
+#' @name ssegment
+#' @title wrapper around DNAcopy to segment a coverage profile
+#' @description 
+#' 
+#' Internal function utilizing DNAcopy to segment a coverage profile
+#' @param tcov GRanges of binned genome-wide coverage
+#' @return GRanges of genomewise segments of piecewise constant coverage
+#' @export
+#' @author Marcin Imielinski
+ssegment = function(cov, field = NULL, log = TRUE, verbose = TRUE, alpha = 1e-5){
+  if (is.null(field))
+    field = names(values(cov))[1] 
+  cov$y = values(cov)[[field]]
+  new.sl = seqlengths(cov)
+  ix = which(!is.na(cov$y))
+  if (verbose)
+    message('sending ', length(ix), ' segments to DNAcopy')
+  cov = cov[ix]
+  if (log == TRUE)
+    {
+      cov$y = log(cov$y)
+    }
+  cna = CNA(cov$y, as.character(seqnames(cov)), start(cov), data.type = 'logratio')
+  gc()
+  seg = DNAcopy::segment(smooth.CNA(cna), alpha = alpha, verbose = 0)
+  out = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
+  out = gr.fix(out, new.sl, drop = T)
+  if (verbose)
+    message('\t ..finished segmentation')
+  return(out)
+}
+
+
+#' @name jhom
+#' @title wrapper around GxG homeology for junctions
+#' @description 
+#' 
+#' 
+#' @param event Junction object around which to compute homeology
+#' @param pad padding to put around breakpoint window
+#' @param thresh maximum string distance threshold for calling a bin homeologous
+#' @param pad2 pad to put around an output bin in order to measure homeology
+#' @param flip flag whether to measure homeology with bins and their reverse complements
+#' @param stats flag whether to return stats or gMatrix (default)
+#' @param mc.cores  integer number of cores [1]
+#' @param anchor logical flag whether to return homeology results around native (inputted) coordinates or Anchored coordinates [TRUE]
+#' @param mat logical whether to return results as a mat [FALSE] or gMatrix
+#' @return list of gMatrix objects (if stats = FALSE) and data.table of homeology stats (if stats = TRUE)
+#' @export
+#' @author Marcin Imielinski
+jhom = function(event, pad = 100, thresh = 2, stride = 1, pad2 = 5, flip = FALSE, stats = FALSE, mc.cores = 1, anchor = TRUE, mat = FALSE)
+{
+  event = data.table(bp1 = gr.string(event$left),
+                     bp2 = gr.string(event$right))
+
+  gmfeat = function(gm, thresh = 3, op = "<=")
+  {
+    library(imager)
+    if (is(gm, 'gMatrix'))
+    {
+      mat = gm$mat
+      mat = (mat+t(mat))/2
+    }
+    else
+      mat = gm
+    im = mat %>% as.matrix %>% as.cimg
+    cmd = sprintf("im %s %s", op, thresh)
+    px = eval(parse(text = cmd))  
+    if (sum(px)==0)
+      return(data.table())
+    sp = split_connected(px)
+    if (length(sp)==0)
+      return(data.table())
+    res = rbindlist(lapply(1:length(sp), function(k) as.data.table(which(as.matrix(sp[[k]]), arr.ind = TRUE))[, .(k= k, i = pmin(row,col), j = pmax(row,col))]), fill = TRUE)
+    return(res)
+  }
+
+  gmstats = function(res)
+  {
+    if (nrow(res)>0)
+    {
+      res[, .(N = .N, r = cor(i, j)), by = k][, .(
+           numfeat = sum(N>0),
+           numfeat2 = sum(N>2),
+           numfeat5 = sum(N>5),
+           numfeat10 = sum(N>10),
+           maxfeat = max(N),
+           numlines5 = sum(r>0.5, na.rm = TRUE),
+           maxlines5 =  max(c(0,N[r>0.5]), na.rm = TRUE),
+           numlines = sum(r>0.9, na.rm = TRUE),
+           maxlines =  max(c(0,N[r>0.9]), na.rm = TRUE),
+           maxcor = max(r, na.rm = TRUE)
+         )]
+    }
+    else
+      data.table(numfeat = 0, maxfeat = 0)
+  }
+
+  win = c(GRanges('Left:0')+pad,
+          GRanges('Right:0')+pad)
+  evbp1 = gr.end(gr.flipstrand(parse.gr(event$bp1)))
+  if (flip)
+    evbp2 = gr.flipstrand(gr.end(parse.gr(event$bp2)))
+  else
+    evbp2 = gr.end(parse.gr(event$bp2))
+
+  seq1 = ffTrack::get_seq('~/DB/GATK/human_g1k_v37.fasta.2bit', evbp1+pad)
+  seq2 = ffTrack::get_seq('~/DB/GATK/human_g1k_v37.fasta.2bit', evbp2+pad)
+  res = mclapply(1:length(seq1), function(i, stats)
+  {
+    message(i)
+    if (!anchor)
+      win = c(evbp1[i], evbp2[i])+pad
+    win$seq = c(seq1[i], seq2[i])
+    hom = homeology(win, stride = stride, pad = pad2)
+    if (!stats)
+      return(hom)
+    ix1 = which(hom$gr %^% win[1])
+    ix2 = which(hom$gr %^% win[2])
+    return(gmstats(gmfeat(hom$mat[ix1,ix2], thresh = thresh))[, seq := i])
+  }, stats = stats, mc.cores = mc.cores)
+  if (stats)
+    res = cbind(event, rbindlist(res, fill = TRUE))
+  return(res)
+}
+
+
+#' @name write_ggjs
+#' @title dumps ggjs formatted csv file from GRanges
+#' @description 
+#' 
+#' 
+#' @param gr GRanges input
+#' @param filename filename to dump csv to
+#' @param field field name to dump as (numeric) data ["score"]
+#' @export
+#' @author Marcin Imielinski
+write_ggjs = function(gr, filename, field = 'score')
+{
+  out = data.table(
+    chromosome = gr %>% seqnames %>% as.character,
+    start = start(gr),
+    end = end(gr),
+    y =  values(gr)[[field]])
+
+  fwrite(out, filename, sep = ',')
+}
+
+
+
+
+#' rel2abs
+#'
+#' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
+#'
+#' takes in gr with signal field "field"
+#'
+#' @param gr GRanges input with meta data field corresponding to mean relative copy "mean" in that interval
+#' @param purity purity of sample
+#' @param ploidy ploidy of sample
+#' @param gamma gamma fit of solution (over-rides purity and ploidy)
+#' @param beta beta fit of solution (over-rides purity and ploidy)
+#' @param field meta data field in "gr" variable from which to extract signal, default "mean"
+#' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
+#' @return
+#' numeric vector of integer copy numbers
+#' @export
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
+{
+  mu = values(gr)[, field]
+  mu[is.infinite(mu)] = NA
+  w = as.numeric(width(gr))
+  w[is.na(mu)] = NA
+  sw = sum(w, na.rm = T)
+  mutl = sum(mu * w, na.rm = T)
+
+  ncn = rep(2, length(mu))
+  if (!is.null(field.ncn))
+    if (field.ncn %in% names(values(gr)))
+      ncn = values(gr)[, field.ncn]
+
+  ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+
+  if (is.na(gamma))
+    gamma = 2*(1-purity)/purity
+
+  if (is.na(beta))
+    beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
+                                        #      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
+
+
+                                        # return(beta * mu - gamma)
+  return(beta * mu - ncn * gamma / 2)
+}
+
+
+#' @name abs2rel
+#' @description abs2rel
+#'
+#' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
+#' By default, output is normalized to 1 (i.e. assumes that the total relative copy number signal mass over the genome is 1)
+#'
+#' takes in gr with signal field "field"
+#' @param gr GRanges input with meta data field corresponding to mean relative copy "mean" in that interval
+#' @param purity purity of sample
+#' @param ploidy ploidy of sample
+#' @param gamma gamma fit of solution (over-rides purity and ploidy)
+#' @param beta beta fit of solution (over-rides purity and ploidy)
+#' @param field meta character specifying meta data field in "gr" variable from which to extract signal, default "mean"
+#' @param field.ncn character specifying meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
+#' @return
+#' numeric vector of integer copy numbers
+#'  @export
+abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'cn', field.ncn = 'ncn', total = 1)
+{
+  abs = values(gr)[, field]
+  w = width(gr)
+  sw = sum(as.numeric(w))
+  
+  ncn = rep(2, length(gr))
+  if (!is.null(field.ncn))
+    if (field.ncn %in% names(values(gr)))
+      ncn = values(gr)[, field.ncn]
+
+  if (is.na(gamma))
+    gamma = 2*(1-purity)/purity
+
+  ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+
+  if (is.na(beta))
+    beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * total)
+
+                                        #    return((abs + gamma) / beta)
+  return((abs + ncn*gamma/2) / beta)
+}
+
+#' @name fqfl
+#' @description fqfl
+#'
+#' takes character vector of paths with suffix [(R1)|(R2)].fastq or ...fastq.gz and creates
+#' a fastq file list data.table with first two columns R1 and R2 and last column read group id.
+#' 
+#' @param paths character vector of fastq or fastq.gz paths
+#' @return
+#' fastq file list data.table with first two columns R1 and R2 and last column read group id.
+#'  @export
+fqfl = function(paths)
+{
+  tmp = data.table(path = paths)
+  tmp[, read := ifelse(grepl('R1\\.fastq(\\.gz)?$', basename(path)), 'R1',
+                ifelse(grepl('R2\\.fastq(\\.gz)?$', basename(path)), 'R2', NA))]
+  tmp[, group := gsub('\\.((R1)|(R2))\\.fastq(\\.gz)?$', '', basename(path))]
+  dcast.data.table(tmp, group ~ read, value.var = 'path')[, .(R1, R2, group)]
+}
+
+
+
+
 

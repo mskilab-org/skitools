@@ -8,6 +8,7 @@
 \alias{anno.hop}
 \alias{jabba.kid}
 \alias{ra_tier}
+\alias{rebin}
 \title{jabba.gwalk}
 \usage{
 jabba.gwalk(jab, verbose = FALSE, return.grl = TRUE)
@@ -25,6 +26,8 @@ jabba.kid(gwalks, pad = 5e+05, min.ab = 5e+05, min.run = 2)
 
 ra_tier(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10,
   min.treads2 = 3, max.nreads = Inf)
+
+rebin(cov, binwidth, field = names(values(cov))[1], na.rm = TRUE)
 }
 \arguments{
 \item{jab}{JaBbA object
@@ -46,12 +49,18 @@ ra_tier(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10,
 
 \item{min.run}{how many aberrant junctions to  require in the outputted kidnapped fragments}
 
+\item{cov}{GRanges of binned genome-wide coverage}
+
+\item{binwidth}{new binwidth}
+
 \item{jab}{input jab object}
 }
 \value{
 GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata#'
 
 gTrack of karyograph with particular nodes / edges colored with specified colors
+
+GRanges of binned genome-wide coverage at new bin
 }
 \description{
 Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
@@ -73,6 +82,8 @@ Classify full set of dRanger rearrangements into "tiers" of confidence
 (1) Tier 1 BPresult>0 and somatic_score>min.score1
 (2) Tier 2 BPresult=0 and somatic_score>min.score1
 (3) Tier 3 min.score2<=somatic_score<=min.score2 & tumreads>min.reads
+
+Given GRanges of bins will aggregate around new bin width.
 }
 \details{
 Takes karyograph and outputs gTrack +/- highlighting of one or more paths defined as GRanges or GRangesList (for multiple paths)
@@ -98,6 +109,8 @@ Marcin Imielinski
 ++ = RL
 +- = RR
 -+ = LL
+
+Marcin Imielinski
 
 Marcin Imielinski
 
