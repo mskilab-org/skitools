@@ -9070,7 +9070,7 @@ standardize_segs = function(seg, chr = FALSE)
 #' @title qstat
 #' @description
 #'
-#' Tabulates cluster usage (qstat()) or if full = TRUE flag given will dump out
+#' Tabulates SGE cluster usage (qstat()) or if full = TRUE flag given will dump out
 #' all running jobs in a data.table
 #'
 #' @author Marcin Imielinski
@@ -9152,6 +9152,42 @@ qstat = function(full = FALSE, numslots = TRUE, resources = full)
         else
             return(tmp)
     }
+
+
+
+#' @name sstat
+#' @title sstat
+#' @description
+#'
+#' Tabulates Slurm cluster usage (sstat()) or if full = TRUE flag given will dump out
+#' all running jobs in a data.table
+#'
+#' @author Zoran Gajic
+#' @export
+sstat = function(full = FALSE, numslots = TRUE, resources = T){
+    asp = "username,groupname,state,name,jobid,associd"
+    if(resources){
+        asp = c(asp, "timelimit,timeused,submittime,starttime,endtime,eligibletime,minmemory,numcpus,numnodes,priority,nice,reason,reboot")
+    }
+    asps = unlist(strsplit(asp, split = ','))
+    feats = lapply(c(1:length(asps)), function(x){
+        p = pipe(paste('squeue -O', asps[x]))
+        tmp = readLines(p)
+        tmp = tmp[2:length(tmp)]
+        close(p)
+        out = gsub(' ', '', tmp)
+    })
+    out = as.data.table(do.call('cbind', feats))
+    colnames(out) = asps
+    out = out[!is.na(out$username)]
+    if(!full){
+        p = pipe('whoami')
+        whoami = readLines(p)
+        close(p)
+        out = out[out$username == whoami]
+    }
+    return(out)
+}
 
 
 #' @name gigs
