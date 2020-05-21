@@ -218,9 +218,10 @@ border = function(B, na.rm = TRUE)
 ##############
 fready = function(..., pattern = "\\W+", sub = "_")
   {
-      tab = fread(...)
-      setnames(tab, dedup(gsub(pattern, sub, names(tab), perl = TRUE), suffix = '.'))
-      return(tab)
+    tab = fread(...)
+    nms = dedup(gsub(pattern, sub, names(tab), perl = TRUE), suffix = '.') %>% gsub('^[^A-Za-z]', '', ., perl = TRUE)
+    setnames(tab, nms)
+    return(tab)
   }
 
 
@@ -1583,7 +1584,7 @@ ra_breaks = function(rafile,
           require(VariantAnnotation)
           vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
           ## vgr = rowData(vcf) ## parse BND format
-          vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
+          vgr = skidb::read_vcf(rafile, swap.header = swap.header, geno=geno)
           if (!is.null(info(vcf)$SCTG))
             vgr$SCTG = info(vcf)$SCTG
           
@@ -2113,6 +2114,9 @@ vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 #' @author Marcin Imielinski
 score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, rthresh = 4, thresh = 1e5, pad = 1e4, raw = FALSE, allpaths = TRUE, verbose = TRUE)
 {
+  shift = data.table::shift
+  rowSums = Matrix::rowSums
+  colSums = Matrix::colSums
   if (is.null(wins))
   {
 
@@ -2306,7 +2310,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     message("Lifting concordant linked read footprints onto walks")
   rovcl = wks.chain * readsc
   rovclb = t(wks.chain) * rovcl
-  values(rovclb)$walk = seqnames(rovcl)[rovclb$query.id]
+  values(rovclb)$walk = as.integer(seqnames(rovcl)[rovclb$query.id]) ## without as.integer(), gr.findoverlaps fails below
   values(rovclb)$bx.walk = paste(values(rovclb)$BX, values(rovclb)$walk)
 
   tmp = rep(readsc, length(wks))
@@ -3621,9 +3625,8 @@ levapply = function(x, by, FUN = 'order')
 #' @return length(n) character vector of colors
 #' @author Marcin Imielinski
 #' @export
-brewer.master = function(n, palette = NULL, wes = TRUE,  list = FALSE)
+brewer.master = function(n, palette = NULL, wes = FALSE,  list = FALSE)
 {
-
     if (wes)
     {
       palettes = c("Royal2"=5, "Chevalier1"=4, "Darjeeling1"=5, "IsleofDogs1"=6, "Darjeeling2"=5, "Moonrise1"=4, "BottleRocket1"=7, "Rushmore"=5, "Moonrise3"=5, "Cavalcanti1"=5, "Rushmore1"=5, "FantasticFox1"=5, "BottleRocket2"=5, "Royal1"=4, "IsleofDogs2"=5, "Moonrise2"=4, "GrandBudapest1"=4, "GrandBudapest2"=4, "Zissou1"=5)
@@ -5119,13 +5122,14 @@ bubblemap = function(mat, col = 'darkgreen', cluster = TRUE, cex = 1, cex.text =
 #' @param scatter logical flag whether to include scatter of points (=FALSE)
 #' @param alpha numeric vector between 0 and 1 to specify alpha transparency of points if scatter is TRUE (0.3)
 #' @param title character specifying plot title (=NULL)
+#' @param facet_scales character specifying scales arg in ggplot2::facet_grid()
 #' @author Marcin Imielinski
 #' @import ggplot2
 #' @export
 vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, flip = FALSE,  mapping = NULL,
                  stat = "ydensity",
     position = "dodge",
-    trim = TRUE, sample = NA, scale = "width", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
+    trim = TRUE, sample = NA, scale = "width", log = FALSE, log1p = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
     scatter = FALSE,
     wes = 'Royal1',
     col = NULL, 
@@ -5139,7 +5143,8 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
     cex.axis = 1,
     cex.title = 1, 
     cex.scatter = cex,
-    col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE)
+    col.scatter = alpha('black', 0.5),
+    alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE,facet_scales = "fixed")
     {
         # require(ggplot2)
       if (!is.factor(group))
@@ -5207,11 +5212,12 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
           names(col)[match(levels(dat$group), names(col))] = newnames
         levels(dat$group) = newnames
       }
-      
+
       if (is.null(mapping))
         mapping = aes(fill=group)
-      
-      g = ggplot(dat[vfilter!=0, ], aes(y = y, x = group)) + theme_bw(base_size = 15*cex.axis) %+replace% theme(plot.title = element_text(size = 11*cex.axis*cex.title))
+
+      dat = dat[vfilter!=0, ]
+      g = ggplot(dat, aes(y = y, x = group)) + theme_bw(base_size = 15*cex.axis) %+replace% theme(plot.title = element_text(size = 11*cex.axis*cex.title), panel.grid.major.x = element_blank(), panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank())
 
       if (vplot)
         g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
@@ -5221,9 +5227,9 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
       {
         if (sina)
         {
-          g = g + ggforce::geom_sina(scale = sina.scale, method = method, size = 2*cex.scatter, alpha = alpha)
+          g = g + ggforce::geom_sina(scale = sina.scale, method = method, colour = col.scatter, size = 2*cex.scatter, alpha = alpha)
         }
-          else if (dot)
+        else if (dot)
           {
             if (is.null(text))
               g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
@@ -5261,11 +5267,20 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 
                 if (is.null(ylim))
                     g = g + scale_y_log10()
-#                    g = g + coord_trans(y = 'log10')
                 else
                     g = g+ scale_y_log10(limits = ylim)
-#                    g = g + coord_trans(y = 'log10', limits = ylim)
             }
+        else if (log1p)
+      {
+        if (!is.null(ylim))
+          if (length(ylim)!=2)
+            ylim = NULL
+        
+        if (is.null(ylim))
+          g = g + scale_y_continuous(trans = "log1p")
+        else
+          g = g+ scale_y_log10(limits = ylim)
+      }
         else
             {
                 if (!is.null(ylim))
@@ -5294,10 +5309,12 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
       if (!is.null(col))
       {
         g = g + scale_fill_manual(values = col)
+        g = g + scale_color_manual(values = col)
       }
       else if (!is.null(wes))
       {
-        g = g + scale_fill_manual(values = wesanderson::wes_palette(wes))
+        g = g + scale_fill_manual(values = skitools::brewer.master(length(unique(dat$group)), wes, wes = TRUE))
+#        g = g + scale_fill_manual(values = wesanderson::wes_palette(wes))
       }
      
 
@@ -5309,16 +5326,16 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
         if (!is.null(dat$facet2))
         {
           if (transpose)
-            g = g + facet_grid(facet2 ~ facet1)
+            g = g + facet_grid(facet2 ~ facet1, scales = facet_scales)
           else
-            g = g + facet_grid(facet1 ~ facet2)
+            g = g + facet_grid(facet1 ~ facet2, scales = facet_scales)
         }
         else
         {
           if (transpose)
-            g = g + facet_grid(. ~ facet1)
+            g = g + facet_grid(. ~ facet1, scales = facet_scales)
           else
-            g = g + facet_grid(facet1 ~ .)
+            g = g + facet_grid(facet1 ~ ., scales = facet_scales)
         }
       }
 
@@ -10706,7 +10723,7 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
 
   if (is.character(x))
     {
-      out = suppressWarnings(read_vcf(x))
+      out = suppressWarnings(skidb::read_vcf(x))
       if (is.na(label))
         label = x    }
   else
@@ -10842,7 +10859,7 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
   other = lines[!is.header]
   if (length(other))
     {
-      out = fread(paste(other, collapse = '\n'), header = FALSE)
+      out = fread(paste(c(other, ''), collapse = '\n'), sep = "\t", header = FALSE)
       sn = unlist(strsplit(gsub('^\\#', '', header[length(header)]), '\\t'))
       sfields = sn[-c(1:9)]
       setnames(out, sn)
@@ -13473,7 +13490,7 @@ ppgrid = function(
 {
 
   if (verbose)
-      jmessage('setting up ppgrid matrices .. \n')
+      message('setting up ppgrid matrices .. \n')
 
     if (is.na(ploidy.min)) ploidy.min = 1.2
     if (is.na(ploidy.max)) ploidy.max = 6
@@ -13639,7 +13656,7 @@ ppgrid = function(
         {
           if (verbose)
             {
-              jmessage(sprintf('Evaluating alleles for solution %s of %s\n', i, nrow(out)))
+              message(sprintf('Evaluating alleles for solution %s of %s\n', i, nrow(out)))
             }
             alpha = out$purity[i]
             tau = out$ploidy[i]
@@ -13854,7 +13871,7 @@ grl.stripnames = function(grl)
 #' @title Simple het "caller" meant to be used at validated het SNP sites for tumor / normal pairs
 #' @description 
 #'
-#' hets() outputs a tsv file of ALT ($alt.count.t, $alt.count.n) and REF ($ref.count.t, $ref.count.n) read counts to out.file
+#' hets() outputs a tsv file of ALT ($alt.count.t, $alt.count.n) and REF ($ref.count.t,, $ref.count.n) read counts to out.file
 #' for a tumor / normal pair across a set of sites specified by an input VCF
 #'
 #' @param tum.bam string path to tumor sample, input to Bamfile()
@@ -16776,888 +16793,6 @@ karyotrack = function(kag, paths = NULL, col = 'red', pad = 0)
     }
 
 
-#' @name fusions
-#' @export
-#' @rdname internal
-#' fusions
-#'
-#' annotates all gene fusions given an n x n adjacency matrix A of n genomic segments seg and grl of transcripts (eg output of read_RefGene)
-#' seg must be (1) a tiling of the genome and (2) have copies of both + and - intervals for each genomic range (eg output of karyograph)
-#'
-#' alternate input is a pile of junctions of ranges with strand orientation pointing AWAY from breakend
-#'
-#' cds = gencode cds GRanges gff3 / gtf input
-#'
-#' "gene_name" GRangesList meta data field is used in annotation and in not creating "splice" fusions that arise from different transcripts of the same gene.
-#'
-#' @param junctions GRangesList of junctions (each a length 2 GRanges)
-#' @param jab  JaBbA object (overrides junctions input)
-#' @param cds  CDS annotations (GrangesList of transcript composed of coordinates coding regions of exons)
-#' @param promoters GRanges of promoters (same length as transcript)
-#' @param query optional query limiting walks to specific regions of interest
-#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
-#' @return GRangesList of walks corresponding to transcript boundaires
-fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, query = NULL, prom.window = 1e3, verbose = T, max.chunk = 1e10, cb.interval = 1e4, cb.chunksize = 1e4, cb.maxchunks = 1e10, exhaustive = FALSE, debug = NULL, mc.cores = 1)
-    {
-        if (!is.null(junctions))
-            {
-                jab = JaBbA:::karyograph(junctions)
-                A = jab$adj
-                seg = jab$tile
-                if (verbose)
-                    cat('made karyograph\n')
-            }
-        else if (!is.null(jab))
-            {
-                if (!is.null(jab$segstats))
-                    seg = jab$segstats
-                else
-                    seg = jab$tile
-                A = jab$adj
-            }
-        else
-            stop('either jab or junctions input must be non NULL')
-
-        if (is.null(A) | is.null(seg))
-            stop('Some essential args are NULL')
-
-        if (!is(cds, 'GRangesList'))
-            cds = NULL
-        else if (!all(c('Transcript_id', 'Gene_name') %in% names(values(cds))))
-            cds = NULL
-
-        if (is.null(cds))
-            {
-                if (verbose)
-                    jmessage('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via skidb::read_gencode("cds"))')
-                cds = read_gencode('cds')
-            }
-
-        tx.span = seg2gr(values(cds))
-
-        names(values(tx.span))[match(c('transcript_id', 'gene_name'), tolower(names(values(tx.span))))] = c('transcript_id', 'gene_name')
-
-        if (verbose)
-            cat('got transcript boundaries\n')
-
-        ## determine set of transcript fragments
-        ## these correspond to transcripts that intersect a segment boundary
-
-        cds.frag.left = gr.findoverlaps(tx.span, gr.start(seg), qcol = c('gene_name', 'transcript_id'), ignore.strand = F, max.chunk = max.chunk)
-        strand(cds.frag.left) = strand(tx.span)[cds.frag.left$query.id]
-        cds.frag.right = gr.findoverlaps(tx.span, gr.end(seg), qcol = c('gene_name', 'transcript_id'),  ignore.strand = F, max.chunk = max.chunk)
-        strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
-
-        ## I want to find all unique walks that involve tx fragments
-
-        if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 )
-            tmp = merge(data.frame(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
-                data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
-        else
-            return(GRangesList())
-
-        pos.right = which( as.logical( strand(cds.frag.right)=='+'))
-        pos.left = which( as.logical( strand(cds.frag.left)=='+') )
-        neg.right = which(as.logical( strand(cds.frag.right)=='-') )
-        neg.left = which(as.logical( strand(cds.frag.left)=='-'))
-
-        ## positive start fragments will be "right" fragments
-        cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
-        start(cds.start.frag.pos) = start(tx.span)[cds.start.frag.pos$query.id]
-        if (length(cds.start.frag.pos)>0)
-            cds.start.frag.pos$type = 'start'
-
-        ## positive end fragments will be "left" fragments
-        cds.end.frag.pos = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% pos.left, ]$i]
-        end(cds.end.frag.pos) = end(tx.span)[cds.end.frag.pos$query.id]
-        if (length(cds.end.frag.pos)>0)
-            cds.end.frag.pos$type = 'end'
-
-        ## negative start fragments will be "right" fragments
-        cds.start.frag.neg = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% neg.left, ]$i]
-        end(cds.start.frag.neg) = end(tx.span)[cds.start.frag.neg$query.id]
-        if (length(cds.start.frag.neg)>0)
-            cds.start.frag.neg$type = 'start'
-
-        ## negative end fragments will be "left" fragments
-        cds.end.frag.neg = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% neg.right, ]$j]
-        start(cds.end.frag.neg) = start(tx.span)[cds.end.frag.neg$query.id]
-        if (length(cds.end.frag.neg)>0)
-            cds.end.frag.neg$type = 'end'
-
-        ## remaining will be "middle" fragments
-        middle.frag = cds.frag.left[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$i]
-        end(middle.frag) = end(cds.frag.right[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$j])
-        if (length(middle.frag)>0)
-            middle.frag$type = 'middle'
-
-        ## concatenate fragments
-        ## subject.id of frags is the id of the node on the graph
-
-        all.frags = c(cds.start.frag.pos, cds.end.frag.pos, cds.start.frag.neg, cds.end.frag.neg, middle.frag)
-
-        ##
-        ## now connect all.frags according to A
-        ## i.e. apply A connections to our fragments, so draw an edge between fragments
-        ## if
-        ## (1) there exists an edge connecting segment and
-        ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
-        ##
-
-        seg.edges = as.data.frame(Matrix::which(A!=0, arr.ind = T))
-        colnames(seg.edges) = c('from.seg', 'to.seg')
-        edges = merge(merge(data.frame(i = 1:length(all.frags), from.seg = all.frags$subject.id),
-            seg.edges), data.frame(j = 1:length(all.frags), to.seg = all.frags$subject.id))
-
-        edges = edges[all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'middle' |
-                          all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'end' |
-                              all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'middle' |
-                                  all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'end', ]
-
-        ## this removes splice variants .. keeping only links that fuse different genes or same transcripts
-        edges = edges[tx.span$gene_name[all.frags$query.id[edges$i]] != tx.span$gene_name[all.frags$query.id[edges$j]] |
-                          all.frags$query.id[edges$i] == all.frags$query.id[edges$j],]
-
-        if (nrow(edges)==0)
-            return(GRangesList())
-
-        if (verbose)
-            cat('computed subgraph\n')
-
-        A.frag = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(all.frags),2))
-        keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
-        A.frag = A.frag[keep.nodes, keep.nodes]
-        all.frags = all.frags[keep.nodes]
-
-        sources = which(all.frags$type == 'start')
-        sinks = which(all.frags$type == 'end')
-
-        G = graph.adjacency(A.frag)
-        C = clusters(G, 'weak')
-        vL = split(1:nrow(A.frag), C$membership)
-
-        paths = do.call('c', mclapply(1:length(vL), function(i) {
-            if (verbose & (i %% 10)==0)
-                cat(i, ' of ', length(vL), '\n')
-            x = vL[[i]]
-            if (!is.null(debug))
-                if (i %in% debug)
-                    browser()
-            tmp.source = setdiff(match(sources, x), NA)
-            tmp.sink = setdiff(match(sinks, x), NA)
-            tmp.mat = A.frag[x, x, drop = FALSE]!=0
-            if (length(x)<=1)
-                return(NULL)
-            if (length(x)==2)
-                list(x[c(tmp.source, tmp.sink)])
-            else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1))
-                get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
-            else
-                {
-                    if (exhaustive)
-                        lapply(all.paths(A.frag[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = verbose)$paths, function(y) x[y])
-                    else
-                        {
-                            out = do.call('c', lapply(intersect(x, sources),
-                                function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
-                            out = out[sapply(out, length)!=0]
-                            if (length(out)>0)
-                                out = out[!duplicated(sapply(out, paste, collapse = ','))]
-                            return(out)
-                        }
-                }
-        }, mc.cores = mc.cores))
-
-        if (verbose)
-            cat('computed paths\n')
-
-        paths.u = unlist(paths)
-        paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
-        walks = split(seg[all.frags$subject.id[paths.u]], paths.i)
-        values(walks)$seg.id = split(all.frags$subject.id[paths.u], paths.i)
-
-        ## for now just want to pick the non duplicated paths on the original graph and send these to the walk annotation module
-        walks = walks[!duplicated(sapply(values(walks)$seg.id, function(x) paste(x, collapse = ',')))]
-
-        ## note aberrant junction ids and filter out trivial walks that don't employ any ab junctions
-        A.ab = sparseMatrix(1, 1, x = as.numeric(NA), dims = dim(jab$adj))
-        ab.ix = !is.na(rowSums(rbind(jab$ab.edges[, 1:2,1])))
-
-        A.ref = sign(jab$adj)-sign(A.ab)
-
-
-        if (any(ab.ix))
-            A.ab[rbind(jab$ab.edges[ab.ix, 1:2, 1])] = A.ab[rbind(jab$ab.edges[ab.ix, 1:2, 2])] = which(ab.ix)
-
-        values(walks)$ab.id = lapply(values(walks)$seg.id, function(x)
-            if (length(x)==1) c() else setdiff(A.ab[cbind(x[-length(x)], x[-1])], NA))
-
-        values(walks)$junc.type = lapply(values(walks)$seg.id, function(x)
-            if (length(x)==1) c() else sign(A.ref[cbind(x[-length(x)], x[-1])]) + 2*sign(A.ab[cbind(x[-length(x)], x[-1])]))
-
-        walks = walks[!sapply(values(walks)$junc.type, function(x) all(x == 1))]
-
-        values(walks)$seg.id = sapply(values(walks)$seg.id, paste, collapse = ',')
-        values(walks)$ab.id = sapply(values(walks)$ab.id, paste, collapse = ',')
-        values(walks)$junc.type = NULL
-
-        if (verbose)
-            cat(sprintf('Annotating %s walks\n', length(walks)))
-
-        if (length(walks)==0)
-            return(walks)
-        else
-            {
-                names(walks) = 1:length(walks)
-                if (!is.null(query))
-                    walks = walks[grl.in(walks, query, some = TRUE)]
-                return(annotate.walks(walks, cds, promoters, verbose = verbose, exhaustive = FALSE, mc.cores = mc.cores))
-            }
-    }
-
-
-#' @name annotate.walks
-#' @export
-#' @rdname internal
-#' annotate.walks
-#'
-#' Low level function to annotate walks (GRanges list) with cds / promoter annotations
-#'
-#' given:
-#' walks: input grl of walks on the genome
-#' tx:  gr annotating transcript boundaries
-#' or grl annotating exon level transcripts e.g. refgene or grl with
-#' grl-level meta data fields $s1, $s2, $e1, $e2 annotating start and end positions of transcipt and cds
-#' respectively, $gene_sym representing gene label, $chr - chromosome, $str strand
-#' and gr level features (exon_frame) annotating the frame (0,1,2) of the first exon position in a + transcript
-#' and last exon position in a - transcript.
-#' Assumes that exons are ordered in each grl item in the order of transcription (i.e. right most exon for negative strand transcripts)
-#' (e.g. output of read_refGene(grl = T))
-#'
-#' @param walks GRangesList of walks to query (eg from traversal of JaBbA object)
-#' @param cds  GRangesList of CDS annotation, one per transcript (each a coding region of an exon)
-#' @param promoters GRanges of promoters (same length as transcript)
-#' @param filter.splice flag whether to filter out splice variants of a given gene
-#' @param verbose  flag
-#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
-#' @param mc.cores number of cores to use
-#' @return
-#' a grl of putative fusions with annotations in values field:
-#' $label
-#' $type  e.g. promoter-fusion, 5-UTR fusion, In-frame fusion, 3' truncated fusion, 5' truncated fusion, in-frame poly-fusion, 3' truncated poly-fusion,
-#'             5' truncated poly-fusion
-#' $genes genes involved in fusion
-#' $transcripts transcripts involved in fusion
-#'
-#' annotates every possible altered transcript in region including
-#'   - transcripts with truncated
-############################################
-annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbose = F, prom.window = 1e3, max.chunk = 1e9, mc.cores = 1, exhaustive = FALSE)
-    {
-        if (inherits(walks, 'GRanges'))
-            walks = GRangesList(walks)
-
-        if (is(walks, 'list'))
-            walks = do.call(GRangesList, walks)
-
-        if (!is(cds, 'GRangesList'))
-            {
-                if (verbose)
-                    cat('splitting cds\n')
-                cds = .gencode_split(cds, by = 'transcript_id')
-            }
-
-        tx.span = seg2gr(values(cds)) ## assumed that transcript span is encoded in the cds metadata (i.e. beginning end including UTR)
-
-        cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
-        setkey(cdsu, grl.ix)
-
-        cds.span = cdsu[, list(start = min(start), end = max(end)), keyby = grl.ix][list(1:length(tx.span)), ]
-
-
-        utr.left = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = start, strand = strand, end = cds.span[list(1:length(start)), start], transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
-        utr.right = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = cds.span[list(1:length(start)), end], strand = strand, end = end, transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
-        utr = c(utr.left, utr.right)
-
-        names(values(tx.span))[match(c('Transcript_id', 'Transcript_name', 'Gene_name'), names(values(tx.span)))] = c('transcript_id', 'transcript_name', 'gene_name')
-
-        if (is.null(promoters))
-            {
-                promoters = flank(tx.span, prom.window)
-                values(tx.span) = values(promoters)
-            }
-
-        tx.span$type = 'cds'
-        promoters$type = 'gene'
-        utr.left$type = 'gene'
-        utr.right$type = 'gene'
-        tx.span$cds.id = 1:length(tx.span)
-        tx.span = seg2gr(as.data.table(rrbind(as.data.frame(tx.span), as.data.frame(promoters)))[, list(seqnames = seqnames[1], start = min(start), end = max(end), strand = strand[1], gene_name = gene_name[1], transcript_id = transcript_id[1], transcript_name = transcript_name[1], cds.id = cds.id), keyby = cds.id][!is.na(cds.id), ], seqlengths = seqlengths(tx.span))
-
-        # match up tx.span to walks
-        walks.u = grl.unlist(walks)
-
-        ## these are fragments of transcripts that overlap walks
-        this.tx.span = gr.findoverlaps(tx.span, walks.u, qcol = c('transcript_id', 'transcript_name', 'gene_name'), verbose = verbose, max.chunk = max.chunk)
-        this.tx.span$tx.id = this.tx.span$query.id
-
-        strand(this.tx.span) = strand(tx.span)[this.tx.span$query.id]
-        this.tx.span$left.broken = start(this.tx.span) != start(tx.span)[this.tx.span$query.id]
-        this.tx.span$right.broken = end(this.tx.span) != end(tx.span)[this.tx.span$query.id]
-
-        # remove elements that are "unbroken" by the window boundaries
-        this.tx.span = this.tx.span[this.tx.span$left.broken | this.tx.span$right.broken]
-        this.tx.span$cds.sign = c('-'= -1, '+' = 1)[as.character(strand(this.tx.span))]
-        this.tx.span$window.sign = c('-'= -1, '+' = 1)[as.character(strand(walks.u)[this.tx.span$subject.id])]
-
-        # annotate left and right ends (if information available)
-        # i.e. UTR, CDS, Promoter
-
-        ## we trim cds by 1 nucleotide at both ends so that 'cds' annotation only refers to a cds fragment (not including start and stop)
-                ## annotate ends with feature types so that positions internal to cds bases will be 'cds',
-        ## external to cds but in cds will 'utr'
-        ## and 5' flank (with respect to cds orientation) will be promoter
-        this.tx.span$left.feat = NA
-        this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), tx.span, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'cds'
-        this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), utr, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'utr'
-        this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), promoters, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'promoter'
-
-        this.tx.span$right.feat = NA
-        this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), tx.span, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'cds'
-        this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), utr, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'utr'
-        this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), promoters, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'promoter'
-
-        ## if lands in CDS annotate this.tx.span ends with right and/or left exon frame
-        ## (if lands in intron then annotate left end with frame of next exon on right and right end
-        ## with frame of next exon on left)
-        ## otherwise annotate as NA
-        ## we will eventually integrate frames across walks and call a transition "in frame" if the
-        ## frame of the right (left) end of the previous + (-) interval
-
-        ## now we want to find the first exon to the right of the left boundary and
-        ## the first exon to the left of the right boundary for each fragment
-        ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
-
-        cds.u = grl.unlist(cds[this.tx.span$tx.id])
-                                        #        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
-        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
-
-        tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
-
-        leftmost.cds.exon = data.table(id = 1:length(tmp), qid = tmp$query.id, start = start(tmp))[, id[which.min(start)], by = qid][, V1]
-        rightmost.cds.exon = data.table(id = 1:length(tmp), qid = tmp$query.id, end = end(tmp))[, id[which.max(end)], by = qid][, V1]
-
-        ## now we want to get the frame of the left and right base
-        ## of each leftmost and rightmost exon (etc.
-        ## this will depend on orientation of the exon and side that we are querying
-        ## for left side of - exon, (exonFrame + width) %% 3
-        ## for right side of - exon, (exonFrame + width(og.exon) - width %% 3
-        ## for left side of + exon, (exonFrame + width(og.exon) - width) %%3
-        ## for right side of - exon, (exonFrame + int.exon) %% 3
-
-        leftmost.coord = ifelse(as.logical(strand(cds.u[tmp$subject.id[leftmost.cds.exon]])=='+'),
-            (start(tmp)[leftmost.cds.exon] - start(cds.u)[tmp$subject.id[leftmost.cds.exon]] + cds.u$start.local[tmp$subject.id[leftmost.cds.exon]]),
-            (end(cds.u)[tmp$subject.id[leftmost.cds.exon]] - start(tmp)[leftmost.cds.exon] + cds.u$start.local[tmp$subject.id[leftmost.cds.exon]]))
-
-        rightmost.coord = ifelse(as.logical(strand(cds.u[tmp$subject.id[rightmost.cds.exon]])=='+'),
-            (end(tmp)[rightmost.cds.exon] - start(cds.u)[tmp$subject.id[rightmost.cds.exon]] + cds.u$start.local[tmp$subject.id[rightmost.cds.exon]]),
-            (end(cds.u)[tmp$subject.id[rightmost.cds.exon]] - end(tmp)[rightmost.cds.exon] + cds.u$start.local[tmp$subject.id[rightmost.cds.exon]]))
-
-        leftmost.frame = ifelse(as.logical(strand(cds.u[tmp$subject.id[leftmost.cds.exon]])=='+'),
-            (start(tmp)[leftmost.cds.exon] - start(cds.u)[tmp$subject.id[leftmost.cds.exon]] + cds.u$phase[tmp$subject.id[leftmost.cds.exon]]) %% 3,
-            (end(cds.u)[tmp$subject.id[leftmost.cds.exon]] - start(tmp)[leftmost.cds.exon] + cds.u$phase[tmp$subject.id[leftmost.cds.exon]]) %% 3)
-
-        rightmost.frame = ifelse(as.logical(strand(cds.u[tmp$subject.id[rightmost.cds.exon]])=='+'),
-            (end(tmp)[rightmost.cds.exon] - start(cds.u)[tmp$subject.id[rightmost.cds.exon]] + cds.u$phase[tmp$subject.id[rightmost.cds.exon]]) %% 3,
-          (end(cds.u)[tmp$subject.id[rightmost.cds.exon]] - end(tmp)[rightmost.cds.exon] + cds.u$phase[tmp$subject.id[rightmost.cds.exon]]) %% 3)
-
-        leftmost.frame = leftmost.coord %% 3
-        rightmost.frame = rightmost.coord %% 3
-
-        this.tx.span$left.coord = this.tx.span$left.boundary = this.tx.span$right.coord = this.tx.span$right.boundary = NA
-
-        this.tx.span$left.coord[tmp$query.id[leftmost.cds.exon]] = leftmost.coord
-        this.tx.span$right.coord[tmp$query.id[rightmost.cds.exon]] = rightmost.coord
-
-        this.tx.span$left.boundary[tmp$query.id[leftmost.cds.exon]] =
-            ifelse(strand(this.tx.span)[tmp$query.id[leftmost.cds.exon]]=="+",
-                   tmp$start.local[leftmost.cds.exon], tmp$end.local[leftmost.cds.exon])
-
-        this.tx.span$right.boundary[tmp$query.id[rightmost.cds.exon]] =
-            ifelse(strand(this.tx.span)[tmp$query.id[rightmost.cds.exon]]=="+",
-                   tmp$end.local[rightmost.cds.exon], tmp$start.local[rightmost.cds.exon])
-
-        this.tx.span$right.exon_del = this.tx.span$left.exon_del = NA;
-        this.tx.span$right.frame = this.tx.span$left.frame = NA;
-        this.tx.span$right.exon_id= this.tx.span$left.exon_id = NA;
-
-        ## keep track of exon frames to left and right
-        this.tx.span$left.frame[tmp$query.id[leftmost.cds.exon]] = leftmost.frame
-        this.tx.span$right.frame[tmp$query.id[rightmost.cds.exon]] = rightmost.frame
-
-        this.tx.span$left.exon_id[tmp$query.id[leftmost.cds.exon]] = cds.u[tmp$subject.id[leftmost.cds.exon]]$exon_number
-        this.tx.span$right.exon_id[tmp$query.id[rightmost.cds.exon]] = cds.u[tmp$subject.id[rightmost.cds.exon]]$exon_number
-
-        ## keep track of which exons have any sort of sequence deletion
-        this.tx.span$left.exon_del[tmp$query.id[leftmost.cds.exon]] =
-            start(this.tx.span)[tmp$query.id[leftmost.cds.exon]] > start(cds.u)[tmp$subject.id[leftmost.cds.exon]]
-        this.tx.span$right.exon_del[tmp$query.id[rightmost.cds.exon]] =
-            end(this.tx.span)[tmp$query.id[rightmost.cds.exon]] <  end(cds.u)[tmp$subject.id[rightmost.cds.exon]]
-
-
-        ## now traverse each walk and connect "broken transcripts"
-        ## each walk is a list of windows, connections will be made with respect to the window walk
-        ## paying attention to (1) side of breakage, (2) orientation of adjacent windows in walk (3) orientation of transcript
-        ##
-        ## right broken + cds upstream of ++ junction attaches to left  broken + cds in next window
-        ##              - cds upstream of ++ junction attached to left  broken - cds in next window
-        ##              + cds upstream of +- junction attaches to right broken - cds in next window
-        ##              - cds upstream of +- junction attaches to right broken + cds in next window
-        ##
-        ## left  broken + cds upstream of -- junction attaches to right broken + cds in next window
-        ##              - cds upstream of -- junction attached to right broken - cds in next window
-        ##              + cds upstream of -+ junction attaches to left  broken - cds in next window
-        ##              - cds upstream of -+ junction attaches to left  broken + cds in next window
-        ##
-        ##
-        ##
-
-        # to achieve this create a graphs on elements of this.tx.span
-        # connecting elements i and j if a window pair k k+1 in (the corresponding) input grl
-        # produces a connection with the correct orientation
-
-        # match up on the basis of the above factors to determine edges in graph
-
-        ##
-
-        edges = merge(
-            data.table(
-                i = 1:length(this.tx.span),
-                key1 = walks.u$grl.ix[this.tx.span$subject.id],
-                key2 = walks.u$grl.iix[this.tx.span$subject.id],
-                key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
-                key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$right.broken, this.tx.span$left.broken)),
-            data.table(
-                j = 1:length(this.tx.span),
-                key1 = walks.u$grl.ix[this.tx.span$subject.id],
-                key2 = walks.u$grl.iix[this.tx.span$subject.id]-1,
-                key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
-                key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$left.broken, this.tx.span$right.broken)), by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE
-            )[key4 == TRUE, ]
-
-        ## remove edges that link different transcripts of same gene
-
-        if (filter.splice)
-            edges = edges[!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j]), ]
-
-        if (nrow(edges)==0)
-          return(GRangesList())
-
-        A = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(this.tx.span),2))
-        sources = which(Matrix::colSums(A!=0)==0)
-        sinks = which(Matrix::rowSums(A!=0)==0)
-
-        G = graph.adjacency(A)
-        C = clusters(G, 'weak')
-        vL = split(1:nrow(A), C$membership)
-
-        ## collate all paths through this graph
-        paths = do.call('c', mclapply(1:length(vL), function(i) {
-            if (verbose & (i %% 10)==0)
-                cat(i, ' of ', length(vL), '\n')
-            x = vL[[i]]
-            tmp.source = setdiff(match(sources, x), NA)
-            tmp.sink = setdiff(match(sinks, x), NA)
-            tmp.mat = A[x, x, drop = FALSE]!=0
-            if (length(x)<=1)
-                return(NULL)
-            if (length(x)==2)
-                list(x[c(tmp.source, tmp.sink)])
-            else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1))
-                get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
-            else
-                {
-                    if (exhaustive)
-                        lapply(all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])
-                    else
-                        {
-                            out = do.call('c', lapply(intersect(x, sources),
-                                function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
-                            out = out[sapply(out, length)!=0]
-                            if (length(out)>0)
-                                out = out[!duplicated(sapply(out, paste, collapse = ','))]
-                            return(out)
-                        }
-                }
-        }, mc.cores = mc.cores))
-
-        fus.sign = this.tx.span$cds.sign * this.tx.span$window.sign
-        paths = lapply(paths, function(x) if (fus.sign[x][1]<0) rev(x) else x) ## reverse "backward paths" (i.e. those producing fusions in backward order)
-        paths.first = sapply(paths, function(x) x[1])
-        paths.last = sapply(paths, function(x) x[length(x)])
-        paths.broken.start = ifelse(as.logical(strand(this.tx.span)[paths.first] == '+'), this.tx.span$left.broken[paths.first], this.tx.span$right.broken[paths.first])
-        paths.broken.end = ifelse(as.logical(strand(this.tx.span)[paths.last] == '+'), this.tx.span$right.broken[paths.last], this.tx.span$left.broken[paths.last])
-        paths.u = unlist(paths)
-        paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
-        tmp.gr = this.tx.span[paths.u]
-
-        ## annotate steps of walk with out of frame vs in frame (if cds is a grl)
-
-        ## left and right exon frame
-        paths.u.lec = tmp.gr$left.coord
-        paths.u.rec = tmp.gr$right.coord
-        paths.u.lef = tmp.gr$left.frame
-        paths.u.ref = tmp.gr$right.frame
-        paths.u.str = as.character(strand(tmp.gr))
-        paths.u.lcds = tmp.gr$left.feat == 'cds'
-        paths.u.rcds = tmp.gr$right.feat == 'cds'
-        paths.u.lout = tmp.gr$left.feat %in% c('promoter', 'utr')
-        paths.u.rout = tmp.gr$right.feat %in% c('promoter', 'utr')
-
-                                        # a fragment is in frame either if (1) it begins a walk at frame 0 outside of the cds
-                                        # or if (2) its frame is concordant with previous cds
-        paths.u.inframe = rep(NA, length(paths.u))
-        paths.u.cdsend = paths.u.cdsstart = rep(FALSE, length(paths.u)) # this keeps track of cds starts and cds ends in the fusion
-
-        outside = TRUE
-        for (i in 1:length(paths.u.inframe))
-            {
-                if (i == 1)
-                    outside = TRUE
-                else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i]))
-                    outside = TRUE
-
-                if (outside)
-                    {
-                        if (paths.u.str[i] == '+')
-                            paths.u.inframe[i] = paths.u.lout[i] & paths.u.lef[i] == 0
-                        else
-                            paths.u.inframe[i] = paths.u.rout[i] & paths.u.ref[i] == 0
-
-                        paths.u.cdsstart[i] = paths.u.inframe[i]
-                        outside = F
-                    }
-                else
-                    {
-                        if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+')
-                            paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.lef[i] == ((paths.u.ref[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.rcds[i-1]
-                        else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-')
-                            paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.ref[i]  == ((paths.u.ref[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.rcds[i-1]
-                        else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-')
-                            paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.ref[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.lcds[i-1]
-                        else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+')
-                            paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.lef[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.lcds[i-1]
-                    }
-
-                if ((paths.u.str[i] == '+' & paths.u.rout[i]) | (paths.u.str[i] == '-' & paths.u.lout[i]))
-                    {
-                        paths.u.cdsend[i] = paths.u.inframe[i]
-                        outside = T
-                    }
-            }
-
-        tmp.gr$in.frame = paths.u.inframe;
-        tmp.gr$cds.start = paths.u.cdsstart
-        tmp.gr$cds.end = paths.u.cdsend
-        tmp.gr$del5 = ifelse(paths.u.str == '+', tmp.gr$left.exon_del, tmp.gr$right.exon_del)
-        tmp.gr$del3 = ifelse(paths.u.str == '+', tmp.gr$right.exon_del, tmp.gr$left.exon_del)
-        tmp.gr$first.coord = ifelse(paths.u.str == '+', tmp.gr$left.coord, tmp.gr$right.coord)
-        tmp.gr$last.coord  = ifelse(paths.u.str == '+', tmp.gr$right.coord, tmp.gr$left.coord)
-        tmp.gr$first.boundary = ifelse(paths.u.str == '+', tmp.gr$left.boundary, tmp.gr$right.boundary)
-        tmp.gr$last.boundary  = ifelse(paths.u.str == '+', tmp.gr$right.boundary, tmp.gr$left.boundary)
-        tmp.gr$first.exon = ifelse(paths.u.str == '+', tmp.gr$left.exon_id, tmp.gr$right.exon_id)
-        tmp.gr$last.exon = ifelse(paths.u.str == '+', tmp.gr$right.exon_id, tmp.gr$left.exon_id)
-        fusions = split(tmp.gr, paths.i)
-
-                                        # now annotate fusions
-
-        values(fusions)$walk.id = data.table(wid = walks.u$grl.ix[tmp.gr$subject.id], fid = paths.i)[, wid[1], keyby = fid][, V1]
- #    values(fusions)$walk.id = vaggregate(walks.u$grl.ix[tmp.gr$subject.id], by = list(paths.i), FUN = function(x) x[1])
-
-        tmp.g = tmp.gr$gene_name
-        tmp.cds = tmp.gr$transcript_id
-        tmp.fe = as.numeric(tmp.gr$first.exon)
-        tmp.le = as.numeric(tmp.gr$last.exon)
-        tmp.fb = tmp.gr$first.boundary
-        tmp.lb = tmp.gr$last.boundary
-        tmp.fc = tmp.gr$first.coord
-        tmp.lc = tmp.gr$last.coord
-        tmp.5d = tmp.gr$del5
-        tmp.3d = tmp.gr$del3
-        tmp.5d[is.na(tmp.5d)] = FALSE
-        tmp.3d[is.na(tmp.3d)] = FALSE
-        paths.u.cdsend[is.na(paths.u.cdsend)] = FALSE
-        paths.u.cdsstart[is.na(paths.u.cdsstart)] = FALSE
-        paths.u.inframe[is.na(paths.u.inframe)] = FALSE
-
-        totpaths = max(paths.i)
-
-        if (verbose)
-            cat('Populating coordinates\n')
-
-        values(fusions)[, 'coords'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
-                           split(gr.string(this.tx.span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
-
-        if (verbose)
-            cat('Populating transcript names\n')
-        values(fusions)[, 'transcript_names'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
-                           split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
-                           split(values(tx.span)[, 'transcript_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
-
-        if (verbose)
-            cat('Populating transcript ids\n')
-        values(fusions)[, 'transcript_ids'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
-                           split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
-                           split(values(tx.span)[, 'transcript_id'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
-
-        if (verbose)
-            cat('Populating gene names\n')
-        values(fusions)[, 'genes'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
-                           split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
-
-        if (verbose)
-            cat('Populating alteration\n')
-        values(fusions)$alteration =  vaggregate(1:length(paths.i), by = list(paths.i),
-                           FUN = function(x)
-                               {
-                                   if (verbose & (x[1] %% 10)==0)
-                                       cat('Path', unique(paths.i[x]), 'of', totpaths, '\n')
-                                   if (length(unique((tmp.cds[x])))==1) ## single transcript event
-                                       {
-                                           out = NULL
-                                           x = x[!is.na(tmp.fe[x]) & !is.na(tmp.le[x])]
-                                           if (length(x)>0)
-                                               {
-#                                                   browser()
-                                                   ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
-                                                   if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
-                                                       {
-                                                           del.fc = pmax(tmp.lc[x[match(start(del)-1, tmp.le[x])]]+1, 1, na.rm = TRUE)
-                                                           del.lc = pmin(tmp.fc[x[match(end(del)+1, tmp.fe[x])]]-1, max(tmp.lc[x]), na.rm = TRUE)
-                                                           out = c(out,## some portion deleted
-                                                               ifelse(start(del)==end(del),
-                                                                      paste('deletion of exon ', start(del),
-                                                                            ' [', del.fc, '-', del.lc, 'bp]',
-                                                                            sep = '', collapse = ', '),
-                                                                      paste('deletion of exons ', start(del), '-', end(del),
-                                                                            ' [', del.fc, '-', del.lc, 'bp]',
-                                                                            sep = '', collapse = ', ')))
-                                                       }
-
-                                                   if (length(amp <- IRanges(coverage(ir)>1))>0)
-                                                       {
-                                                           amp.fc = tmp.lc[x[match(start(amp), tmp.le[x])]]
-                                                           amp.lc = tmp.fc[x[match(end(amp), tmp.fe[x])]]
-                                                           out = c(out,   ## some portion duplicated
-                                                               ifelse(start(amp)==end(amp),
-                                                                      paste('duplication of exon ', end(amp),
-                                                                            '[', amp.fc, '-', amp.lc, 'bp]',
-                                                                            sep = '', collapse = ', '),
-                                                           paste('duplication of exons ', start(amp), '-', end(amp),
-                                                                 ' [', amp.fc, '-', amp.lc, 'bp]',
-                                                                 sep = '', collapse = ', ')))
-                                                       }
-
-                                                   if (any(ix <- tmp.5d[x]))
-                                                       {
-                                                           out = c(out, paste("partial 5' deletion of exon ", tmp.fe[x[ix]],
-                                                               ' [', tmp.fb[x[ix]], '-', tmp.fc[x[ix]], 'bp]',
-                                                               sep = '', collapse = ', '))  ## some portion duplicated
-                                                       }
-                                                   if (any(ix <- tmp.3d[x]))
-                                                       {
-                                                           del.fc = pmax(tmp.lc[x[ix-1]] + 1, 1, na.rm = TRUE)
-                                                           del.lc = pmin(tmp.fc[x[ix+1]]-1, max(tmp.lc[x]), na.rm = TRUE)
-                                                           out = c(out, paste("partial 3' deletion of exon ", tmp.fe[x[ix]],
-                                                                ' [', tmp.lc[x[ix]], '-', tmp.lb[x[ix]], 'bp]',
-                                                               sep = '', collapse = ', '))  ## some portion duplicated
-                                                       }
-                                               }
-
-                                           if (length(out)>0)
-                                               paste(out, collapse = '; ')
-                                           else
-                                               ''
-                                       }
-                                   else
-                                       {
-                                           return(paste(tmp.g[x], ' ', ifelse(paths.u.cdsstart[x], 'S', ''), ifelse(tmp.5d[x],  'tr', ''),
-                                                        ifelse(is.na(tmp.fe[x]), 'UTR',
-                                                               ifelse(tmp.le[x]==tmp.fe[x],
-                                                                      paste('exon ', tmp.le[x], sep = ''),
-                                                                      paste('exons ', tmp.fe[x], '-', tmp.le[x], sep = ''))),
-                                                               ' [', tmp.fc[x], '-', tmp.lc[x], 'bp]',
-                                                               ifelse(tmp.3d[x],  'tr', ''), ifelse(paths.u.cdsend[x], 'E', ''), ' ',
-                                                               ifelse(c(paths.u.inframe[x[-1]], FALSE), '-',
-                                                                      ifelse((1:length(x))!=length(x), '-X', '')), sep = '', collapse = '-> '))
-                                       }
-                               })
-
-        values(fusions)$max.inframe = vaggregate(paths.u.inframe, by = list(paths.i),
-                           FUN = function(x) return(max(c(0, rle(x)$lengths[which(rle(x)$values == T)]))))
-        values(fusions)$num.win = vaggregate(paths.u.inframe, by = list(paths.i), length)
-#        values(fusions)$broken.start = paths.broken.start[as.numeric(names(fusions))]
-#        values(fusions)$broken.end = paths.broken.end[as.numeric(names(fusions))]
-
-        values(fusions) = cbind(values(walks)[values(fusions)$walk.id, ], values(fusions))
-
-        fusions = fusions[nchar(values(fusions)$alteration)>0, ]
-        return(fusions)
-    }
-
-
-
-
-#' @name anno.hop
-#' @rdname internal
-#' @title anno.hop
-#' @export
-#' @description
-#'
-#' Adds simple annotations to GRangesList of walks including
-#' distance along each reference fragment and distance
-#' between "hops"
-#'
-#' @param walks walks to annotate
-#'
-#' @author Marcin Imielinski
-anno.hop = function(walks)
-{
-  gw = gr2dt(grl.unlist(walks))
-  gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
-  gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
-                        (strand[-1] != strand[-length(strand)]), Inf,
-                 ifelse(strand[-1]=='+',
-                        start[-1]-end[-length(end)],
-                        start[-length(end)]-end[-1]))
-               , Inf), by = grl.ix]
-
-  gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
-                          ifelse(strand[-1]=='+',
-                                 start[-1]-end[-length(end)],
-                                 start[-length(end)]-end[-1]))
-                        , Inf), by = grl.ix]
-
-  gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
-  gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
-     by = grl.ix]
-
-  gw[, ":="(frag.id = paste(grl.ix, ab.chunk),
-            frag.iid = 1:length(grl.ix),
-            frag.pos = cumsum(width)
-            ), by = .(ab.chunk, grl.ix)]
-
-  gr.out = dt2gr(gw)
-  gr.out$width = NULL
-
-  setkey(gw, frag.id)
-
-  grl.out = split(gr.out[, c('ab.id','grl.iix', 'cn', 'cn.1', 'frag.id', 'frag.iid', 'frag.pos', 'dist', 'dist.nostrand')], gr.out$grl.ix)[as.character(1:length(walks))]
-
-  names(grl.out) = names(walks)
-  values(grl.out) = values(walks)
-
-  return(grl.out)
-}
-
-
-#' @name jabba.kid
-#' @rdname internal
-#' @title jabba.kid
-#' @export
-#' @description
-#'
-#' Given a set of gwalks (grangeslist outputs of jabba.gwalk) identifies strings "kidnapped" fragments i.e.
-#' strings of tempaled insertions, which are outputted as a grangeslist
-#'
-#' @param gwalks grangeslist of walks (e.g.outputted from jabba.gwalks)
-#' @param pad how much bp neighboring material around each kidnapped string to include in outputs
-#' @param min.ab minimal bp distance a junction needs to be considered aberrant (e.g. to exclude very local deletions)
-#' @param min.run how many aberrant junctions to  require in the outputted kidnapped fragments
-#' @author Marcin Imielinski
-jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
-{
-    gw = gr2dt(grl.unlist(gwalks))
-    gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
-                          (strand[-1] != strand[-length(strand)]), Inf,
-                   ifelse(strand[-1]=='+',
-                          start[-1]-end[-length(end)],
-                          start[-length(end)]-end[-1]))
-                 , Inf), by = grl.ix]
-    gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
-                   ifelse(strand[-1]=='+',
-                          start[-1]-end[-length(end)],
-                          start[-length(end)]-end[-1]))
-                 , Inf), by = grl.ix]
-    gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
-    gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
-       by = grl.ix]
-
-
-    gw$ab.id = as.numeric(NA)
-    gw[dist>=min.ab, ab.id := as.numeric(1)]
-    gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
-
-
-    ## get rid of little dels ie short ab junctions
-    ## gw[which(dist<min.ab & dist>0), ab.id := NA]
-
-    gwu = gw[, .(wid = sum(width), ab.id = ab.id[!is.na(ab.id)][1],
-                           start = grl.iix[1], end = grl.iix[length(grl.iix)]), by = .(ab.chunk, grl.ix)]
-
-    .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA)
-
-    ## every run of "trues" i.e. wid<something is labeled
-    gwu[, runtag := as.numeric(.labrun(wid<pad)), by = grl.ix]
-    gwu = gwu[!is.na(runtag), ]
-    gwu[, runlab := paste(grl.ix, runtag), by = grl.ix]
-    gwu[, runlen := sum(!is.na(ab.id)), by = .(grl.ix, runlab)]
-
-
-    ## choose only chunk s with min run of abs
-    kidnapped = gwu[!is.na(runlab) & runlen>=min.run, ]
-
-    if (nrow(kidnapped) == 0)
-        return(GRangesList())
-
-
-    ## expand chunks back out
-    kidnapped[, first := (1:length(start))==1, by = .(runlab)]
-    kidnapped[, last := (1:length(start))==length(start), by = .(runlab)]
-    ix = kidnapped[, .(runlab, frag.id = paste(grl.ix, ab.chunk),
-                       grl.iix = unique(c(start-first, start:end, end+last))), by = .(ab.chunk, grl.ix)]
-    setkeyv(ix, c('grl.ix', 'grl.iix'))
-    setkeyv(gw, c('grl.ix', 'grl.iix'))
-
-    kidnapped = gw[ix, ][!is.na(start),]
-    kidnapped[, frag.iid := 1:length(grl.iix), by = frag.id]
-    kidnapped[, frag.pos := cumsum(width), by = frag.id]
-
-    kidnapped[, first := (1:length(grl.iix)) == 1, by = runlab]
-    kidnapped[, last := (1:length(grl.iix)) == length(grl.iix), by = runlab]
-
-    gr.kn = dt2gr(kidnapped)
-
-    gr.kn$width = NULL
-    ## trim ends leading to and out of segment
-    gr.kn[gr.kn$first] = gr.end(gr.kn[gr.kn$first], pad, ignore.strand = FALSE)
-    gr.kn[gr.kn$last] = gr.start(gr.kn[gr.kn$last], pad, ignore.strand = FALSE)
-
-    setkey(kidnapped, frag.id)
-
-    walks.kn = split(gr.kn[, c('ab.id','grl.iix', 'cn', 'cn.1', 'frag.id', 'frag.iid', 'frag.pos', 'dist', 'dist.nostrand')], gr.kn$runlab)
-
-    kidnapped$runlab = as.character(kidnapped$runlab)
-    setkey(kidnapped, 'runlab')
-    if (is.null(kidnapped$pair))
-      kidnapped$pair = NA
-
-    values(walks.kn) = as.data.frame(kidnapped[ ,.(pair = pair[1], grl.ix = grl.ix[1],
-                                                   len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])
-
-    return(walks.kn)
-}
-
 
 
 #' @name junction.paths
@@ -19002,7 +18137,7 @@ ggjs = function(...,
                 field = 'ratio', path = '~/public_html/ggjs',
                 binwidth = 5e3,
                 mc.cores = 1,
-                web = FALSE,
+                web = TRUE,
                 skip.dl = FALSE,
                 force = FALSE,
                 win = NULL,
@@ -19289,7 +18424,7 @@ ssegment = function(cov, field = NULL, log = TRUE, verbose = TRUE, alpha = 1e-5)
     {
       cov$y = log(cov$y)
     }
-  cna = CNA(cov$y, as.character(seqnames(cov)), start(cov), data.type = 'logratio')
+  cna = DNAcopy::CNA(cov$y, as.character(seqnames(cov)), start(cov), data.type = 'logratio')
   gc()
   seg = DNAcopy::segment(smooth.CNA(cna), alpha = alpha, verbose = 0)
   out = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
@@ -19523,6 +18658,532 @@ fqfl = function(paths)
 }
 
 
+#' @name llplot
+#' @description Lolliplot wrapper 
+#'
+#' Adaptation of code from https://www.bioconductor.org/packages/release/bioc/vignettes/trackViewer/inst/doc/trackViewer.html#embl-ebi_proteins_api
+#' to plot lolliplot of mutations from SNPEff or VEP annotated VCF.
+#'
+#' @param vars GRanges of mutations ingested (e.g. via grok_vcf(long = TRUE)) from SnpEff style annotated vcf / bcf file, by default needs to have columns $REF, $ALT, $gene, $protein_pos, $feature_id, $variant.p
+#' @param gene gene / protein to plot (default is inferred from vars$gene)
+#' @param legend named vector mapping unique values of $type column to colors
+#' @param domain_types vector of domain types to include in plot (if NULL will include all)
+#' @param type.field name of vars field that corresponds to variant type, will determine the color mapping below (default $type), if blank will infer automatically from annotation.field
+#' @param protein_pos.field name of vars field that specifies to variant protein position (default $protein_pos)
+#' @param annotation.field name of vars field that specifies variant annotation (default $annotation)
+#' @param label.field name of label field (default $variant.p)
+#' @param gene.field name of vars field that specifies to variant gene (default $gene)
+#' @param ... other parameters to pass to lolliplot e.g. type, yaxis, 
+#' @return plots lolliplot with trackViewer::lolliplot
+#' @export
+llplot = function(variants,
+                  gene = variants$gene[1] %>% as.character,
+                  domain_types = c("DNA_BIND", "MOTIF", "DOMAIN", "REGION", "BINDING", "CHAIN", "TOPOLOGY"), 
+                  legend = NULL,
+                  type.field = 'type',
+                  gene.field = 'gene',
+                  annotation.field = 'annotation', 
+                  protein_pos.field = 'protein_pos',
+  #                feature_id.field = 'feature_id',
+                  label.field = 'variant.p',
+                  wes = FALSE,
+                  verbose = TRUE,
+                  na.col = 'gray90',
+                  yaxis = TRUE, 
+                  ..., 
+                  apiurl = "www.ebi.ac.uk/proteins/api/", taxid = '9606', orgdb = "org.Hs.eg.db" , maxaccession = 20)
+{
+  if (verbose)
+    message('Processing variant data')
+
+  if ( protein_pos.field %in% names(values(variants)) )
+  {
+    values(variants)$protein_pos =  values(variants)[[protein_pos.field]]
+    if (!is.integer(variants$protein_pos))
+    {
+      variants$protein_pos = sapply(strsplit(as.character(variants$protein_pos), '\\/'), '[', 1) %>% as.integer
+    }
+  }
+  else
+    stop(sprintf('%s field does not exist in provided vars object', protein_pos.field))
+  
+  if ( gene.field %in% names(values(variants)) )
+  {
+    values(variants)$gene = values(variants)[[gene.field]]
+  }
+  else
+    stop(sprintf('%s field does not exist in provided vars object', gene.field))
+
+  variants = variants[variants$gene %in% gene]
+
+  ## if (length(variants)==0)
+  ##   {
+  ##     message('empty variant set provided, no plot produced')
+  ##     return()
+  ##   }
+
+  if (annotation.field %in% names(values(variants)))
+  {
+    values(variants)$annotation =  values(variants)[[annotation.field]]
+  }
+  
+  if (label.field %in% names(values(variants)))
+  {
+    values(variants)$label = values(variants)[[label.field]]
+  }
+  else
+    values(variants)$label = ''
+  
+  if (type.field %in% names(values(variants)))
+  {
+    if (verbose)
+    {
+      message('found type annotation in ', type.field, ' field of vars')
+    }
+    variants$type = values(variants)[[type.field]]
+  }
+  else ## infer type from annotation field
+  {
+    trunc = c('disruptive', 'splice_region', 'frameshift', 'stop')
+    .parenify = function(x) paste0('(', paste(x, collapse = ')|('), ')')
+    variants$truncating = grepl(.parenify(trunc), variants$annotation)
+    variants$indel = nchar(variants$REF)!=nchar(variants$ALT)
+    variants$type = paste(ifelse(variants$truncating, 'truncating', 'missense'), ifelse(variants$indel, 'indel', 'SNV'))    
+  }
+
+  if (is.null(legend))
+  {
+    legend = unique(variants$type)
+    legend = structure(brewer.master(length(legend), 'Spectral', wes = FALSE), names = legend)
+    legend = c(legend, c(other = na.col))
+    legend = legend[names(legend) %in% unique(names(legend))]
+  }
+  
+  if (any(is.na(variants$type)))
+    variants$type[is.na(variants$type)] = 'other'
+
+  variants$tag = paste(seqnames(variants), variants$protein_pos, variants$label)
+
+  pvariants = as.data.table(variants)[, .(score = .N),  by = .(seqnames, tag, start = protein_pos, end = protein_pos, label, color = legend[type])][!is.na(start) & !is.na(end), ] %>% dt2gr
+  names(pvariants) = pvariants$label
+
+
+  library(httr) # load library to get data from REST API
+  ## org database to get the uniprot accession id
+  eval(parse(text = paste('library(', orgdb,')')))
+  eid = BiocGenerics::mget(gene, get(sub(".db", "SYMBOL2EG", orgdb)))[[1]]
+  if (verbose)
+    message('Requesting UniProt protein domain annotation for gene id ', eid)
+  chr = BiocGenerics::mget(eid, get(sub(".db", "CHR", orgdb)))[[1]]
+  accession = unlist(lapply(eid, function(.ele){
+    BiocGenerics::mget(.ele, get(sub(".db", "UNIPROT", orgdb)))
+  }))
+
+  dtypes = ''
+  if (!is.null(domain_types))
+    dtypes = paste0("&types=", paste(domain_types, collapse = '%2C'))
+  featureURL = paste0(apiurl,
+                       "features?offset=0&size=-1&reviewed=true",
+                       dtypes, 
+                       "&taxid=", taxid,
+                       "&accession=", paste(accession, collapse = ",")
+                       )
+  response = GET(featureURL)
+  stop_for_status(response)
+  content = content(response)
+
+  if (verbose)
+    message('Processing protein domain data ', eid)
+  content = content[[1]]
+  acc = content$accession
+  sequence = content$sequence
+  domains = rbindlist(lapply(content$features, '[', c('type', 'category', 'description' ,'begin', 'end')))[, seqnames := chr][, start := begin %>% as.integer][, end := end  %>% as.integer] %>% dt2gr
+  domains$fill = 1+seq_along(domains)
+  names(domains) = domains$description
+  domains$height = 0.04
+
+  trackViewer::lolliplot(pvariants, domains, ranges = GRanges(chr, IRanges(1, nchar(sequence))), ylab = gene, legend = legend, yaxis = yaxis, main = gene, ...)
+}
+
+
+#' @name cc
+#' @title cc
+#' @description select columns of data.frame or data.frame-like object 
+#'
+#' @param x column expression or variables 
+#' @param ... additional variables
+#' @export
+cc = function(x, y = c(), ...)
+{
+    if (is.data.table(x))
+      eval(parse(text = paste0('x[, ', deparse(substitute(y)), ', ...]')))
+    else
+      x[, y]
+}
+
+
+#' @name rr
+#' @title rr
+#' @description select row of data.frame or data.frame- like object data.table
+#'
+#' @param x expression or variables
+#' @param ... additional variables
+#' @export
+rr = function(x, y = c())
+{
+
+  if (is.data.table(x))
+    y = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(y)))), parent.frame()),x, parent.frame(2)), error = function(e) NULL)
+  
+  x[y, ]
+}
+
+#' @name dd
+#' @title dd
+#' @description "dollar sign" usage of expression
+#'
+#' @param x variable
+#' @export
+dd = function(x, y = c())
+{
+  eval(parse(text = paste0('x$', y)))
+}
+
+
+#' @name variants
+#' @title variants
+#' @description Call substitutions and indels from contigs
+#'
+#' Calls substitutions from contigs by comparing DNAStringSet ref
+#' against reference sequence ref via RSeqLib::BWA
+#'
+#' The caller is IUPAC "ambiguity code aware" meaning that for every instance of ambiguity in the query and reference
+#' it will output the cartesian product of all mismatching variants (iupac = TRUE) otherwise
+#' it will treat those bases literally. 
+#'
+#' Note: not recommended to use on reads, only for contigs, i.e. will not scale to millions of reads 
+#'
+#' @param query DNAStringSet of query
+#' @param ref DNASTringSet of ref
+#' @param expand.iupac logical flag (TRUE) specifying whether to expand iupac for computing SNV  in query and reference
+#' @return GRanges in ref coordinates of SNV and indels
+#' @author Marcin Imielinski
+#' @export
+variants = function(query, ref, expand.iupac = TRUE, verbose = FALSE)
+{
+  nmq = names(query)
+  nmr = names(ref)
+
+  if (verbose)
+    message(nmq)
+
+  if (is.null(nmq))
+    nmq = 1:length(nmq)
+
+  if (is.null(nmr))
+    nmr = 1:length(nmr)
+
+  if (!is(query, 'DNAStringSet'))
+    query = DNAStringSet(as.character(query))
+
+  if (!is(ref, 'DNAStringSet'))
+    ref = DNAStringSet(as.character(ref))
+
+  if (is.null(names(query)))
+    names(query) = nmq
+  
+  if (is.null(names(ref)))
+    names(ref) = nmr
+
+
+  ## replace any gap characters in query
+  query = suppressWarnings(replaceAt(query, vmatchPattern('-', query), ''))
+ 
+  bw = RSeqLib::BWA(seq = ref)
+  aln = bw[query]
+
+  ## build chain connecting alignment to reference
+  cg = cgChain(aln)
+
+  ## create every single base on query
+  bases = gr.tile(seqinfo(links(cg)$x), 1)
+
+  ## look up those bases in query
+  bases$ALT = query[bases]
+
+  ## lift those bases to reference and compare to sequence to find SNV
+  basesl = suppressWarnings(lift(cg, bases) %&% si2gr(ref))
+  basesl$REF = ref[basesl]
+  basesl$qname = names(query)
+  basedt = basesl[, c("REF", "ALT", "qname")] %>% gr2dt
+
+  if (expand.iupac)
+  {
+    iupac = data.table(
+      IUPAC = c('A', 'T', 'G', 'C', 'R', 'R', 'Y', 'Y', 'S', 'S', 'W', 'W', 'K', 'K', 'M', 'M', 'B', 'B', 'B', 'D', 'D', 'D', 'H', 'H', 'H', 'V', 'V', 'V', 'N', 'N', 'N', 'N'),
+      base = c('A', 'T', 'G', 'C', 'A', 'G', 'C', 'T', 'G', 'C', 'A', 'T', 'G', 'T', 'A', 'C', 'C', 'G', 'T', 'A', 'G', 'T', 'A', 'C', 'T', 'A', 'C', 'G', 'A', 'C', 'G', 'T')
+    )
+      
+    expand.ref = copy(iupac)
+    setnames(expand.ref, 'base', 'ref')
+    expand.alt = copy(iupac)
+    setnames(expand.alt, 'base', 'alt')
+
+    basedt = basedt %>% merge(expand.alt, by.x = 'ALT', by.y = 'IUPAC', all.x = TRUE, allow.cartesian = TRUE) %>%
+      merge(expand.ref, by.x = 'REF', by.y = 'IUPAC', all.x = TRUE, allow.cartesian = TRUE)
+    basedt$REF = basedt$ref
+  }
+    
+  snv = basedt[REF != alt, ]
+
+  if (length(snv))
+    snv$type = 'SNV'
+
+  ## find unaligned / unmapped chunks  of query to define indels
+  insertionsl = basesl[c()]
+  insertions = reduce(bases[-basesl$query.id])
+
+  if (length(insertions))
+  {
+    ## pad either to the left or to the right so that there is something to lift
+    start(insertions) = ifelse(start(insertions)>1, start(insertions)-1, start(insertions))
+    end(insertions) = ifelse(start(insertions)== 1 & end(insertions) < seqlengths(insertions)[as.character(seqnames(insertions))],
+                             end(insertions)+1, end(insertions))
+        
+    insertions$type = 'INS'
+    insertions$ALT = query[insertions]
+    insertions$alt = NA
+    insertions$qname = as.character(seqnames(insertions))
+    insertionsl = lift(cg, insertions)
+    if (length(insertionsl))
+      insertionsl$REF = ref[insertionsl]
+  }
+
+  deletions = basesl[c()]
+  vb = suppressWarnings(grl.unlist(varbase(aln)))
+  if (length(vb))
+    {
+      deletions = vb[, c('qname', 'type')] %Q% (type == 'D')
+    }
+
+  if (length(deletions))
+  {
+    deletions$alt = NA
+    deletions$ALT = ''
+    deletions$REF = ref[deletions]
+    deletions$type = 'DEL'
+  }
+  
+  variants = rbind(snv, gr2dt(insertionsl), gr2dt(deletions), fill = TRUE)
+
+  if (nrow(variants))
+  {
+    variants = variants %>% dt2gr
+    strand(variants) = '+'
+    variants = variants[, intersect(c('qname', 'type','REF', 'ALT', 'alt'), names(values(variants)))]
+  } else
+    variants = bases[c(), c()]
+
+  return(sort(variants))
+}
+
+
+#' @name contig.support
+#' @title contig.support
+#' @description
+#'
+#' Takes as input a GRanges of bam alignments (e.g. outputted from bamUtils::read.bam) and a GRanges of rearranged
+#' reference aligned contigs (e.g. output of RSeqLib::BWA).
+#'
+#' It identifies the subset of reads that support each of the contigs and "lifts" those reads
+#' through the read --> contig and contig --> reference alignments, returning supporting reads in reference coordinates.
+#'
+#' The criteria for support include min.bases aligning to at least two chunks of the rearranged contig, and
+#' requirement that min.aligned.frac fraction of bases in every supporting read is aligned to that contig.
+#'
+#' Additional requirements for support include not allowing split alignment of individual reads to the contigs
+#' (note: this does not mean we don't detect split reads that support the structural variant, this is captured
+#' by the contig -> reference alignment, we are just requiring the reads align (near) perfectly to the contig).
+#' and requiring alla alignments from a read pair (oriented to R1 frame of the fragment) to align to the same
+#' strand of the contig.
+#'
+#' Finally, reads are not included in support if they align better to the reference than their native alignment,
+#' which is determined by comparing the $AS of their contig alignment with their original alignment score, stored
+#' in the provided metadata $AS field.  If reference AS is not provided as metadata, it will is assumed to be zero. 
+#'
+#' $AS can be optionally recomputed against a DNAStringSet "ref" that represent the reference
+#' sequence.  (Note that this "ref" does not have to be the full genome reference, it is just used to compute
+#' the alignment scores, and in fact for this to work  efficiently, it's recommended that the provided
+#' reference sequence is local to the regions of interest, e.g. a few kb flanking each SV breakpoint,
+#' rather than the whole genome.)
+#'
+#' The outputted reads include additional metadata including number of bases aligning to each chunk of the aligned contig.
+#' 
+#' 
+#' @param reads GRanges in SAM / BAM format e.g. output of read.bam or BWA, with fields $qname, $cigar, $flag $seq all populated in standard fashion, and optionally $AS
+#' @param contig GRanges in SAM / BAM format wth fields $qname, $cigar and $seq all [populated
+#' @param ref optional DNAStringSet representing a reference sequence to compute alignments against
+#' @param 
+#' @return reads re-aligned to the reference through the contigs with additional metadata describing features of the alignment
+#' @export
+#' @author Marcin Imielinski
+contig.support = function(reads, contig, ref = NULL, cg.contig = gChain::cgChain(contig), min.bases = 20, min.aligned.frac = 0.95)
+{
+  if (length(reads)==0)
+    stop('reads must be non empty GRanges with $qname, $cigar, $seq, and $flag fields')
+
+  if (length(contig)==0)
+    stop('contig must be non empty GRanges with $qname, $cigar and $seq fields')
+
+  seq = unique(gr2dt(contig), by = c('qname'))[, structure(as.character(seq), names = as.character(qname))]
+  bwa.contig = RSeqLib::BWA(seq = seq)
+  chunks = gChain::links(cg.contig)$x
+  strand(chunks) = '+'
+  chunks = disjoin(chunks)
+  reads$R1 = bamflag(reads$flag)[,'isFirstMateRead']>0
+  if (is.null(reads$AS))
+  {
+    warning('AS not provided in reads, may want to consider using tag = "AS" argument to read.bam or provide a ref sequence to provide additional specificity to the contig support')
+    reads$AS = 0
+  }
+  nix = as.logical(strand(reads) == '-' )
+  reads$seq[nix] = reverseComplement(DNAStringSet(reads$seq[nix])) ## flip read sequences to original strand
+  reads[!reads$R1] = gr.flipstrand(reads[!reads$R1]) ## flip R2 read orientation to R1 strand
+  reads$seq[!reads$R1] = reverseComplement(DNAStringSet(reads$seq[!reads$R1])) ## flip R2 read sequences to R1 strand
+  reads = reads %Q% (!duplicated(paste(qname, R1)))
+
+  if (!is.null(ref)) ## realign reads against reference DNAStringSet if provided
+  {
+    bwa.ref = RSeqLib::BWA(seq = ref)
+    tmp = bwa.ref[reads$seq] %>% gr2dt
+    tmp$ix = as.numeric(as.character(tmp$qname))
+    tmp$R1 = reads$R1[tmp$ix]
+    tmp$qname = reads$qname[tmp$ix]
+    tmp = unique(tmp, by = c('qname', 'R1'))
+    setkeyv(tmp, c('qname', 'R1'))
+    if (nrow(tmp))
+      reads$AS = tmp[.(reads$qname, reads$R1), AS]
+  }
+  
+  readsc = bwa.contig[reads$seq] %>% gr2dt
+  readsc$ix = as.integer(as.character(readsc$qname))
+  readsc$R1 = reads$R1[as.numeric(readsc$ix)]
+  readsc[, nsplit := .N, by = .(qname, R1)] ## these are splits on the contig, not reference --> shouldn't be any for good alignment
+  readsc[, aligned := countCigar(cigar)[, 'M']]
+  readsc[, aligned.frac := aligned/qwidth[1], by = .(qname, R1)] ## these are splits on the contig, not reference --> shouldn't be any for good alignment
+  readsc$AS.og = reads$AS[readsc$ix]
+  readsc$AS.og[is.na(readsc$AS.og)] = 0
+  readsc$qname = reads$qname[readsc$ix]
+
+  ov = dt2gr(readsc) %*% chunks
+  strand(ov) = readsc$strand[ov$query.id]
+  ov$subject.id = paste0('chunk', ov$subject.id)
+  ovagg = dcast.data.table(ov %>% gr2dt, qname ~ subject.id, value.var = 'width', fun.aggregate = sum)
+  ovagg$nchunks = rowSums(ovagg[, -1]>min.bases)  ## good means we hit multiple chunks with sufficient bases
+  rstats = gr2dt(ov)[, .(
+                  contig.id = unique(seqnames)[1],
+                  pos = sum(width[strand == '+']),
+                  neg = sum(width[strand == '-']),
+                  aligned.frac = min(aligned.frac),
+                  num.contigs = length(unique(seqnames)),
+                  isize.contig = diff(range(c(start, end))),
+                  qsplit = any(nsplit>1), ## any sequences in this qname split on the contig ie a bad alignment on the contig
+                  worse = any(AS.og>AS) ## any alignment in this qname worse than vs reference?
+                ), by = qname] %>% merge(ovagg, by = 'qname')
+  keepq = rstats[nchunks>1 & (pos == 0 | neg  == 0) & aligned.frac > min.aligned.frac & !worse & !qsplit & num.contigs == 1, ]
+
+  if (nrow(keepq)==0)
+    return(reads[c()])
+
+  keepq$aligned.frac = NULL
+  readsc = merge(readsc, keepq, by = 'qname') %>% dt2gr
+  out = gChain::lift(cg.contig, readsc)  
+  out[!out$R1] = gr.flipstrand(out[!out$R1])
+  out$col = ifelse(out$R1, 'blue', 'gray')
+  out
+}
+
+#' @name junction.support
+#' @title junction.support
+#' @description
+#'
+#' Takes as input a GRanges of bam alignments (e.g. outputted from bamUtils::read.bam) and a GRanges of rearranged
+#' reference aligned contigs (e.g. output of RSeqLib::BWA) and a set of Junction objects, and outputs reads supporting
+#' these junctions by building a contig around each junction (from the reference) and then running contig.support (see
+#' that functions docuemntation for criteria)
+#'
+#' @param reads GRanges in SAM / BAM format e.g. output of read.bam or BWA, with fields $qname, $cigar, $flag $seq all populated in standard fashion, and optionally $AS
+#' @param junctions Junction object
+#' @param bwa RSeqLib BWA object and path to fasta file corresponding to the reference 
+#' @param ref optional DNAStringSet corresponding to reference genome sequence 
+#' @param pad padding around the junction breakpoint around  which to analyze contig and reference sequences, this should be several standard deviations above the average insert size (2000)
+#' @param verbose logical flag (TRUE)
+#' @param ... additional parameters to contig support
+#' @return reads re-aligned to the reference through the contigs with additional metadata describing features of the alignment
+#' @export
+#' @author Marcin Imielinski
+junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad = 2000, walks = NULL, verbose = TRUE, ...)
+{
+  if (!is.null(junctions))
+    walks = jJ(junctions$grl)$gw(pad = pad)
+
+  if (is.null(walks))
+    stop('Either walks or junctions must be provided')
+  
+  if (inherits(bwa, 'character') && file.exists(bwa))
+  {
+    if (verbose)
+      message('Loading BWA index')
+    bwa = BWA(bwa)
+  }
+
+  if (!inherits(ref, 'DNAStringSet'))
+  {
+    if (verbose)
+      message('Loading genome reference as DNAStringSet')
+
+    ref = rtracklayer::import(bwa@reference)
+  }
+
+  ## only use the fasta header before the first space as the seqnames of ref 
+  names(ref) = strsplit(names(ref), '\\s+') %>% sapply('[', 1)
+
+  if (length(setdiff(seqnames(walks$nodes$gr), seqlevels(ref))))
+    stop('seqlevels mismatch between junctions / walks and reference, please check reference (e.g. chr issues)')
+
+  if (length(setdiff(seqnames(walks$nodes$gr), seqlevels(bwa))))
+    stop('seqlevels mismatch between junctions / walks and BWA reference, please check reference (e.g. chr issues)')
+
+  if (verbose)
+    message('Building and mapping derivative contigs')
+  contig = bwa[ref[gr.fix(walks$grl, ref, drop = TRUE)]]
+
+  if (verbose)
+    message('Building reference contigs flanking junctions')
+  contigref = ref[gr.fix(walks$edges$junctions$footprint + pad, ref, drop = TRUE)]
+
+
+  if (verbose)
+    message('Making gChain mapping contigs to reference')
+  cg.contig = gChain::cgChain(contig)
+
+  if (verbose)
+    message('Running contig support')
+
+  return(contig.support(reads, contig, ref = contigref, cg.contig = cg.contig, ...))
+}
+
+#' @name mem
+#' @title mem
+#' @description
+#' check memory usage by user on current server
+#' @export
+mem = function()
+{
+  res = pipe('~/scripts/mem')  %>% readLines %>% paste(collapse='\n') %>% fread
+  setnames(res, c('user', 'GB'))
+  return(res[rev(order(GB)), ])
+}
 
 
 

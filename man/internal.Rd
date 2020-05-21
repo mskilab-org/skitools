@@ -5,33 +5,31 @@
 \alias{jgraph}
 \alias{jab2json}
 \alias{karyotrack}
-\alias{anno.hop}
-\alias{jabba.kid}
 \alias{ra_tier}
 \alias{rebin}
 \title{jabba.gwalk}
 \usage{
 jabba.gwalk(jab, verbose = FALSE, return.grl = TRUE)
 
-jgraph(jab, thresh_cl = 1e+06, all = FALSE, thresh_r = 1000,
-  clusters = FALSE)
+jgraph(jab, thresh_cl = 1e+06, all = FALSE, thresh_r = 1000, clusters = FALSE)
 
 jab2json(jab, file, maxcn = 100, maxweight = 100)
 
 karyotrack(kag, paths = NULL, col = "red", pad = 0)
 
-anno.hop(walks)
-
-jabba.kid(gwalks, pad = 5e+05, min.ab = 5e+05, min.run = 2)
-
-ra_tier(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10,
-  min.treads2 = 3, max.nreads = Inf)
+ra_tier(
+  dra,
+  min.score1 = 10,
+  min.score2 = 4,
+  min.treads1 = 10,
+  min.treads2 = 3,
+  max.nreads = Inf
+)
 
 rebin(cov, binwidth, field = names(values(cov))[1], na.rm = TRUE)
 }
 \arguments{
-\item{jab}{JaBbA object
-#}
+\item{jab}{input jab object}
 
 \item{file}{output json file}
 
@@ -39,21 +37,9 @@ rebin(cov, binwidth, field = names(values(cov))[1], na.rm = TRUE)
 
 \item{paths}{GRanges or GRangesList}
 
-\item{pad}{how much bp neighboring material around each kidnapped string to include in outputs}
-
-\item{walks}{walks to annotate}
-
-\item{gwalks}{grangeslist of walks (e.g.outputted from jabba.gwalks)}
-
-\item{min.ab}{minimal bp distance a junction needs to be considered aberrant (e.g. to exclude very local deletions)}
-
-\item{min.run}{how many aberrant junctions to  require in the outputted kidnapped fragments}
-
 \item{cov}{GRanges of binned genome-wide coverage}
 
 \item{binwidth}{new binwidth}
-
-\item{jab}{input jab object}
 }
 \value{
 GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata#'
@@ -69,13 +55,6 @@ takes in a jabba object and threshold for clusters and "quasi-reciprocal"
 junctions
 
 Dumps JaBbA graph into json
-
-Adds simple annotations to GRangesList of walks including
-distance along each reference fragment and distance
-between "hops"
-
-Given a set of gwalks (grangeslist outputs of jabba.gwalk) identifies strings "kidnapped" fragments i.e.
-strings of tempaled insertions, which are outputted as a grangeslist
 
 Classify full set of dRanger rearrangements into "tiers" of confidence
 
@@ -109,10 +88,6 @@ Marcin Imielinski
 ++ = RL
 +- = RR
 -+ = LL
-
-Marcin Imielinski
-
-Marcin Imielinski
 
 Marcin Imielinski
 }
