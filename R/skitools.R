@@ -19560,7 +19560,7 @@ oncoprint = function(tumors = NULL,
                      sort = TRUE, sort.genes = sort, sort.tumors = sort,
                      columns = NULL,
                      noncoding = FALSE,
-                     cna = TRUE, tmb = TRUE, pp = TRUE, signature = TRUE, svevents = TRUE,
+                     cna = TRUE, tmb = TRUE, pp = TRUE, signature = TRUE, svevents = TRUE, basic = FALSE, 
                      ppdf = TRUE,
                      return.oncotab = FALSE,
                      return.mat = FALSE,                     
@@ -19579,6 +19579,9 @@ oncoprint = function(tumors = NULL,
                      width = 20,
                      ...)
 {
+
+  if (basic)
+    tmb = svevents = signature = FALSE
 
   if (!is.null(tumors))
   {
@@ -19599,7 +19602,7 @@ oncoprint = function(tumors = NULL,
     missing = union(missing, tumors$id[!fe])
 
     if (any(fe))
-      warning(paste(sum(fe), 'tumors with missing oncotab, will remove if drop = TRUE, otherwise mark'))
+      warning(paste(sum(!fe), 'tumors with missing oncotab, will remove if drop = TRUE, otherwise mark'))
 
     if (!nrow(tumors))
       stop('No tumors with $oncotab field pointing to existing path')
@@ -19684,21 +19687,21 @@ oncoprint = function(tumors = NULL,
     v = v[ord]
     for (i in which(v)) {
       if (names(v)[i] %in% c('amp', "hetdel", "homdel", 'fusion'))
-        grid.rect(x,y,w,h, gp = gpar(fill = col[names(v)[i]], col = NA))
+        grid.rect(x,y,w,h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else if (grepl("missing", names(v)[i]))
-        grid.rect(x, y, w, h, gp = gpar(fill = col[names(v)[i]], col = NA))
+        grid.rect(x, y, w, h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else if (grepl("trunc", names(v)[i]))
         {
           grid.segments(x - w*0.5, y - h*0.5, x + w*0.5, y + h*0.5,
-                        gp = gpar(lwd = 2, col = col[names(v)[i]]))
+                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
           grid.segments(x - w*0.5, y + h*0.5, x + w*0.5, y - h*0.5,
-                        gp = gpar(lwd = 2, col = col[names(v)[i]]))
+                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
         }
       else if (grepl("(missense)|(missense)|(promoter)|(regulatory)", names(v)[i]))
-        grid.circle(x,y,l*CSIZE, gp = gpar(fill = col[names(v)[i]], col = NA))
+        grid.circle(x,y,l*CSIZE, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else {
         if (grepl("indel", names(v)[i]))
-          grid.rect(x,y,w*0.9,h*0.4, gp = gpar(fill = col[names(v)[i]], col = NA))
+          grid.rect(x,y,w*0.9,h*0.4, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       }
     }
   }
@@ -19890,7 +19893,7 @@ oncoprint = function(tumors = NULL,
 
   if (length(packed_legends))
     packed_legends = do.call(packLegend, packed_legends)
-
+ 
   op = ComplexHeatmap::oncoPrint(varm,
                       get_type = function(x) unlist(strsplit(x, ",")), ##get type = separating each cell in matrix into vector
                       alter_fun = alter_fun,
