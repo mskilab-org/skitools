@@ -26,7 +26,7 @@ ra_tier(
   max.nreads = Inf
 )
 
-rebin(cov, binwidth, field = names(values(cov))[1], na.rm = TRUE)
+rebin(cov, binwidth, field = names(values(cov))[1], FUN = mean, na.rm = TRUE)
 }
 \arguments{
 \item{jab}{input jab object}

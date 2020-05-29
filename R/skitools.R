@@ -4319,8 +4319,7 @@ dunlist = function(x)
 {
   if (is.null(names(x)))
     names(x) = 1:length(x)
-  tmp = lapply(x, as.data.table)
-  
+  tmp = lapply(x, as.data.table)  
   out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
   setkey(out, listid)
   return(out)
@@ -5098,6 +5097,133 @@ bubblemap = function(mat, col = 'darkgreen', cluster = TRUE, cex = 1, cex.text =
           )
   print(gg)
 }
+
+#' @name bplot
+#' @title bplot
+#' @description
+#'
+#' Takes vector y of binary / categorical data (eg genotype) plots a bar plot of the
+#' fraction +/- confidence intervals (from prop.test) of each unique value in y. 
+#' 
+#' Optional argument by and facet provide additonal grouping / faceting variables that will
+#' result in the fractions being computed within those groups and the results plotted vertically
+#' (for by = ) and horizontally (for facet = ). 
+#' 
+#'
+#' @param y categorical vector across N samples whose fraction will be plotted on the y axis 
+#' @param by optional grouping vector, same length as y, to group on prior to plotting fractions
+#' @param facet optional second grouping vector, same length as y, to group on
+#' @param col single color or named vector to plot or NA (then brewer is used)
+#' @param wes if col = NA wes = TRUE will cause wesanderson colors to be used, otherwise standard brewer is used (TRUE)
+#' @param keep.base whether to keep the base level when plotting, will be FALSE unless y is logical (ie suppress plotting FALSE value)
+#' @param xlab x label
+#' @param ylab y label
+#' @param counts print counts alongside the by / facet labels (TRUE)
+#' @param title title
+#' @param return.stats return stats with confidence intervals and proportions in each tranche
+#' @return gg plot object or stats
+#' @author Marcin Imielinski
+#' @export 
+bplot = function(y, by = NULL, facet = NULL, col = NA, ylim = NA, keep.base = NULL, xlab = '', counts = TRUE, wes = TRUE, ylab = '', title = '', print = TRUE, return.stats = FALSE)
+{
+
+  if (is.null(keep.base))
+    keep.base = !is.logical(y)
+
+  if (!inherits(y, 'factor')) ## factor
+  {
+    if (is.character(y))
+      y = factor(y, names(rev(sort(table(y)))))
+    else
+      y = factor(y)
+  }
+
+  dat = data.table(y = y, by = by, facet = facet)
+
+  if (is.null(dat$by))
+    dat$by = factor('dummy')
+  else if (counts)
+    dat$by = paste0('(', dat[, .N, keyby = by][.(dat$by), N], ') ', dat$by)
+
+  if (is.null(dat$facet))
+    dat$facet = factor('dummy')
+  else if (counts)
+    dat$facet = paste0(dat$facet, ' (', dat[, .N, keyby = facet][.(dat$facet), N], ')')
+    
+  base = levels(y)[1]
+
+  if (is.na(col))
+    col = skitools::brewer.master(levels(y), wes = wes)
+  else if (is.null(names(col))) ## colors provided as named or unnamed vector     
+    col = data.table(uy = levels(y), col = col)[, structure(col, names = uy)] ## replicate if necessary
+
+  dat[, tot := .N, by = .(by, facet)] ## tally totals in each facet
+
+  if (!keep.base)
+    dat = dat[y != base, ]
+
+  stats = dat[, .(ndom = .N, frac =.N/tot[1], tot = tot[1]), by = .(y, by, facet)]
+  prop.stats = stats[, prop.test(frac*tot, tot) %>% dflm, by = .(y, by, facet)][, .(y, by, facet, frac.lower = ci.lower, frac.upper = ci.upper)] 
+  stats = stats %>% merge(prop.stats, by = c("y", "by", "facet"), allow.cartesian = TRUE)
+
+  if (!inherits(stats$by, 'factor'))
+    stats$by = factor(stats$by, stats[, sum(frac), by = by][rev(order(V1)), by])
+  
+  if (!inherits(stats$facet, 'factor'))
+    stats$facet = factor(stats$facet, stats[, sum(frac), by = facet][rev(order(V1)), facet])
+
+  if (is.null(by))
+    stats[, x := y]
+  else
+  {
+    stats[, x := by]
+    stats[, facet1 := y]
+  }
+
+  if (!is.null(facet))
+    stats[, facet2 := facet]
+
+  if (is.na(ylim))
+    ylim = c(0, pmin(1, pmax(max(stats$frac.upper*1.1))))
+
+  favtheme = theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank())
+
+  g = ggplot(stats, aes(x = x, y = frac, fill = y)) +
+    geom_bar(position = position_dodge(0.7), stat = 'identity') +
+    geom_errorbar(aes(ymin = frac.lower, ymax = frac.upper, width = 0.3), position = position_dodge(0.7)) + 
+    scale_fill_manual(values = col) + 
+    favtheme + 
+    ylim(ylim) + ylab(ylab) +
+    xlab(xlab) +
+    ggtitle(title)
+
+  if (!is.null(stats$facet1) & !is.null(by))
+    {
+      if (!is.null(stats$facet2))
+        g = g + facet_grid(facet1 ~ facet2, scales = 'fixed')
+      else
+        g = g + facet_grid(facet1 ~ ., scales = 'fixed')
+    }
+  else
+  {
+       if (!is.null(stats$facet2))
+        g = g + facet_grid(. ~ facet2, scales = 'fixed')
+  }
+
+  if (!print)
+    return(g)
+
+  if (return.stats)
+    return(stats)
+
+  print(g)
+}
+
+
 
 #' @name vplot
 #' @title vplot
@@ -9186,23 +9312,30 @@ sstat = function(full = FALSE, numslots = TRUE, resources = T){
     if(resources){
         asp = c(asp, "timelimit,timeused,submittime,starttime,endtime,eligibletime,minmemory,numcpus,numnodes,priority,nice,reason,reboot")
     }
-    asps = unlist(strsplit(asp, split = ','))
-    feats = lapply(c(1:length(asps)), function(x){
-        p = pipe(paste('squeue -O', asps[x]))
-        tmp = readLines(p)
-        tmp = tmp[2:length(tmp)]
-        close(p)
-        out = gsub(' ', '', tmp)
-    })
-    out = as.data.table(do.call('cbind', feats))
-    colnames(out) = asps
-    out = out[!is.na(out$username)]
-    if(!full){
-        p = pipe('whoami')
-        whoami = readLines(p)
-        close(p)
-        out = out[out$username == whoami]
+    p = pipe(paste('squeue -O', paste(asp, collapse = ',')))
+    res = readLines(p)
+    close(p)
+
+    ## need to do some fixed width parsing training our parser on the header
+    header = res[1]
+    res = res[-1]
+    bks = c(0, str_locate_all(header, '\\s++')[[1]][, 'end'], nchar(header))
+    bkdt = data.table(start = bks[-length(bks)]+1, end = bks[-1])
+    nms = strsplit(header, '\\s+')[[1]] %>% tolower    
+    tmp = lapply(1:length(nms), function(i) str_trim(substr(res, bkdt[i,start], bkdt[i,end])))
+    names(tmp) = nms
+    out = do.call(data.table, tmp)
+   
+    out$state = factor(out$state, unique(c(out$state, 'RUNNING'))) %>% relevel('RUNNING')
+
+    if (!full)
+    {
+      if (numslots)
+        out = dcast.data.table(out[, sum(as.numeric(cpus)), by = .(user, state)], user ~ state, fill = 0, value.var = 'V1')[rev(order(RUNNING)), ]
+      else
+        out = dcast.data.table(out[, .N, by = .(user, state)], user ~ state, fill = 0, value.var = 'N')[rev(order(RUNNING)), ]
     }
+
     return(out)
 }
 
@@ -10779,7 +10912,21 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         values(out2) = cbind(values(out2), meta)
         names(out2) = NULL
         out2$ANN = NULL
+
+        precedence = c('trunc', 'cnadel', 'cnadup', 'complexsv', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory', 'noncoding', 'inv', 'synonymous', '')
+        eff = readRDS(system.file('extdata', 'snpeff_ontology.rds', package = 'skitools'))[, short := factor(short, precedence)][!is.na(short), ]
+
+        .short = function(vcf)
+        {
+          tmp = strsplit(as.character(vcf$annotation), '\\&')
+          dtl = data.table(eff = unlist(tmp), id = rep(1:length(tmp), lengths(tmp)))  %>% merge(eff, by = 'eff', allow.cartesian = TRUE) %>% unique(by = 'id')
+          setkey(dtl, id)
+          vcf$short = dtl[.(1:length(vcf)), short]
+          return(vcf)
+        }
         
+        out2 = .short(out2)
+
         if (oneliner)
           out2$oneliner = paste(
             ifelse(!is.na(out2$gene),
@@ -10876,7 +11023,7 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
       {        
         fdat$value = dunlist(strsplit(out[[sfield]], ':'))$V1
         fdatc = dcast.data.table(copy(fdat)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'value')
-        out = merge(out, fdatc, by = 'listid', all.x = TRUE)
+        out = merge(out, fdatc, by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
       }
       
       ## unpack "info" field
@@ -10884,7 +11031,7 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
       idat = cbind(idat, colsplit(idat$V1, pattern = "=", names = c("field","value")))
       idatc = dcast.data.table(idat, listid ~ field, value.var = 'value')
       out$INFO = NULL
-      out = merge(out, idatc, by = 'listid', all.x = TRUE)
+      out = merge(out, idatc, by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
       out = dt2gr(out, seqlengths = sl)
       out = grok_vcf(out, keep.modifier = keep.modifier, long = long, oneliner = oneliner, verbose = verbose, label = label)
     }
@@ -18139,6 +18286,7 @@ ggjs = function(...,
                 mc.cores = 1,
                 web = TRUE,
                 skip.dl = FALSE,
+                clean.up = TRUE, 
                 force = FALSE,
                 win = NULL,
                 ggjs.url = 'http://mskilab.com/gGnome.js/ggjs.tar.gz',
@@ -18284,6 +18432,17 @@ ggjs = function(...,
       arg$graph$set(description = paste0('', arg$description), name = paste0('', arg$id))
     }
 
+    if (clean.up)
+    {
+      gg = arg$graph
+      chrs = c(1:22, 'X', 'Y', paste0('chr', c(1:22, 'X', 'Y')))
+      gg = gg[seqnames %in% chrs, ]
+      gg = gG(nodes = gg$nodes$gr %>% gr2dt %>% cc(seqnames := gsub('chr', '', seqnames)) %>% dt2gr,
+              edges = gg$edges$dt)
+      gg$set(y.field = 'cn')
+      arg$graph = gg 
+    }
+    
     graph.json = paste0(ggjs.dir, '/json/', nm, '.json')
     if (!is.null(arg$graph))
     {
@@ -18293,7 +18452,7 @@ ggjs = function(...,
       arg$graph$json(graph.json, seqlevels = sl)
     }
 
-    cov.csv = paste0(ggjs.dir, '/coverage/', nm, '.csv')
+    cov.csv = paste0(ggjs.dir, '/scatterPlot/', nm, '.csv')
     if (is.character(arg$cov))
     {
       if (!is.na(arg$cov) && file.exists(arg$cov) && (force | !file.exists(cov.csv)))
@@ -18301,6 +18460,9 @@ ggjs = function(...,
           arg$cov = readRDS(arg$cov)
           if (!is.null(win) & inherits(win, 'GRanges'))
             arg$cov = arg$cov[arg$cov %^% win]
+
+          if (clean.up)            
+            arg$cov = arg$cov %Q% (seqnames %in% c(1:22, 'X', 'Y', paste0('chr', c(1:22, 'X', 'Y')))) %>% gr2dt %>% cc(seqnames := gsub('chr', '', seqnames)) %>% dt2gr
         }
       else
         {
@@ -18389,11 +18551,11 @@ gr.eval = function(query, subject, expr, fill = NA, ignore.strand = TRUE)
 #' @return GRanges of binned genome-wide coverage at new bin
 #' @export
 #' @author Marcin Imielinski
-rebin = function(cov, binwidth, field = names(values(cov))[1], na.rm = TRUE)
+rebin = function(cov, binwidth, field = names(values(cov))[1], FUN = mean, na.rm = TRUE)
 {
   tmp = as.data.table(cov[, c()])
   tmp$value =  values(cov)[[field]]
-  outdt = tmp[, mean(value, na.rm = na.rm), by = .(seqnames,
+  outdt = tmp[, FUN(value, na.rm = na.rm), by = .(seqnames,
                                                    start = ceiling(start/binwidth)*binwidth)]
   outdt[, end := start + binwidth -1]
   out = dt2gr(outdt)
@@ -19173,12 +19335,12 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
   return(contig.support(reads, contig, ref = contigref, cg.contig = cg.contig, ...))
 }
 
-#' @name mem
-#' @title mem
+#' @name memu
+#' @title memu
 #' @description
 #' check memory usage by user on current server
 #' @export
-mem = function()
+memu = function()
 {
   res = pipe('~/scripts/mem')  %>% readLines %>% paste(collapse='\n') %>% fread
   setnames(res, c('user', 'GB'))
@@ -19186,4 +19348,575 @@ mem = function()
 }
 
 
+#' @name oncotable
+#' @title oncotable
+#' @description
+#'
+#' Takes as input (keyed) "tumors" (aka pairs) table which a metadata table with specific
+#' columns pointing to paths corresponding to one or more of the following pipeline outputs:
+#'
+#' $annotated_bcf  Path to annotated.bcf file that is the primary output of SnpEff module from which TMB and basic mutation
+#' descriptions are extracted along with their basic categories (these will comprising the core of the oncoplot are computed)
+#' 
+#' $fusions  Path to fusion.rds file that is the primary output of the Fusions modjle, from which protein coding fusions will
+#' be computed for
+#' 
+#' $jabba_rds  Path to jabba.simple.rds output representing primary output of JaBbA module from which SCNA and overall
+#' junction burden are computed
+#' 
+#' $complex    Path to complex.rds gGnome cached object that is the primary output of Events module, from which simple
+#' and complex event burdens are computed
+#' 
+#' $signature_counts Path to signature_counts.txt that is the primary output of Signatures module from which SNV signature
+#' counts are computed
+#' 
+#' The function then outputs a melted data.table of "interesting" features that can be saved and/or immediately output
+#' into oncoprint.  This data.table will at the very least have fields $id $type (event type), $track, and  $source
+#' populated in addition to a few other data type specific columns.
+#'
+#' The $source column is the name of the column of tumors from which that data was extracted, and track is a grouping
+#' variable that allows separation of the various data types. 
+#'
+#' All the paths above can be NA or non existent, in which case a dummy row is inserted into the table so that downstream
+#' applications know that data is missing for that sample. 
+#'
+#' @param tumors keyed data.table i.e. keyed by unique tumor id with specific columns corresponding to  paths to pipeline outputs(see description)
+#' @param gencode path to gencode .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping
+#' @param amp.thresh SCNA amplification threshold to call an amp as a function of ploidy (4)
+#' @param del.thresh SCNA deletion threshold for (het) del as a function of ploidy (by default cn = 1 will be called del, but this allows additoinal regions in high ploidy tumors to be considered het dels)
+#' @param mc.cores number of cores for multithreading
+#' @param verbose logical flag 
+#' @author Marcin Imielinski
+#' @export
+oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5, mc.cores = 1)
+{
+  if (is.null(gencode))
+    gencode = read_gencode()
+  else if (is.character(gencode))
+  {
+    if (grepl('.rds$', gencode))
+      gencode = readRDS(gencode)
+    else
+      gencode = rtracklayer::import(gencode)
+  }
 
+  pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
+
+  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5)
+  {
+    out = data.table()
+
+    ## collect gene fusions
+    if (!is.null(dat$fusions) && file.exists(dat[x, fusions]))
+    {
+      if (verbose)
+        message('pulling $fusions for ', x)
+      fus = readRDS(dat[x, fusions])$meta
+      if (nrow(fus))
+      {
+        fus = fus[in.frame == TRUE & silent == FALSE, ][!duplicated(genes), ]
+        fus = fus[, .(gene = strsplit(genes, ',') %>% unlist)][, id := x][, track := 'variants'][, type := 'fusion'][, source := 'fusions'][, vartype := 'fusion']
+        out = rbind(out, fus, fill = TRUE, use.names = TRUE)
+      }
+    } 
+    else ## signal missing result
+      out = rbind(out, data.table(id = x, type = NA, source = 'fusions'), fill = TRUE, use.names = TRUE)
+
+    ## collect complex events
+    if (!is.null(dat$complex) && file.exists(dat[x, complex]))
+    {
+      if (verbose)
+        message('pulling $complex events for ', x)
+      sv = readRDS(dat[x, complex])$meta$events
+      if (nrow(sv))
+      {
+        sv = sv[, .(value = .N), by = type][, id := x][, track := ifelse(type %in% c('del', 'dup', 'invdup', 'tra', 'inv'), 'simple sv', 'complex sv')][, source := 'complex']
+        out = rbind(out, sv, fill = TRUE, use.names = TRUE)
+      }
+    }
+    else
+      out = rbind(out, data.table(id = x, type = NA, source = 'complex'), fill = TRUE, use.names = TRUE)
+
+    ## collect copy number / jabba
+    if (!is.null(dat$jabba_rds) && file.exists(dat[x, jabba_rds]))
+    {
+      if (verbose)
+        message('pulling $jabba_rds to get SCNA and purity / ploidy for ', x)
+      jab = readRDS(dat[x, jabba_rds])
+      out = rbind(out,
+                  data.table(id = x, value = c(jab$purity, jab$ploidy), type = c('purity', 'ploidy'), track = 'pp'),
+                  fill = TRUE, use.names = TRUE)
+
+      gg = gG(jab = jab)
+
+      scna = rbind(
+        gg$nodes$dt[cn>=amp.thresh*jab$ploidy, ][, type := 'amp'],
+        gg$nodes$dt[cn == 1 | cn<del.thresh*jab$ploidy, ][, type := 'hetdel'],
+        gg$nodes$dt[cn == 0, ][, type := 'homdel']
+      )
+
+      if (nrow(scna))
+      {
+        scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
+
+        if (nrow(scna))
+        {
+          scna[, track := 'variants'][, source := 'jabba_rds'][, vartype := 'scna']
+          out = rbind(out,
+                      scna[, .(id = x, value = cn, type, track, gene = gene_name)],
+                      fill = TRUE, use.names = TRUE)
+        }
+      }
+    }
+    else
+      out = rbind(out, data.table(id = x, type = NA, source = 'jabba_rds'), fill = TRUE, use.names = TRUE)
+
+    ## collect signatures
+    if (!is.null(dat$signature_counts) && file.exists(dat[x, signature_counts]))
+    {
+      if (verbose)
+        message('pulling $signature_counts for ', x)
+      sig = fread(dat[x, signature_counts])
+      sig = sig[, .(id = x, value = num_events, type = Signature, etiology = Etiology, frac = frac.events, track = 'signature', source = 'signature_counts')]
+      out = rbind(out, sig, fill = TRUE, use.names = TRUE)
+    }
+    else
+      out = rbind(out, data.table(id = x, type = NA, source = 'signature_counts'), fill = TRUE, use.names = TRUE)
+    
+    ## collect gene mutations
+    if (!is.null(dat$annotated_bcf) && file.exists(dat[x, annotated_bcf]))
+    {
+      if (verbose)
+        message('pulling $annotated_bcf for ', x)
+      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE)
+      genome.size = sum(seqlengths(bcf))/1e6
+      mut.density = data.table(id = x, value = c(length(bcf), length(bcf)/genome.size), type = c('count', 'density'),  track = 'tmb', source = 'annotated_bcf')
+      out = rbind(out, mut.density, fill = TRUE, use.names = TRUE)
+      keepeff = c('trunc', 'cnadel', 'cnadup', 'complexsv', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory','mir')
+      bcf = bcf %Q% (short %in% keepeff)
+      vars = gr2dt(bcf)[, .(id = x, gene, vartype, variant.p, distance, annotation, type = short, track = 'variants', source = 'annotated_bcf')]
+      out = rbind(out, vars, fill = TRUE, use.names = TRUE)
+    }
+    else
+      out = rbind(out, data.table(id = x, type = NA, source = 'annotated_bcf'), fill = TRUE, use.names = TRUE)
+
+
+    if (verbose)
+      message('done ', x)
+
+    return(out)
+  }
+
+  out = mclapply(tumors[[key(tumors)]], .oncotable,
+                 dat = tumors, pge = pge, amp.thresh = amp.thresh, del.thresh = del.thresh, verbose = verbose, mc.cores = mc.cores)
+  out = rbindlist(out, fill = TRUE, use.names = TRUE)
+
+  setnames(out, 'id', key(tumors))
+  return(out)
+}
+
+
+
+#' @name oncoprint
+#' @title oncoprint
+#' @description
+#'
+#' Simple wrapper around to oncoPrint from complexHeatmap package to allow quick plotting
+#' of patients x genes + metadata.  Uses the data gathered by oncotab to generate quick simple
+#' plots that include a core matrix of genes x patients containing data on  SCNA, (complex), fusions,
+#' SNV, and indels.  Additional tracks plotting log TMB + 1, log SV burden, complex events,
+#' SNV signatures can be provided. 
+#' 
+#'
+#' @param tumors  keyed table of tumors (aka pairs table) with field $oncotab which points to a cached .rds file of an oncotable e.g. produced by oncotable function or Oncotable module / task
+#' @param oncotab output from oncotable function with field $id
+#' @param genes character vector of genes
+#' @param columns additional columns of tumors matrix to plot as horizontal tracks below the main track
+#' @param sort  logical flag whether to automatically sort rows i.e. genes and columns i.e. tumors in a "stair step" pattern or default to the provided (TRUE)
+#' @param noncoding logical flag whether to show non protein coding mutations
+#' @param sort.genes logical flag whether to sort rows i.e. genes with respect to their frequency (TRUE)
+#' @param sort.tumors logical flag whether to sort columns i.e. patients in a stairstep pattern with respect to the provided gene order (TRUE)
+#' @param sv.stack  logical flag whether to stack bar plot simple and complex SV event counts (FALSE)
+#' @param signatures logical flag whether to show signatures (if data is provided / available) (TRUE)
+#' @param svevents logical flag whether to show events (if data is provided / available) (TRUE)
+#' o=@param tmb logical flag whether to show TMB bar plot (TRUE)
+#' @param tmb.log  logical flag whether to log TMB + 1 (TRUE)
+#' @param pp logical flag whether to show purity / ploidy (if data is provided / available) (TRUE)
+#' @param ppdf whether to print to pdf via ppdf
+#' @param track.height height of tracks in 'cm'
+#' @param signature.main integer indices of main COSMIC signatures to keep
+#' @param signature.thresh lower threshold for non main signature fraction in at least one sample to plot
+#' @param cex length 1 or 2 vector canvas expansion factor to apply to the oncoprint itself (relative to 10 x 10 cm) (c(1,3))
+#' @param return.mat whether to return.mat
+#' @param wes logical flag whether to use wesanderson coolors
+#' @param mc.cores multicore threads to use for $oncotab loading from tumors table (not relevant if oncotab provided)
+#' @param ... other arguments to ppdf
+#' @return ComplexHeatmap object (if ppdf = FALSE), and genotype matrix (if return)
+#' @author Marcin Imielinski
+#' @export 
+oncoprint = function(tumors = NULL,
+                     oncotab = NULL,
+                     genes = c('KRAS', 'EGFR', 'BRAF', 'TP53', 'TERT', 'CCND1', 'MYC', 'PIK3CA', 'PTEN', 'CDKN2A', 'ARID1A', 'SMARCA4'),
+                     sort = TRUE, sort.genes = sort, sort.tumors = sort,
+                     columns = NULL,
+                     noncoding = FALSE,
+                     cna = TRUE, tmb = TRUE, pp = TRUE, signature = TRUE, svevents = TRUE,
+                     ppdf = TRUE,
+                     return.oncotab = FALSE,
+                     return.mat = FALSE,                     
+                     wes = TRUE,
+                     drop = TRUE, 
+                     track.height = 1,
+                     signature.thresh = 0.2,
+                     signature.main = c(1:5,7,9,13),
+                     track.gap = track.height/2,
+                     colnames.fontsize = 10,
+                     rownames.fontsize = 10,
+                     track.fontsize = 10,
+                     mc.cores = 1,
+                     verbose = FALSE,
+                     height = 20,
+                     width = 20,
+                     ...)
+{
+
+  if (!is.null(tumors))
+  {
+    tumors$id = tumors[[key(tumors)]]
+    
+    if (any(duplicated(tumors$id)))
+      stop('check key field in tumors table: duplicated ids present. The key should be unique per row, and matched to the $id field of oncotab')
+  }
+
+  missing = c()
+  if (is.null(oncotab))
+  {
+    errmsg = 'Either oncotab or tumors argument must be provided, where tumors is a keyed data table (where each row is a tumor) with column $oncotab of file paths pointing to the cached rds Oncotable results for each tumors'
+    if (is.null(tumors) || is.null(tumors$oncotab))
+      stop(errmsg)
+
+    fe = file.exists(tumors$oncotab)
+    missing = union(missing, tumors$id[!fe])
+
+    if (any(fe))
+      warning(paste(sum(fe), 'tumors with missing oncotab, will remove if drop = TRUE, otherwise mark'))
+
+    if (!nrow(tumors))
+      stop('No tumors with $oncotab field pointing to existing path')
+
+    if (verbose)
+      message('Scraping $oncotab paths for oncotable .rds files.  To speed up, consider multi-threading with mc.cores and if you will be creating multiple plots.  Also consider running this with return.oncotab = TRUE and use that for subsequent calls via oncotab = argument.')
+
+    oncotab = tumors[fe, ]$oncotab %>% mclapply(readRDS, mc.cores = mc.cores) %>% rbindlist(fill = TRUE)
+    oncotab$id = factor(oncotab$id, tumors$id)    
+  }
+
+  if (!is.null(tumors))
+    {
+      oncotab$id = factor(oncotab$id, tumors$id)
+      missing = union(missing, setdiff(tumors$id, oncotab$id))
+    }
+  else
+    oncotab$id = factor(oncotab$id)
+  
+  oncotab = oncotab[!is.na(id), ]
+
+  if (!nrow(oncotab))
+  {
+    if (!is.null(tumors))
+      stop('empty oncotable provided, check tumors table, there may be an id mismatch or no non empty files')
+    else
+      stop('empty oncotable provided, please check inputs')
+  }
+  
+  vars = oncotab[track == 'variants', ][gene %in% genes, ][type != 'synonymous', ]
+
+  ## keep track of missing samples ie those that had either SNV, jabba, fusions
+  ## will get a gray column in the plot
+  missing = union(missing, vars[track == 'variants' & is.na(type), id])
+
+  if (!noncoding)
+    vars = vars[!(type %in% c('promoter', 'noncoding', 'regulatory')), ]
+
+  if (!cna)
+    vars = vars[!(type %in% c('amp', 'hetdel', 'homdel')), ]  
+
+  vars[, gene := factor(gene, genes)]
+  vars = vars[!is.na(gene), ]
+
+  ## convert to matrix format for complex heatmap
+  varc = dcast.data.table(data = vars, gene ~ id, value.var = "type", fill = '', drop = FALSE, fun.aggregate = function(x) paste(x, collapse = ','))
+  varm = as.matrix(varc[, -1])
+  rownames(varm) = varc$gene
+
+  ## prune / label missing genotypes (ie either due to missing or incomplete oncotable entries)
+  if (length(missing))
+    {
+      if (!drop)
+        varm[, intersect(colnames(varm), missing)] = 'missing'
+      else
+        varm = varm[, setdiff(colnames(varm), missing)]
+    }
+
+  ## then gene binary order
+  if (sort.genes)
+    {
+      ##ix = skitools::border(varm!='') %>% rev
+      ix = rev(order(rowSums(varm!='' & varm != 'missing', na.rm = TRUE)))
+      varm = varm[ix, , drop = FALSE]
+    }
+  
+  ## then sample binary mutation order
+  if (sort.tumors)
+    {
+      jx = rev(skitools::border(t(varm)!='' & t(varm) != 'missing'))
+      varm = varm[, jx, drop = FALSE]
+    }
+    
+  ## customize appeagrid appearance with mix of rectangles and circles
+  ord = c("amp", "hetdel", "homdel", "fusion", "missense", "splice", 'trunc', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory')
+  alter_fun = function(x, y, w, h, v) {
+    CSIZE = 0.25
+    w = convertWidth(w, "cm")*0.7
+    h = convertHeight(h, "cm")*0.7
+    l = min(unit.c(w, h))
+    grid.rect(x, y, w, h, gp = gpar(fill = alpha("grey90", 0.4), col = NA))   
+    v = v[ord]
+    for (i in which(v)) {
+      if (names(v)[i] %in% c('amp', "hetdel", "homdel", 'fusion'))
+        grid.rect(x,y,w,h, gp = gpar(fill = col[names(v)[i]], col = NA))
+      else if (grepl("missing", names(v)[i]))
+        grid.rect(x, y, w, h, gp = gpar(fill = col[names(v)[i]], col = NA))
+      else if (grepl("trunc", names(v)[i]))
+        {
+          grid.segments(x - w*0.5, y - h*0.5, x + w*0.5, y + h*0.5,
+                        gp = gpar(lwd = 2, col = col[names(v)[i]]))
+          grid.segments(x - w*0.5, y + h*0.5, x + w*0.5, y - h*0.5,
+                        gp = gpar(lwd = 2, col = col[names(v)[i]]))
+        }
+      else if (grepl("(missense)|(missense)|(promoter)|(regulatory)", names(v)[i]))
+        grid.circle(x,y,l*CSIZE, gp = gpar(fill = col[names(v)[i]], col = NA))
+      else {
+        if (grepl("indel", names(v)[i]))
+          grid.rect(x,y,w*0.9,h*0.4, gp = gpar(fill = col[names(v)[i]], col = NA))
+      }
+    }
+  }
+
+  varcol = c(  
+    fusion = alpha('green', 0.5),
+    hetdel = 'lightblue',
+    missing = 'gray',            
+    amp = "red",
+    drop = FALSE,
+    homdel = "darkblue",
+    missense = 'gray40',
+    inframe_indel = 'darkgreen',
+    promoter  = alpha('red', 0.5),
+    regulatory  = alpha('red', 0.2),
+    trunc = alpha("blue", 0.8),
+    mir = alpha('purple', 0.4),
+    splice = "purple"
+  )
+  
+  ids = colnames(varm)
+  out.mat = varm ## in case we want to return.mat
+
+  ## generate additional plots if requested / available
+  bottom_data = top_data = list()
+  if (tmb)
+  {
+    tmbd = oncotab[track == 'tmb' & type == 'density', structure(value, names = as.character(id))][ids]
+    
+    top_data$TMB = tmbd
+    out.mat = rbind(TMB = tmbd, out.mat)
+  }
+
+  if (pp)
+  {
+    top_data$Purity = oncotab[track == 'pp' & type == 'purity', structure(value, names = as.character(id))][ids]
+    top_data$Ploidy = oncotab[track == 'pp' & type == 'ploidy', structure(value, names = as.character(id))][ids]
+
+    out.mat = rbind(Purity = top_data$Purity, Ploidy = top_data$Ploidy, out.mat)
+  }
+
+  ## put together top track from all topdata
+  ab = anno_oncoprint_barplot(border = FALSE, height = unit(track.height, "cm"))                
+  toptracks = HeatmapAnnotation(column_barplot = ab)
+  if (length(top_data))
+  {
+    topcols = brewer.master(names(top_data), wes = wes)
+    tmp = lapply(names(top_data),
+                 function(x) anno_barplot(top_data[[x]],
+                                          border = FALSE,
+                                          axis_param = list(gp = gpar(fontsize = track.fontsize)),
+                                          height = unit(track.height, 'cm'),
+                                          gp = gpar(fill = topcols[x], col = topcols[x])))
+    names(tmp) = names(top_data)
+    tmp$gap = unit(track.gap, 'cm')
+    toptracks = do.call(HeatmapAnnotation, c(tmp, list(column_barplot = ab)))
+  }
+
+  packed_legends = list()
+  bottomtracks = list()
+  if (signature)
+  {
+    sigd = oncotab[track == 'signature', ][type != 'Residual', ]
+
+    ## keep any signature outside of keep that has at least signature.thresh in at least
+    ## one tumor
+    signature.keep = paste('Signature', signature.main, sep = '_') %>%
+      union(sigd[frac>signature.thresh, type])
+    sigd[, type := ifelse(type %in% signature.keep, as.character(gsub('Signature_', '', type)), 'other')]
+    sigdc = dcast.data.table(sigd, id ~ type, value.var = 'frac', fun.aggregate = sum)
+    sigdm = as.matrix(sigdc[, -1])
+    rownames(sigdm) = sigdc$id
+    sigdm = sigdm[ids,, drop = FALSE]
+    out.mat = rbind(out.mat, t(sigdm))
+    if (wes)
+      sigcols = brewer.master(colnames(sigdm), 'BottleRocket1', wes = TRUE)
+    else
+      sigcols = brewer.master(colnames(sigdm), 'Dark2')
+
+    sigcols['other'] = 'gray'
+    bottomtracks$COSMIC = anno_barplot(
+      sigdm,
+      legend = TRUE,
+      axis_param = list(gp = gpar(fontsize = track.fontsize)),
+      height = unit(3*track.height, 'cm'),
+      border = FALSE,
+      gp = gpar(fill = sigcols, col = sigcols)
+    )
+    packed_legends = c(packed_legends,
+      list(Legend(labels = names(sigcols), ncol = 2, legend_gp = gpar(fill = sigcols), title = 'COSMIC')))
+  }
+
+  if (svevents)
+  {
+    cx = dcast.data.table(oncotab[track == 'complex sv', ][, type := as.character(type)][, id := factor(id, ids)], id ~ type, fill = 0, drop = FALSE, value.var = 'value')
+    simple = dcast.data.table(oncotab[track == 'simple sv', ][, type := as.character(type)][, id := factor(id, ids)], id ~ type, fill = 0, drop = FALSE, value.var = 'value')
+    out.mat = rbind(out.mat, t(as.matrix(cx[,-1])), t(as.matrix(simple[,-1])))
+
+    uev = names(cx)[-1]
+    if (wes)
+    {
+      cxcols = brewer.master(names(cx)[-1], 'IsleOfDogs1', wes = TRUE)
+      simplecols = brewer.master(names(simple)[-1], 'Zissou1', wes = TRUE)
+    }
+    else
+    {
+      cxcols = brewer.master(names(cx)[-1], 'Accent', wes = FALSE)
+      simplecols = brewer.master(names(simple)[-1], 'Pastel1', wes = FALSE)
+    }
+
+    cxtracks = lapply(names(cx)[-1], function(x)
+      anno_barplot(
+        cx[[x]],
+        legend = TRUE,
+        axis_param = list(gp = gpar(fontsize = track.fontsize)),
+        height = unit(track.height, 'cm'),
+        border = FALSE,
+        gp = gpar(fill = cxcols[x], col = NA)
+      ))
+    names(cxtracks) = names(cx)[-1]
+
+    simpletracks = lapply(names(simple)[-1], function(x)
+      anno_barplot(
+        simple[[x]],
+        legend = TRUE,
+        axis_param = list(gp = gpar(fontsize = track.fontsize)),
+        height = unit(track.height, 'cm'),
+        border = FALSE,
+        gp = gpar(fill = simplecols[x], col = NA)
+        ))
+    names(simpletracks) = names(simple)[-1]
+
+    bottomtracks = c(bottomtracks, simpletracks, cxtracks)
+  }
+
+  ## process custom columns if any 
+  if (!is.null(tumors) && length(intersect(columns, names(tumors))))
+  {
+    columns = intersect(columns, names(tumors))
+    custom = tumors[.(ids), columns, with = FALSE]
+    out.mat = rbind(out.mat, t(as.matrix(custom)))
+    customcols = brewer.master(columns, wes = wes)
+    customtracks = lapply(columns, function(x)
+    {
+      ## discrete data simple plot ie heatmap
+      if (is.character(custom[[x]]) | is.factor(custom[[x]]) | is.logical(custom[[x]]))
+      {
+        if (is.logical(custom[[x]]))
+          cols = c("FALSE" = 'gray', "TRUE" = 'red')
+        else
+          cols = brewer.master(unique(custom[[x]]), wes = wes)
+        list(
+          anno = anno_simple(
+            as.character(custom[[x]]),
+            height = unit(track.height/2, 'cm'),
+            col = cols),
+          legend = Legend(labels = names(cols),
+                          ncol = 2, legend_gp = gpar(fill = cols, col = NA),
+                          title = x)
+        )
+      }
+      else ## numeric data barplot
+        list(anno = 
+               anno_barplot(
+                 custom[[x]],
+                 legend = TRUE,
+                 axis_param = list(gp = gpar(fontsize = track.fontsize)),
+                 height = unit(track.height, 'cm'),
+                 border = FALSE,
+                 gp = gpar(fill = customcols[x], col = NA)
+               ))
+    })
+
+    customanno = lapply(customtracks, function(x) x$anno)
+    names(customanno) = columns
+    bottomtracks = c(bottomtracks, customanno)
+
+    ix = lengths(customtracks)==2
+    if (any(ix))
+      packed_legends = c(packed_legends,
+                         lapply(customtracks[ix], function(x) x$legend))
+  }
+  
+  if (length(bottomtracks))
+  {
+    bottomtracks$gap = unit(track.gap, 'cm')
+    bottomtracks = do.call(HeatmapAnnotation, bottomtracks)
+  }
+
+  if (length(packed_legends))
+    packed_legends = do.call(packLegend, packed_legends)
+
+  op = ComplexHeatmap::oncoPrint(varm,
+                      get_type = function(x) unlist(strsplit(x, ",")), ##get type = separating each cell in matrix into vector
+                      alter_fun = alter_fun,
+                      top_annotation = toptracks,
+                      bottom_annotation = bottomtracks,
+                      col = varcol,
+                      row_order = 1:nrow(varm),
+                      column_order = 1:ncol(varm),
+                      pct_gp = gpar(fontsize = rownames.fontsize),
+                      row_names_gp = gpar(fontsize = rownames.fontsize),
+                      column_names_gp = gpar(fontsize = colnames.fontsize),
+                      show_column_names = TRUE,
+                      show_heatmap_legend = TRUE
+                      )
+
+
+  if (ppdf)
+    if (length(packed_legends))
+      skitools::ppdf(draw(op, annotation_legend_list = packed_legends), height = height, width = width, ...)
+    else
+      skitools::ppdf(draw(op), height = height, width = width, ...)
+
+  if (return.oncotab)
+    oncotab
+  else if (return.mat)
+    varm
+  else
+    op
+} 
