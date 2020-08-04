@@ -19775,45 +19775,45 @@ edge2tip = function(tree, matrix = TRUE)
 #'
 PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
 
-            if (prefix!= ''){prefix = paste0(prefix, '_')}
-            if (suffix!= ''){suffix = paste0('_', suffix)}
-            #' histogram of bin copy number
-            cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
-            output = paste0(outputdir, '/', prefix, 'CN_hist', suffix, '.png')
-            ppng(
-            {
-              hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
-              abline(v = 0:xmax, lty = 3, col = 'red')
-            }, output
-            )
-            #' histogram of het copy numbers
-            hetsc = rbind(
-              hets[, .(seqnames, start, end, count = alt.count.t, type = 'alt')],
-              hets[, .(seqnames, start, end, count = ref.count.t, type = 'ref')]
-            )
-            hetsc$ncn = 1
-            hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
-            output =  paste0(outputdir, '/', prefix, 'het_hist', suffix, '.png')
-            ppng(
-            {
-              hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
-              abline(v = 0:xmax, lty = 3, col = 'red')
-            }, output)
-            #' density plots for hets
-            hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
-            hets2[, low := pmin(alt, ref)]
-            hets2[, high := pmax(alt, ref)]
-            output =  paste0(outputdir, '/', prefix, 'het_density', suffix, '.png')
+    if (prefix!= ''){prefix = paste0(prefix, '_')}
+    if (suffix!= ''){suffix = paste0('_', suffix)}
+    #' histogram of bin copy number
+    cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
+    output = paste0(outputdir, '/', prefix, 'CN_hist', suffix, '.png')
+    ppng(
+    {
+      hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
+      abline(v = 0:xmax, lty = 3, col = 'red')
+    }, output
+    )
+    #' histogram of het copy numbers
+    hetsc = rbind(
+      hets[, .(seqnames, start, end, count = alt.count.t, type = 'alt')],
+      hets[, .(seqnames, start, end, count = ref.count.t, type = 'ref')]
+    )
+    hetsc$ncn = 1
+    hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
+    output =  paste0(outputdir, '/', prefix, 'het_hist', suffix, '.png')
+    ppng(
+    {
+      hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
+      abline(v = 0:xmax, lty = 3, col = 'red')
+    }, output)
+    #' density plots for hets
+    hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
+    hets2[, low := pmin(alt, ref)]
+    hets2[, high := pmax(alt, ref)]
+    output =  paste0(outputdir, '/', prefix, 'het_density', suffix, '.png')
 
-            binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
-            if (binwidths[1] <= 0) | (binwidths[2] <= 0){
-                print('The density of the het allele count is too dense and so a stat_density_2d plot cannot be generated.')
-            else{
-                p = ggplot(hets2[sample(.N, N_subsample), ], aes(x = low, y = high, fill = ..level..)) +
-                        stat_density_2d(geom = "polygon") +
-                        scale_fill_distiller(palette = 4, direction = 1) +
-                        theme_bw(base_size = 25)
-                ppng(print(p), output)
-            }
+    binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
+    if (binwidths[1] <= 0) | (binwidths[2] <= 0){
+        print('The density of the het allele count is too dense and so a stat_density_2d plot cannot be generated.')
+    else{
+        p = ggplot(hets2[sample(.N, N_subsample), ], aes(x = low, y = high, fill = ..level..)) +
+                stat_density_2d(geom = "polygon") +
+                scale_fill_distiller(palette = 4, direction = 1) +
+                theme_bw(base_size = 25)
+        ppng(print(p), output)
+    }
 
 }
