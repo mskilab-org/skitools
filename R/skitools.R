@@ -21,26 +21,26 @@
 ## You should have received a copy of the GNU Lesser General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#
-# General utility functions
-#
+                                        #
+                                        # General utility functions
+                                        #
 
 .ls.objects <- function (pos = 1, pattern, order.by,
                          decreasing=FALSE, head=FALSE, n=5) {
     napply <- function(names, fn) sapply(names, function(x)
-                                         fn(base::get(x, pos = pos)))
+        fn(base::get(x, pos = pos)))
     names <- ls(pos = pos, pattern = pattern)
     obj.class <- napply(names, function(x) as.character(class(x))[1])
     obj.mode <- napply(names, mode)
     obj.type <- ifelse(is.na(obj.class), obj.mode, obj.class)
     obj.size <- napply(names, object.size)
     obj.dim <- t(napply(names, function(x)
-                        {
-                          if (all(class(x) == 'Hits'))
-                            c(S4Vectors::queryLength(x), S4Vectors::subjectLength(x))
-                          else
-                            as.numeric(dim(x))[1:2]
-                        }))
+    {
+        if (all(class(x) == 'Hits'))
+            c(S4Vectors::queryLength(x), S4Vectors::subjectLength(x))
+        else
+            as.numeric(dim(x))[1:2]
+    }))
     vec <- is.na(obj.dim)[, 1] & (obj.type != "function")
     obj.dim[vec, 1] <- napply(names, function(x) c(muffle(length(x)), NA)[1])[vec]    
 
@@ -56,10 +56,10 @@
 
 prettyMem = function(x, places = 3)
 {
-  power <- pmin(6, floor(log(abs(x), 1000)))
-  units <- c("B", "kB", "MB", "GB", "TB", "PB", "EB")[power+1]
-  x <- x/(1000^power)
-  paste(prettyNum(signif(x,places)), units)
+    power <- pmin(6, floor(log(abs(x), 1000)))
+    units <- c("B", "kB", "MB", "GB", "TB", "PB", "EB")[power+1]
+    x <- x/(1000^power)
+    paste(prettyNum(signif(x,places)), units)
 }
 
 
@@ -89,18 +89,18 @@ lsos <- function(..., n=10) {
 #' @export
 du = function(path, d = 1)
 {
-  if (!file.exists(path))
-    stop('path does not exist')
-  udf = fread(cmd = sprintf("cd %s; du -h --max-depth %s", path, d), sep = '\t', header = FALSE)
-  setnames(udf, c("size", "path"))
-  units = gsub('.*([A-Z])$', '\\1', udf$size)
-  units = ifelse(grepl('[A-Z]', udf$size), units, 'B')
-  units = c('K' = 1000, 'P' = 1e15, 'T' = 1e12, 'B' = 1, 'G' = 1e9, 'M' = 1e6)[units]
-  sizenum = as.numeric(gsub('[A-Z]', '', udf$size))
-  udf[, MB := sizenum*units/1e6]
-  udf = udf[rev(order(MB)), ]
-  udf[, path := gsub('^\\.\\/', '', path)]
-  return(udf)
+    if (!file.exists(path))
+        stop('path does not exist')
+    udf = fread(cmd = sprintf("cd %s; du -h --max-depth %s", path, d), sep = '\t', header = FALSE)
+    setnames(udf, c("size", "path"))
+    units = gsub('.*([A-Z])$', '\\1', udf$size)
+    units = ifelse(grepl('[A-Z]', udf$size), units, 'B')
+    units = c('K' = 1000, 'P' = 1e15, 'T' = 1e12, 'B' = 1, 'G' = 1e9, 'M' = 1e6)[units]
+    sizenum = as.numeric(gsub('[A-Z]', '', udf$size))
+    udf[, MB := sizenum*units/1e6]
+    udf = udf[rev(order(MB)), ]
+    udf[, path := gsub('^\\.\\/', '', path)]
+    return(udf)
 }
 
 
@@ -114,9 +114,9 @@ du = function(path, d = 1)
 #' @author Marcin Imielinski
 #' @export
 ldim = function(l)
-  {
+{
     return(lapply(l, function(x) {if (!is.null(dim(x))) dim(x) else length(x)}))
-  }
+}
 
 
 #' @name file.name
@@ -131,9 +131,9 @@ ldim = function(l)
 #' @export
 ########
 file.name = function(paths)
-  {
+{
     return(gsub('(^|(.*\\/))?([^\\/]*)', '\\3', paths))
-  }
+}
 
 #' @name file.dir
 #' @title file.dir
@@ -147,36 +147,36 @@ file.name = function(paths)
 #' @author Marcin Imielinski
 #' @export
 file.dir = function(paths)
-  {
+{
     return(gsub('(^|(.*\\/))?([^\\/]*)$', '\\2', paths))
-  }
+}
 
 ########
 #' splits a single string according to fixed widths contained in fw (ie each components i of fw denotes the width of field i in string str
 #'
 ########
 strsplit.fwf = function(str, fw)
-  {
+{
     if (length(str)>1)
-      {
+    {
         warning('String should be of length 1, only taking first element')
         str = str[1];
-      }
+    }
 
     cs = cumsum(fw);
     return(substr(rep(str, length(fw)), cs-fw+1,c(cs[1:(length(cs)-1)], nchar(str))))
-  }
+}
 
 ########
-# Returns vector of line counts for each file in path
+                                        # Returns vector of line counts for each file in path
 ########
 line.counts = function(paths)
-  {
+{
     out = rep(NA, length(paths))
     ix = which(file.exists(paths))
     out[ix] = sapply(paths, function(x) { p = pipe(paste('cat ', x, ' | wc -l ')); as.numeric(readLines(p)); close(p)});
     return(out)
-  }
+}
 
 
 
@@ -193,15 +193,15 @@ line.counts = function(paths)
 #' @export
 ##############
 border = function(B, na.rm = TRUE)
-  {
+{
     B = array(as.logical(B), dim = dim(B))
     tmp = vector(mode = "numeric", length = nrow(B));
     if (na.rm)
-      B[is.na(B)] = FALSE;
+        B[is.na(B)] = FALSE;
     for (i in 1:ncol(B))
         tmp = tmp + 2^(ncol(B)-i)*as.numeric(B[,i]==1);
     return(order(tmp))
-  }
+}
 
 
 ##############
@@ -217,12 +217,12 @@ border = function(B, na.rm = TRUE)
 #' @export
 ##############
 fready = function(..., pattern = "\\W+", sub = "_")
-  {
+{
     tab = fread(...)
     nms = dedup(gsub(pattern, sub, names(tab), perl = TRUE), suffix = '.') %>% gsub('^[^A-Za-z]', '', ., perl = TRUE)
     setnames(tab, nms)
     return(tab)
-  }
+}
 
 
 
@@ -242,13 +242,13 @@ fready = function(..., pattern = "\\W+", sub = "_")
 ################################
 dedup = function(x, suffix = '.')
 {
-  dup = duplicated(x);
-  udup = setdiff(unique(x[dup]), NA)
-  udup.ix = lapply(udup, function(y) which(x==y))
-  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
-  out = x;
-  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
-  return(out)
+    dup = duplicated(x);
+    udup = setdiff(unique(x[dup]), NA)
+    udup.ix = lapply(udup, function(y) which(x==y))
+    udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    out = x;
+    out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+    return(out)
 }
 
 
@@ -268,11 +268,11 @@ dedup = function(x, suffix = '.')
 ################################
 nona = function(dt, thresh = 0.1)
 {
-  na = colSums(is.na(dt))/nrow(dt)
-  if (inherits(dt, 'data.table'))
-    dt[, which(!na), with = FALSE]
-  else
-    dt[, which(!na), with = FALSE]
+    na = colSums(is.na(dt))/nrow(dt)
+    if (inherits(dt, 'data.table'))
+        dt[, which(!na), with = FALSE]
+    else
+        dt[, which(!na), with = FALSE]
 }
 
 
@@ -287,153 +287,157 @@ nona = function(dt, thresh = 0.1)
 #' @param cex integer dot size for scatter plot
 #' @param conf.lines logical, optional, whether to draw 95 percent confidence interval lines around x-y line
 #' @param max numeric, optional, threshold to max the input p values
-#' @param label character vector, optional specifying which data points to label (obs vector has to be named, for this to work)
+#' @param repel logical flag whether to use ggrepel
+#' @param label length(obs) charater vector of labels (NULL)
 #' @param plotly toggles between creating a pdf (FALSE) or an interactive html widget (TRUE)
 #' @param annotations named list of vectors containing information to present as hover text (html widget), must be in same order as obs input
 #' @param gradient named list that contains one vector that color codes points based on value, must bein same order as obs input
 #' @param titleText title for plotly (html) graph only
 #' @author Marcin Imielinski, Eran Hodis, Zoran Gajic
 #' @export
-qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=FALSE, max=NULL, max.x = NULL, max.y = NULL, qvalues=NULL, label = NULL, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
+qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=FALSE, max=NULL, max.x = NULL, max.y = NULL, qvalues=NULL, label = NULL, repel = FALSE, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
 {
-    if(!(plotly)){
-        is.exp.null = is.null(exp)
+  if(!(plotly))
+  {
+    is.exp.null = is.null(exp)
 
-        if (is.null(col))
-            col = rep('black', length(obs))
+    if (is.null(col))
+      col = rep('black', length(obs))
 
-        ix1 = !is.na(obs)
-        if (!is.null(exp))
-            if (length(exp) != length(obs))
-                stop('length of exp must be = length(obs)')
-            else
-                ix1 = ix1 & !is.na(exp)
+    ix1 = !is.na(obs)
+    if (!is.null(exp))
+      if (length(exp) != length(obs))
+        stop('length of exp must be = length(obs)')
+      else
+        ix1 = ix1 & !is.na(exp)
 
-        if (is.null(highlight))
-            highlight = rep(FALSE, length(obs))
-        else if (is.logical(highlight))
-            {
-                if (length(highlight) != length(obs))
-                    stop('highlight must be either logical vector of same length as obs or a vector of indices')
-            }
-        else
-            highlight = 1:length(obs) %in% highlight
+    if (is.null(highlight))
+      highlight = rep(FALSE, length(obs))
 
-        obs = -log10(obs[ix1])
-        col = col[ix1]
+    if (is.null(label))
+      label = rep('', length(label))
 
-        highlight = highlight[ix1]
-        if (!is.null(exp))
-            exp = -log10(exp[ix1])
+    else if (is.logical(highlight))
+    {
+      if (length(highlight) != length(obs))
+        stop('highlight must be either logical vector of same length as obs or a vector of indices')
+    }
+    else
+      highlight = 1:length(obs) %in% highlight
 
-        ix2 = !is.infinite(obs)
-        if (!is.null(exp))
-            ix2 = ix2 &  !is.infinite(exp)
+    obs = -log10(obs[ix1])
+    col = col[ix1]
+    highlight = highlight[ix1]
+    label = label[ix1]
+    
+    if (!is.null(exp))
+      exp = -log10(exp[ix1])
 
-        obs = obs[ix2]
-        col = col[ix2]
+    ix2 = !is.infinite(obs)
+    if (!is.null(exp))
+      ix2 = ix2 &  !is.infinite(exp)
 
-        highlight = highlight[ix2]
-        if (!is.null(exp))
-            exp = exp[ix2]
+    obs = obs[ix2]
+    col = col[ix2]
+    highlight = highlight[ix2]
+    label = label[ix2]
 
-        N <- length(obs)
-        ## create the null distribution
-        ## (-log10 of the uniform)
+    if (!is.null(exp))
+      exp = exp[ix2]
 
-        if (is.null(exp))
-            exp <- -log(1:N/N,10)
-        else
-            exp = sort(exp)
+    N <- length(obs)
+    ## create the null distribution
+    ## (-log10 of the uniform)
 
-        if (is.null(max))
-            max = max(obs,exp) + 0.5
+    if (is.null(exp))
+      exp <- -log(1:N/N,10)
+    else
+      exp = sort(exp)
 
-        if (!is.null(max) & is.null(max.x))
-            max.x = max
+    if (is.null(max))
+      max = max(obs,exp) + 0.5
 
-        if (!is.null(max) & is.null(max.y))
-            max.y  = max
+    if (!is.null(max) & is.null(max.x))
+      max.x = max
 
-        if (is.null(max.x))
-            max.x <- max(obs,exp) + 0.5
+    if (!is.null(max) & is.null(max.y))
+      max.y  = max
 
-        if (is.null(max.y))
-            max.y <- max(obs,exp) + 0.5
+    if (is.null(max.x))
+      max.x <- max(obs,exp) + 0.5
 
-        if (is.exp.null)
-            {
-                tmp.exp = rev(seq(0, 7, 0.01))
-                ix = 10^(-tmp.exp)*N
-                c95 <-  qbeta(0.975,ix,N-ix+1)
-                c05 <-  qbeta(0.025,ix,N-ix+1)
+    if (is.null(max.y))
+      max.y <- max(obs,exp) + 0.5
 
-                if (conf.lines){
-                    ## plot the two confidence lines
-                    plot(tmp.exp, -log(c95,10), ylim=c(0,max.y), xlim=c(0,max.x), type="l", axes=FALSE, xlab="", ylab="")
-                    par(new=T)
-                    plot(tmp.exp, -log(c05,10), ylim=c(0,max.y), xlim=c(0,max.x), type="l", axes=FALSE, xlab="", ylab="")
-                    par(new=T)
+    if (is.exp.null)
+    {
+      tmp.exp = rev(seq(0, 7, 0.01))
+      ix = 10^(-tmp.exp)*N
+      c95 <-  qbeta(0.975,ix,N-ix+1)
+      c05 <-  qbeta(0.025,ix,N-ix+1)
 
-                    p1 <- rep(tmp.exp[1], 2)
-                    p2 <- c(-log(c95,10)[1], -log(c05,10)[1])
+      if (conf.lines){
+        ## plot the two confidence lines
+        plot(tmp.exp, -log(c95,10), ylim=c(0,max.y), xlim=c(0,max.x), type="l", axes=FALSE, xlab="", ylab="")
+        par(new=T)
+        plot(tmp.exp, -log(c05,10), ylim=c(0,max.y), xlim=c(0,max.x), type="l", axes=FALSE, xlab="", ylab="")
+        par(new=T)
 
-                    lines(x=p1, y=p2)
-                    x.coords <- c(tmp.exp,rev(tmp.exp))
-                    y.coords <- c(-log(c95,10),rev(-log(c05,10)))
-                    polygon(x.coords, y.coords, col='light gray', border=NA)
-                    par(new=T)
-                }
-            }
+        p1 <- rep(tmp.exp[1], 2)
+        p2 <- c(-log(c95,10)[1], -log(c05,10)[1])
 
-        ord = order(obs)
+        lines(x=p1, y=p2)
+        x.coords <- c(tmp.exp,rev(tmp.exp))
+        y.coords <- c(-log(c95,10),rev(-log(c05,10)))
+        polygon(x.coords, y.coords, col='light gray', border=NA)
+        par(new=T)
+      }
+    }
+
+    ord = order(obs)
 
                                         #colors = vector(mode = "character", length = length(obs)); colors[] = "black";
 
-        colors = col
-        colors[highlight] = "red";
+    colors = col
+    colors[highlight] = "red";
 
-        dat = data.table(x = sort(exp), y = obs[ord], colors = colors[ord], pch = pch, cex = cex)
-        if (!is.null(names(obs)))
-            {
-                dat$names = names(obs[ord])
-                setkey(dat, names)
-            }
+    dat = data.table(x = sort(exp), y = obs[ord], colors = colors[ord], label = label[ord], pch = pch, cex = cex)
 
-        if (nrow(dat)>1e5) ## rough guide to subsampling the lower p value part of the plot
-            subsample = 5e4/nrow(dat)
-
-        if (is.na(subsample[1]))
-            dat[, plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.x), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
-        else
-            {
-                subsample = pmin(pmax(0, subsample[1]), 1)
-                dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.y), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
-            }
-
-        if (!is.null(label))
-            {
-                if (length(label)>0)
-                    if (is.null(key(dat)))
-                        warning('Need to provide names to input vector to draw labels')
-                    else
-                        dat[list(label), text(x, y, labels=label, pos=3)];
-            }
-
-        lines(x=c(0, max(max.y, max.x)), y = c(0, max(max.x, max.y)), col = "black", lwd = lwd)
-
-        if (!is.na(subsample))
-            dat = dat[sample(nrow(dat), subsample*nrow(dat)), ]
-
-        lambda = lm(y ~ x-1, dat)$coefficients;
-
-        lines(x=c(0, max.x), y = c(0, lambda*max.y), col = "red", lty = 2, lwd = lwd);
-        legend('bottomright',sprintf('lambda=\n %.2f', lambda), text.col='red', bty='n')
+    if (!is.null(names(obs)))
+    {
+      dat$names = names(obs[ord])
+      setkey(dat, names)
     }
 
-    else{
+    if (nrow(dat)>1e5) ## rough guide to subsampling the lower p value part of the plot
+      subsample = 5e4/nrow(dat)
 
-        #browser()
+    lambda = lm(y ~ x-1, dat)$coefficients;
+
+    if (is.na(subsample[1]))
+      dat[, plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.x), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
+    else
+    {
+      subsample = pmin(pmax(0, subsample[1]), 1)
+      dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.y), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
+    }
+    
+    if (!is.null(dat$label) && any(nchar(dat$label)>0, na.rm = TRUE))
+    {
+      dat[nchar(label)>0, text(x, y, labels=label, pos=3)];
+    }
+    
+    lines(x=c(0, max(max.y, max.x)), y = c(0, max(max.x, max.y)), col = "black", lwd = lwd)
+    
+    if (!is.na(subsample))
+      dat = dat[sample(nrow(dat), subsample*nrow(dat)), ]
+
+    lines(x=c(0, max.x), y = c(0, lambda*max.y), col = "red", lty = 2, lwd = lwd);
+    legend('bottomright',sprintf('lambda=\n %.2f', lambda), text.col='red', bty='n')
+  }
+  else{
+
+                                        #browser()
 
         if(length(annotations) < 1){
             hover <- do.call(cbind.data.frame, list(p = obs))
@@ -485,11 +489,11 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
             c05 <- qbeta(0.025, ix, N - ix + 1)
             if (FALSE) {   ##Don't need if not using conf.line (might put this in the future)
                 plot(tmp.exp, -log(c95, 10), ylim = c(0, max), xlim = c(0, max),
-                type = "l", axes = FALSE, xlab = "", ylab = "")
+                     type = "l", axes = FALSE, xlab = "", ylab = "")
 
                 par(new = T)
                 plot(tmp.exp, -log(c05, 10), ylim = c(0, max), xlim = c(0, max),
-                type = "l", axes = FALSE, xlab = "", ylab = "")
+                     type = "l", axes = FALSE, xlab = "", ylab = "")
 
                 par(new = T)
                 p1 <- rep(tmp.exp[1], 2)
@@ -502,24 +506,24 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
             }
         }
 
-        #creating the ploting data.table (dat) and organizing the annotations to create hover text
+                                        #creating the ploting data.table (dat) and organizing the annotations to create hover text
         ord = order(hover$obs)
         hover = hover[ord]
         dat = hover
         hover$obs = NULL
 
-        #Creating the hover text
+                                        #Creating the hover text
         if(length(colnames(hover)) > 1){
             annotation_names  = sapply(colnames(hover), paste0, " : ")
             annotation_names_wLineBreak  = paste("<br>", annotation_names[2:length(annotation_names)],
-            sep = "")
+                                                 sep = "")
             annotation_names = c(annotation_names[1], annotation_names_wLineBreak)
         }
         else{
             annotation_names  = sapply(colnames(hover), paste0, " : ")
         }
 
-        #Checking if there is a gradient and if so adding it to the plotting data.table (dat)
+                                        #Checking if there is a gradient and if so adding it to the plotting data.table (dat)
         gradient_control = FALSE
         if(length(gradient )!= 0){
             dat$grad = gradient[[1]][ord]
@@ -533,12 +537,12 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
         dat$x = sort(exp)
         dat$y = dat$obs
 
-        #declare so we can use in If statement
+                                        #declare so we can use in If statement
         p <- NULL
 
-        #hacky subsampling but works really well, just maxing out the number of points at 8k
-        #and removing the extra from the non-sig
-        #(looks to be -logp of 2.6 here can make this more dynamic later )
+                                        #hacky subsampling but works really well, just maxing out the number of points at 8k
+                                        #and removing the extra from the non-sig
+                                        #(looks to be -logp of 2.6 here can make this more dynamic later )
 
         if (nrow(dat) <=  8000){
 
@@ -554,19 +558,19 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                 outstr = paste(c(rbind(annotation_names, trans[,i])), sep = "", collapse = "")
                 hover_text = c(hover_text,outstr)
             }
-#            browser()
+                                        #            browser()
             if(gradient_control){
                 p <- dat[, plot_ly(data = dat, x=x, y=y, hoverinfo = "text",text = hover_text, color = grad,
                                    colors = c("blue2","gold"),marker = list(colorbar = list(title = names(gradient[1]))),
                                    mode = "markers",type = 'scatter')
-                    %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
-                               yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+                         %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                                    yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
             else{
                 p <- dat[, plot_ly(data = dat, x=x, y=y, hoverinfo = "text",text = hover_text,
                                    mode = "markers",type = 'scatter')
-                    %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
-                               yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+                         %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                                    yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
         }
 
@@ -597,21 +601,21 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                 p <- dat2[, plot_ly(data = dat2, x=x, y=y,hoverinfo = "text", text = hover_text, color = grad,
                                     colors = c("blue2","gold"),marker = list(colorbar = list(title = names(gradient[1]))),
                                     mode = "markers",type = 'scatter')
-                     %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
-                                yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+                          %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                                     yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
             else{
                 p <- dat2[,  plot_ly(data = dat2, x=x, y=y,hoverinfo = "text", text = hover_text,
-                                    mode = "markers",type = 'scatter')
-                     %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
-                                yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
+                                     mode = "markers",type = 'scatter')
+                          %>% layout(xaxis = list(title = "<i>Expected -log<sub>10</sub>(P)</i>"),
+                                     yaxis = list(title = "<i>Observed -log<sub>10</sub>(P)</i>")) ]
             }
 
         }
 
- #       browser()
+                                        #       browser()
 
-        #Calculating lambda, Note that this is using the whole data set not the subsampled one
+                                        #Calculating lambda, Note that this is using the whole data set not the subsampled one
         lambda = lm(y ~ x - 1, dat)$coefficients
         lambda_max = max*as.numeric(lambda)
 
@@ -620,9 +624,9 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
         ##is done by specifying two points on the line (x0/y0 and x1/y1)
         p <- layout(p,title = sprintf("<b>%s</b>" ,titleText),titlefont = list(size = 24),
                     shapes = list(list(type = "line",line = list(color = 'black'),
-                    x0 = 0, x1  = max, xref = "x", y0 = 0, y1 = max,yref ="y"),
-                    list( type = "line", line = list(color = "red"),
-                    x0 = 0, x1 = max, xref = "x", y0 = 0, y1 = lambda_max, yref = "y")),
+                                       x0 = 0, x1  = max, xref = "x", y0 = 0, y1 = max,yref ="y"),
+                                  list( type = "line", line = list(color = "red"),
+                                       x0 = 0, x1 = max, xref = "x", y0 = 0, y1 = lambda_max, yref = "y")),
                     annotations = list(
                         x = (0.9 * max),
                         y = (0.03 * max),
@@ -630,18 +634,84 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
                         font = list(
                             color = "red",
                             size = 20
-                            ),
+                        ),
                         showarrow = FALSE,
                         xref = "x",
                         yref = "y"
-                        ),
+                    ),
                     margin = list(
                         t = 100
 
-                        ),
+                    ),
                     hovermode = "compare")
     }
 }
+
+#' @name qq_repel
+#' @title QQ plot with repel
+#'
+#' @param ps vector of p values
+#' @param label length(ps) vector of labels
+#' @export
+#' @author Ashley Doane
+qq_repel <- function(ps, label = rep('', length(ps)), conf.lines = FALSE, ci = 0.95, print = TRUE) {
+  N  <- length(ps)
+  df <- data.table(
+    p = ps,
+    observed = -log10(ps),
+    label = label)
+  df = df[order(p), ][, ":="(
+           expected = -log10(1:N / N),
+           clower   = -log10(qbeta(ci,     1:N, N - 1:N + 1)),
+           cupper   = -log10(qbeta(1 - ci, 1:N, N - 1:N + 1))
+         )]
+  log10Pe <- expression(paste("Expected -log"[10], plain(P)))
+  log10Po <- expression(paste("Observed -log"[10], plain(P)))
+
+  lambda = lm(observed ~ expected-1, df)$coefficients
+
+  p= ggplot(df, aes(expected,observed,label=label)) +
+    geom_point(aes(expected, observed), color = ifelse(df$label=="", "black", "red")) +
+    geom_abline(intercept = 0,
+                slope = 1,
+                alpha = 0.5)
+
+  if (conf.lines)
+    {
+     p = p + geom_line(aes(expected, cupper), linetype = 2) +
+       geom_line(aes(expected, clower),
+              linetype = 2,
+              color = 'red') 
+       }
+
+  p = p + 
+    xlab(log10Pe) +
+    ylab(log10Po) +
+                                        #coord_cartesian(xlim = c(0,5), ylim=c(0,25)) +
+                                        #xlim(0, 10) +
+    ggrepel::geom_text_repel(
+      data = subset(df, (expected > 3 )),
+      nudge_x      =  4.5 - subset(df, (expected > 3 ))$expected,
+      direction    = "y",
+      hjust        = 0,
+      segment.size = 0.2) +
+    ggrepel::geom_text_repel(
+      data = subset(df, (expected <= 3 )),
+      nudge_x      =  1.5 - subset(df, (expected <= 3 ))$expected,
+      direction    = "y",
+      hjust        = 1,
+      segment.size = 0.2) +
+    cowplot::theme_cowplot(font_size = 12) +
+    annotate(geom = 'text', label = sprintf('lambda == %.2f', lambda), size = 6, x = max(df$expected), y = 0, hjust = 1, vjust = 0, parse = TRUE)
+                                        #geom_text_repel(size=4,box.padding = 0.25,segment.size = .25,
+                                        #   max.iter = 2000
+                                        #)
+  if (print)
+    print(p)
+  else
+    p  
+}
+
 
 #' @name wfplot
 #' @title Quick waterfall plot
@@ -663,7 +733,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
 #' @author Marcin Imielinski
 #' @export
 wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, cex = 1, leg.pos = NULL, ...)
-  {
+{
     ix = order(data);
     labels = as.character(labels)
     ulab = unique(labels)
@@ -672,32 +742,32 @@ wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, ce
 
 
     if (is.null(col))
-        {
-            if (length(ulab)>2)
-                col = RColorBrewer::brewer.pal(length(ulab), 'Set3')
-            else
-                col = c('gray', 'red')
-        }
+    {
+        if (length(ulab)>2)
+            col = RColorBrewer::brewer.pal(length(ulab), 'Set3')
+        else
+            col = c('gray', 'red')
+    }
 
     if (is.null(names(col)))
-        {
-            col = col[match(labels, ulab)]
-            names(col) = labels;
-        }
+    {
+        col = col[match(labels, ulab)]
+        names(col) = labels;
+    }
     else
-        {
-            og.col = col;
-            col = col[labels];
-            ulab = intersect(names(og.col), names(col))
-        }
+    {
+        og.col = col;
+        col = col[labels];
+        ulab = intersect(names(og.col), names(col))
+    }
 
     barplot(data[ix], col = col[ix], names.arg = names.arg[ix], las = las, cex.names = 0.5*cex, border = FALSE, ...)
 
     if (is.null(leg.pos))
-      leg.pos = c(mean(par('usr')[1:2])/4, 3*data[which.max(abs(data))]/4)
+        leg.pos = c(mean(par('usr')[1:2])/4, 3*data[which.max(abs(data))]/4)
 
     legend(leg.pos[1], leg.pos[2], legend = ulab, fill = col[ulab])
-  }
+}
 
 
 
@@ -717,15 +787,15 @@ wfplot = function(data, labels = NULL, names.arg = NULL, col = NULL, las = 2, ce
 ############
 list.expr = function(x)
 {
-  y = ''
-  if (!is.null(names(x)))
-    y = paste0('"', names(x), '"=')
+    y = ''
+    if (!is.null(names(x)))
+        y = paste0('"', names(x), '"=')
 
-  if (is.character(x))
-    out =paste("c('", paste(y, x, sep = "", collapse = "', '"), "')", sep = "")
+    if (is.character(x) | is.factor(x))
+        out =paste("c('", paste(y, x, sep = "", collapse = "', '"), "')", sep = "")
     else
-    out = paste("c(", paste(y, x, sep = "", collapse = ", "), ")", sep = "")
-  writeLines(out)
+        out = paste("c(", paste(y, x, sep = "", collapse = ", "), ")", sep = "")
+    writeLines(out)
 }
 
 ########
@@ -741,18 +811,18 @@ list.expr = function(x)
 #' @author Marcin Imielinski
 ########
 fuckr = function()
-  {
+{
     if (!is.null(options()$error))
-      {
+    {
         options(error = NULL);
         print('Options error set to NULL');
-      }
+    }
     else
-      {
+    {
         options(error = recover);
         print('Options error set to recover');
-      }
-  }
+    }
+}
 
 #################
 ## flatten
@@ -763,36 +833,36 @@ fuckr = function()
 #################
 flatten = function(A, cdim = 2, sep = "_")
 {
-  if (!(cdim==1 | cdim ==2))
-    stop('cdim must be 1 or 2')
+    if (!(cdim==1 | cdim ==2))
+        stop('cdim must be 1 or 2')
 
-  ind = order(rep(c(1:dim(A)[cdim]), dim(A)[3]));
+    ind = order(rep(c(1:dim(A)[cdim]), dim(A)[3]));
 
-  out = A[,,1];
+    out = A[,,1];
 
-  if (cdim == 2)
+    if (cdim == 2)
     {
-      if (dim(A)[3]>1)
-        for (i in 2:dim(A)[3])
-          out = cbind(out, A[,,i]);
-      dimnames(A)[[1]] = dimnames(A)[[1]]
+        if (dim(A)[3]>1)
+            for (i in 2:dim(A)[3])
+                out = cbind(out, A[,,i]);
+        dimnames(A)[[1]] = dimnames(A)[[1]]
     }
 
-  if (cdim == 1)
+    if (cdim == 1)
     {
-      if (dim(A)[3]>1)
-        for (i in 2:dim(A)[3])
-          out = rbind(out, A[,,i]);
-      dimnames(A)[[2]] = dimnames(A)[[2]]
+        if (dim(A)[3]>1)
+            for (i in 2:dim(A)[3])
+                out = rbind(out, A[,,i]);
+        dimnames(A)[[2]] = dimnames(A)[[2]]
     }
 
-  out = out[,ind]; #reshuffle to get desired ordering
-  newdimnames = rep(dimnames(A)[[cdim]], each = dim(A)[3]);
-  if (!is.null(sep))
-    newdimnames = paste(newdimnames, dimnames(A)[[3]], sep = sep);
-  dimnames(out)[[cdim]] = newdimnames;
+    out = out[,ind]; #reshuffle to get desired ordering
+    newdimnames = rep(dimnames(A)[[cdim]], each = dim(A)[3]);
+    if (!is.null(sep))
+        newdimnames = paste(newdimnames, dimnames(A)[[3]], sep = sep);
+    dimnames(out)[[cdim]] = newdimnames;
 
-  return(out)
+    return(out)
 }
 
 ##################
@@ -819,15 +889,15 @@ flatten = function(A, cdim = 2, sep = "_")
 #' @author Marcin Imielinski
 ##################
 bsub_cmd = function(cmd, queue, jname = NULL, jlabel=NULL, jgroup = NULL, mem=NULL, group = "cgafolk", cwd = NULL, mc.cores = NULL, deadline = F)
-  {
+{
     if (is.null(jname) & is.null(names(cmd)))
-      jname = 'job'
+        jname = 'job'
 
     if (length(jname) != length(cmd))
-      jname = rep(jname, length(cmd))
+        jname = rep(jname, length(cmd))
 
     if (!is.null(jname))
-      names(cmd) = dedup(jname)
+        names(cmd) = dedup(jname)
 
     qjname = paste( "\"", names(cmd), "\"", sep="" )
     qjout = paste( "\"", names(cmd), ".bsub.out", "\" ", sep="" )
@@ -843,7 +913,7 @@ bsub_cmd = function(cmd, queue, jname = NULL, jlabel=NULL, jgroup = NULL, mem=NU
     out_cmd = paste(out_cmd," \"",  cmd, "\"", sep = "")
     names(out_cmd)= names(cmd)
     return(out_cmd)
-  }
+}
 
 
 ##############
@@ -861,95 +931,95 @@ bsub_cmd = function(cmd, queue, jname = NULL, jlabel=NULL, jgroup = NULL, mem=NU
 #' @author Marcin Imielinski
 ##############
 lsf_query = lsf_out_query = query_lsf_out = function(dir = NULL, jname = NULL, detailed = F, mc.cores = 1)
-{
-  if (!is.null(dir))
-    dir = paste(dir, '/', sep = '')
-  else
-      {
-          if (!is.null(jname))
-              {
-                  dir = dirname(jname)
-                  jname = basename(jname)
-              }
-          else
-              dir = ''
-      }
+                            {
+                                if (!is.null(dir))
+                                    dir = paste(dir, '/', sep = '')
+                                else
+                                {
+                                    if (!is.null(jname))
+                                    {
+                                        dir = dirname(jname)
+                                        jname = basename(jname)
+                                    }
+                                    else
+                                        dir = ''
+                                }
 
-  input.jname = jname
-  jname = gsub('\\.bsub\\.out$', '', gsub('\\.bsub\\.err$', '', jname))
-  names(input.jname) = jname
+                                input.jname = jname
+                                jname = gsub('\\.bsub\\.out$', '', gsub('\\.bsub\\.err$', '', jname))
+                                names(input.jname) = jname
 
-  tmp.run = paste(normalizePath(dir), '/', jname, sep = '')
+                                tmp.run = paste(normalizePath(dir), '/', jname, sep = '')
 
-  if (length(jname)==0)
-    outs = data.frame(jname = NA,
-      out.file = NA,
-      err.file = NA,
-      run.file = NA,
-      exit_flag = NA, term_flag = NA, started = NA, reported = NA, hours_elapsed = NA, max_mem = NA, cpu_time = NA, stringsAsFactors = F)
-  else
-    {
-        outs = data.frame(jname = gsub('\\.R$', '', jname),
-            out.file = paste(normalizePath(dir),'/', jname, '.bsub.out', sep = ''),
-        err.file = paste(normalizePath(dir), '/', jname, '.bsub.err', sep = ''),
-        run.file = ifelse(file.exists(tmp.run), tmp.run, NA),
-        exit_flag = NA, term_flag = NA, started = NA, reported = NA, hours_elapsed = NA, max_mem = NA, cpu_time = NA, stringsAsFactors = F);
+                                if (length(jname)==0)
+                                    outs = data.frame(jname = NA,
+                                                      out.file = NA,
+                                                      err.file = NA,
+                                                      run.file = NA,
+                                                      exit_flag = NA, term_flag = NA, started = NA, reported = NA, hours_elapsed = NA, max_mem = NA, cpu_time = NA, stringsAsFactors = F)
+                                else
+                                {
+                                    outs = data.frame(jname = gsub('\\.R$', '', jname),
+                                                      out.file = paste(normalizePath(dir),'/', jname, '.bsub.out', sep = ''),
+                                                      err.file = paste(normalizePath(dir), '/', jname, '.bsub.err', sep = ''),
+                                                      run.file = ifelse(file.exists(tmp.run), tmp.run, NA),
+                                                      exit_flag = NA, term_flag = NA, started = NA, reported = NA, hours_elapsed = NA, max_mem = NA, cpu_time = NA, stringsAsFactors = F);
 
 
-      fn = paste(dir, jname, '.bsub.out', sep = '')
-      fn.ex = file.exists(fn);
-      if (!any(fn.ex))
-        break
+                                    fn = paste(dir, jname, '.bsub.out', sep = '')
+                                    fn.ex = file.exists(fn);
+                                    if (!any(fn.ex))
+                                        break
 
-      tmp = matrix(unlist(parallel::mclapply(fn[fn.ex],
-        function(x)
-        {
-          y = readLines(x);
-          y = split(y, cumsum(grepl('^Sender', y)))
-          y = y[[length(y)]]  ## picks "last" dump from lsf to this out file
-          return(c(c(grep('^Exited with', y, value = T), grep('^Successfully completed', y, value = T), '')[1],
-                   c(grep('^TERM', y, value = T), '')[1],
-                   c(gsub('Started at ', '', grep('^Started at', y, value = T)), '')[1],
-                   c(gsub('Results reported at ', '', grep('^Results reported at', y, value = T)), '')[1],
-                   c(gsub('[ ]+CPU time[ ]+\\:[ ]+(.*)[ ]+\\S+', '\\1', grep('^[ ]+CPU time', y, value = T)), '')[1],
-                   c(gsub('[ ]+Max Memory[ ]+\\:[ ]+(.*)[ ]+\\S+', '\\1', grep('^[ ]+Max Memory', y, value = T)), '')[1],
-                   c(gsub('[ ]+Max Swap[ ]+\\:[ ]+(.*)[ ]+\\S+', '\\1', grep('^[ ]+Max Swap', y, value = T)), '')[1],
-                   c(gsub('[ ]+Max Processes[ ]+\\:[ ]+(.*)\\S*', '\\1', grep('^[ ]+Max Processes', y, value = T)), '')[1],
-                   c(gsub('[ ]+Max Threads[ ]+\\:[ ]+(.*)\\S*', '\\1', grep('^[ ]+Max Threads', y, value = T)), '')[1]
-                   ))
+                                    tmp = matrix(unlist(parallel::mclapply(fn[fn.ex],
+                                                                           function(x)
+                                                                           {
+                                                                               y = readLines(x);
+                                                                               y = split(y, cumsum(grepl('^Sender', y)))
+                                                                               y = y[[length(y)]]  ## picks "last" dump from lsf to this out file
+                                                                               return(c(c(grep('^Exited with', y, value = T), grep('^Successfully completed', y, value = T), '')[1],
+                                                                                        c(grep('^TERM', y, value = T), '')[1],
+                                                                                        c(gsub('Started at ', '', grep('^Started at', y, value = T)), '')[1],
+                                                                                        c(gsub('Results reported at ', '', grep('^Results reported at', y, value = T)), '')[1],
+                                                                                        c(gsub('[ ]+CPU time[ ]+\\:[ ]+(.*)[ ]+\\S+', '\\1', grep('^[ ]+CPU time', y, value = T)), '')[1],
+                                                                                        c(gsub('[ ]+Max Memory[ ]+\\:[ ]+(.*)[ ]+\\S+', '\\1', grep('^[ ]+Max Memory', y, value = T)), '')[1],
+                                                                                        c(gsub('[ ]+Max Swap[ ]+\\:[ ]+(.*)[ ]+\\S+', '\\1', grep('^[ ]+Max Swap', y, value = T)), '')[1],
+                                                                                        c(gsub('[ ]+Max Processes[ ]+\\:[ ]+(.*)\\S*', '\\1', grep('^[ ]+Max Processes', y, value = T)), '')[1],
+                                                                                        c(gsub('[ ]+Max Threads[ ]+\\:[ ]+(.*)\\S*', '\\1', grep('^[ ]+Max Threads', y, value = T)), '')[1]
+                                                                                        ))
 
-        }, mc.cores = mc.cores)), ncol = 9, byrow = T)
-      colnames(tmp) = c('exit.flag', 'term.flag', 'started', 'reported', 'cpu.time', 'max.memory', 'max.swap', 'max.cpu', 'max.thr')
+                                                                           }, mc.cores = mc.cores)), ncol = 9, byrow = T)
+                                    colnames(tmp) = c('exit.flag', 'term.flag', 'started', 'reported', 'cpu.time', 'max.memory', 'max.swap', 'max.cpu', 'max.thr')
 
-      TIME.FORMAT = '%a %b %d %H:%M:%S %Y';
-      outs$exit_flag[fn.ex] = tmp[, 'exit.flag']
-      outs$term_flag[fn.ex] = tmp[, 'term.flag']
-      outs$started[fn.ex] = as.character(as.POSIXct(strptime(tmp[, 'started'], TIME.FORMAT)))
-      outs$reported[fn.ex] = as.character(as.POSIXct(strptime(tmp[, 'reported'], TIME.FORMAT)))
-      outs$hours_elapsed = round(as.numeric((as.POSIXct(outs$reported)-as.POSIXct(outs$started))/60), 2)
-      outs$cpu_time[fn.ex] = as.numeric(tmp[, 'cpu.time'])
-      outs$max_mem[fn.ex] = as.numeric(tmp[, 'max.memory'])
+                                    TIME.FORMAT = '%a %b %d %H:%M:%S %Y';
+                                    outs$exit_flag[fn.ex] = tmp[, 'exit.flag']
+                                    outs$term_flag[fn.ex] = tmp[, 'term.flag']
+                                    outs$started[fn.ex] = as.character(as.POSIXct(strptime(tmp[, 'started'], TIME.FORMAT)))
+                                    outs$reported[fn.ex] = as.character(as.POSIXct(strptime(tmp[, 'reported'], TIME.FORMAT)))
+                                    outs$hours_elapsed = round(as.numeric((as.POSIXct(outs$reported)-as.POSIXct(outs$started))/60), 2)
+                                    outs$cpu_time[fn.ex] = as.numeric(tmp[, 'cpu.time'])
+                                    outs$max_mem[fn.ex] = as.numeric(tmp[, 'max.memory'])
 
-      if (detailed)
-        {
-          outs$max_swap[fn.ex] = tmp[, 'max.swap']
-          outs$max_processes[fn.ex] = tmp[, 'max.processes']
-          outs$max_threads[fn.ex] = tmp[, 'max.threads']
-        }
-      outs$success = grepl('Success', outs$exit_flag)
-      rownames(outs) = dedup(outs$jname)
-    }
+                                    if (detailed)
+                                    {
+                                        outs$max_swap[fn.ex] = tmp[, 'max.swap']
+                                        outs$max_processes[fn.ex] = tmp[, 'max.processes']
+                                        outs$max_threads[fn.ex] = tmp[, 'max.threads']
+                                    }
+                                    outs$success = grepl('Success', outs$exit_flag)
+                                    rownames(outs) = dedup(outs$jname)
+                                }
 
-  outs = as.data.table(outs)
+                                outs = as.data.table(outs)
 
-  if (!is.null(input.jname))
-      outs = outs[, key := input.jname[jname]]
-  else
-      outs = outs[, key := jname]
+                                if (!is.null(input.jname))
+                                    outs = outs[, key := input.jname[jname]]
+                                else
+                                    outs = outs[, key := jname]
 
-  setkey(outs, 'key')
-  return(outs)
-}
+                                setkey(outs, 'key')
+                                return(outs)
+                            }
 
 
 ###################
@@ -969,22 +1039,22 @@ lsf_query = lsf_out_query = query_lsf_out = function(dir = NULL, jname = NULL, d
 #' @author Marcin Imielinski
 ###################
 chunk = function(from, to = NULL, by = 1, length.out = NULL)
-  {
+{
     if (is.null(to))
-      {
+    {
         to = from;
         from = 1;
-      }
+    }
 
     if (is.null(length.out))
-      tmp = c(seq(from = from, to = to, by = by), to + 1)
+        tmp = c(seq(from = from, to = to, by = by), to + 1)
     else
-      tmp = c(seq(from = from, to = to, length.out = length.out), to + 1)
+        tmp = c(seq(from = from, to = to, length.out = length.out), to + 1)
 
     out = floor(cbind(tmp[-length(tmp)], tmp[-1]-1))
 
     return(out)
-  }
+}
 
 
 ##################
@@ -1012,28 +1082,28 @@ chunk = function(from, to = NULL, by = 1, length.out = NULL)
 #' @author Marcin Imielinski
 ##################
 func_code = function(func, sources = c(), ...)
-  {
+{
     out = "";
 
     argv = list(...);
 
     if (length(sources)>0)
-      {
+    {
         out = sprintf('%s%s\n', out, paste("source(\"", sources, "\")", sep = "", collapse = "\n"));
-      }
+    }
 
     argv_strings = vector(mode="character", length = length(argv));
 
     for (i in 1:length(argv))
-      {
+    {
         this_arg = eval(argv[[i]]); # need to eval if data frame slice passed down as vector (i.e. as "call")
 
         if (is.list(this_arg) & is.null(dim(this_arg))) # checks we have a bona fide list ie not a data frame
-          {
+        {
             if (max(unlist(lapply(this_arg, length)))>1)
             {
-              print("Error: nested list arguments not allowed in argv");
-              return( NA );
+                print("Error: nested list arguments not allowed in argv");
+                return( NA );
             }
 
             list_strings = as.vector(this_arg)
@@ -1042,42 +1112,42 @@ func_code = function(func, sources = c(), ...)
             list_strings[chars] = paste('\"', list_strings[chars], '\"', sep = "");
 
             if (!is.null(names(this_arg))) # take care of named list items if exists
-              {
+            {
                 named = names(this_arg) != "";
                 list_strings[named] = paste(names(this_arg)[named], " = ", list_strings[named],  sep = "");  # prepend "name=" to named items of list
-              }
+            }
 
             argv_strings[[i]] = sprintf("list(%s)", paste(list_strings, collapse = ", "));  # pre-pend list constructor and comma concat list items
-          }
+        }
         else if (is.vector(this_arg) & is.null(dim(this_arg))) # make sure we have vector and not an array
-          {
+        {
             vec_strings = this_arg;
             if (is.character(this_arg))
-              vec_strings = paste('\"', vec_strings, '\"', sep = "");
+                vec_strings = paste('\"', vec_strings, '\"', sep = "");
 
             if (length(vec_strings)>1) # use c() if we have a vector greater than length 1
-              argv_strings[i] = sprintf("c(%s)", paste(vec_strings, collapse = ","))
+                argv_strings[i] = sprintf("c(%s)", paste(vec_strings, collapse = ","))
             else
-              argv_strings[i] = vec_strings;
-          }
+                argv_strings[i] = vec_strings;
+        }
         else if (is.null(this_arg))
-          argv_strings[i] = 'NULL'
+            argv_strings[i] = 'NULL'
         else
-          {
+        {
             print("Error: unsupported data type in argv");
             return( NA );
-          }
-      }
+        }
+    }
 
     if (!is.null(names(argv))) # take care of named args if exist
-      {
+    {
         named = names(argv) != "";
         argv_strings[named] = paste(names(argv)[named], " = ", argv_strings[named], sep = "");
-      }
+    }
 
     out = sprintf('%s\n%s(%s)\n', out, func, paste(argv_strings, collapse = ",\n "));
     out
-  }
+}
 
 
 #############################
@@ -1100,60 +1170,60 @@ func_code = function(func, sources = c(), ...)
 #' @author Marcin Imielinski
 ############################
 read.delim.cat = function(paths, skip = NULL, cols = NULL, include.paths = T, include.index = TRUE, cores = NULL, ...)
-  {
+{
     if (is.null(skip))
-      skip = rep(0, length(paths))
+        skip = rep(0, length(paths))
 
     paths[is.na(paths)] = "";
     does.not.exist = !file.exists(paths);
 
     if (any(does.not.exist))
-      warning(sprintf('Ignoring %s paths that do not exist on the file system.', length(which(does.not.exist))))
+        warning(sprintf('Ignoring %s paths that do not exist on the file system.', length(which(does.not.exist))))
     paths = paths[!does.not.exist];
 
     if (is.null(names(paths)))
-        {
-            names(paths) = 1:length(paths)
-        }
+    {
+        names(paths) = 1:length(paths)
+    }
 
     if (length(skip) ==1)
-      skip = rep(skip, length(paths))
+        skip = rep(skip, length(paths))
     else
-      skip = skip[!does.not.exist]
+        skip = skip[!does.not.exist]
 
-    # scope out files to filter out those with 0 rows and find common columns
+                                        # scope out files to filter out those with 0 rows and find common columns
     if (!is.null(cores))
-      dfs = parallel::mclapply(1:length(paths),
-        function(x) {tmp.df = read.delim(paths[x], skip = skip[x], ...);
-                     if (nrow(tmp.df) != 0) cbind(data.frame(source.path = paths[x]), source.id = names(paths)[x], tmp.df) else data.frame() }, mc.cores = cores)
+        dfs = parallel::mclapply(1:length(paths),
+                                 function(x) {tmp.df = read.delim(paths[x], skip = skip[x], ...);
+                                     if (nrow(tmp.df) != 0) cbind(data.frame(source.path = paths[x]), source.id = names(paths)[x], tmp.df) else data.frame() }, mc.cores = cores)
     else
-      dfs = lapply(1:length(paths),
-        function(x) {tmp.df = read.delim(paths[x], skip = skip[x], ...);
-                     if (nrow(tmp.df) != 0) cbind(data.frame(source.path = paths[x]), source.id = names(paths)[x], tmp.df) else data.frame() })
+        dfs = lapply(1:length(paths),
+                     function(x) {tmp.df = read.delim(paths[x], skip = skip[x], ...);
+                         if (nrow(tmp.df) != 0) cbind(data.frame(source.path = paths[x]), source.id = names(paths)[x], tmp.df) else data.frame() })
 
 
     dfs = dfs[sapply(dfs, nrow)!=0];
 
     if (length(dfs)==0)
-      return(NULL);
+        return(NULL);
 
     out = do.call('rrbind', dfs)
 
     if (!is.null(cols))
-      out = cbind(out[,1], out[, cols]);
+        out = cbind(out[,1], out[, cols]);
 
     if (include.paths)
-      names(out)[1] = 'source.path'
+        names(out)[1] = 'source.path'
     else
-      out$source.path = NULL
+        out$source.path = NULL
 
     if (include.index)
-      names(out)[1] = 'source.path'
+        names(out)[1] = 'source.path'
     else
-      out$source.id = NULL
+        out$source.id = NULL
 
     return(out)
-  }
+}
 
 #' @name fisher.plot
 #' @title Plots fisher contingency table with p value
@@ -1164,13 +1234,13 @@ read.delim.cat = function(paths, skip = NULL, cols = NULL, include.paths = T, in
 #' @param O observed matrix of counts
 #' @export
 fisher.plot = function(O)
-  {
+{
     fish = stats::fisher.test(O)
     plot.new();
     par(usr = c(0, 1, 0, 1));
     plotrix::addtable2plot(0,0.5, O, display.colnames = TRUE, display.rownames = TRUE);
     text(0.5, 0.44, sprintf(paste('P = %0.', floor(-log10(fish$p.value))+2, 'f\nOR = %0.2f [%0.2f-%0.2f]', sep  = ""), fish$p.value, fish$estimate, fish$conf.int[[1]], fish$conf.int[[2]]))
-  }
+}
 
 ###############################
 #' @name fisher.combined
@@ -1187,18 +1257,18 @@ fisher.plot = function(O)
 ###############################
 fisher.combined = function(Ps)
 {
-  if (is.vector(Ps))
-    return(Ps)
+    if (is.vector(Ps))
+        return(Ps)
 
-  return(pchisq(rowSums(-2*log(Ps)), 2*ncol(Ps), lower.tail = F))
+    return(pchisq(rowSums(-2*log(Ps)), 2*ncol(Ps), lower.tail = F))
 }
 
 get.fwf.widths = function(file, skip=0)
-  {
+{
     l = readLines(file,skip+1);
 
     w = get.field.widths(l[[length(l)]]);
-  }
+}
 
 
 ############################
@@ -1212,13 +1282,13 @@ get.fwf.widths = function(file, skip=0)
 #' @export
 #############################
 dev.all.off = function()
-  {
+{
     sapply(dev.list(), dev.off)
-  }
+}
 
 
 get.field.widths = function(str)
-  {
+{
     spl = strsplit(str, "")
     non.space = is.na(match(spl[[1]], " "));
 
@@ -1227,17 +1297,17 @@ get.field.widths = function(str)
     out = c();
 
     if (dim(runs)[1]==1)
-      {
+    {
         out = length(spl[[1]]);
-      }
+    }
     else if (dim(runs)[1]>1)
-      {
+    {
         out = c(runs$start[2:dim(runs)[1]], length(spl[[1]])+1) -
-          c(1, runs$start[2:dim(runs)[1]]);
-      }
+            c(1, runs$start[2:dim(runs)[1]]);
+    }
 
     out
-  }
+}
 
 
 #################
@@ -1251,15 +1321,15 @@ get.field.widths = function(str)
 #' @export
 #################
 write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
-  {
-      if (!is.data.frame(x))
-          x = as.data.frame(x)
+{
+    if (!is.data.frame(x))
+        x = as.data.frame(x)
 
-      write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
-  }
+    write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
+}
 
 footprint = function(gr)
-  cat(prettyNum(sum(as.numeric(width(reduce(gr)))), big.mark = ','), '\n')
+    cat(prettyNum(sum(as.numeric(width(reduce(gr)))), big.mark = ','), '\n')
 
 #' Dump GRanges to GATK file
 #'
@@ -1271,12 +1341,12 @@ footprint = function(gr)
 #' @export
 gr2gatk = function(gr, file, add.chr = F)
 {
-  sn = as.character(seqnames(gr));
-  if (add.chr)
-    sn = paste('chr', sn, sep = '');
+    sn = as.character(seqnames(gr));
+    if (add.chr)
+        sn = paste('chr', sn, sep = '');
 
-  writeLines(paste(sn, ':', start(gr), '-', end(gr), sep = ''), con = file)
-  return(0)
+    writeLines(paste(sn, ':', start(gr), '-', end(gr), sep = ''), con = file)
+    return(0)
 }
 
 #' gstring
@@ -1287,7 +1357,7 @@ gr2gatk = function(gr, file, add.chr = F)
 #' @export
 gstring = function(...)
 {
-  return(unlist(parse.grl(...)))
+    return(unlist(parse.grl(...)))
 }
 
 
@@ -1342,162 +1412,162 @@ gr.peaks = function(gr, field = 'score',
                     AGG.FUN = sum,
                     peel.gr = NULL, ## when peeling will use these segs instead of gr (which can just be a standard granges of scores)
                     score.only = FALSE,
-                          verbose = peel>0)
+                    verbose = peel>0)
 {
 
-        if (!is(gr, 'GRanges'))
-            gr = seg2gr(gr)
+    if (!is(gr, 'GRanges'))
+        gr = seg2gr(gr)
 
-        if (is.null(field))
-            field = 'score'
+    if (is.null(field))
+        field = 'score'
 
-        if (!(field %in% names(values(gr))))
-            values(gr)[, field] = 1
+    if (!(field %in% names(values(gr))))
+        values(gr)[, field] = 1
 
-        if (is.logical(values(gr)[, field]))
-            values(gr)[, field] = as.numeric(values(gr)[, field])
+    if (is.logical(values(gr)[, field]))
+        values(gr)[, field] = as.numeric(values(gr)[, field])
 
-        if (peel>0 & !score.only)
+    if (peel>0 & !score.only)
+    {
+        if (verbose)
+            cat('Peeling\n')
+        out = GRanges()
+
+        if (bootstrap)
+            pbootstrap = pmax(0, pmin(1, pmax(pbootstrap, 1-pbootstrap)))
+
+        ## peel.gr are an over-ride if we have pre-computed the score and only want to match peaks to their supporting segments
+        if (is.null(peel.gr))
+            peel.gr = gr
+
+        for (p in 1:peel)
+        {
+            if (verbose)
+                cat('Peel', p, '\n')
+            if (p == 1)
+                last = gr.peaks(gr, field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
+            else
             {
-                if (verbose)
-                    cat('Peeling\n')
-                out = GRanges()
+                ## only need to recompute peak in region containing any in.peak intervals
+                in.peak = gr.in(gr, peak.hood)
 
-                if (bootstrap)
-                    pbootstrap = pmax(0, pmin(1, pmax(pbootstrap, 1-pbootstrap)))
-
-                ## peel.gr are an over-ride if we have pre-computed the score and only want to match peaks to their supporting segments
-                if (is.null(peel.gr))
-                    peel.gr = gr
-
-                for (p in 1:peel)
-                    {
-                        if (verbose)
-                            cat('Peel', p, '\n')
-                        if (p == 1)
-                            last = gr.peaks(gr, field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
-                        else
-                            {
-                                ## only need to recompute peak in region containing any in.peak intervals
-                                in.peak = gr.in(gr, peak.hood)
-
-                                tmp = NULL
-                                if (any(in.peak))
-                                    tmp = gr.peaks(gr[in.peak, ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
-                                last = grbind(last[!gr.in(last, peak.hood)], tmp)
-                                names(values(last)) = field
-                            }
-
-                        ## these are the regions with the maximum peak value
-                        mix = which(values(last)[, field] == max(values(last)[, field]))
-
-                        ## there can be more than one peaks with the same value
-                        ## and some are related since they are supported by the same gr
-                        ## we group these peaks and define a tmp.peak to span all the peaks that are related
-                        ## to the top peak
-                        ## the peak is the span beteween the first and last interval with the maximum
-                        ## peak value that are connected through at least one segment to the peak value
-
-                        ##
-                        tmp.peak = last[mix]
-
-                        if (length(tmp.peak)>1)
-                            {
-                                tmp.peak.gr = gr[gr.in(gr, tmp.peak)]
-                                ov = gr.findoverlaps(tmp.peak, tmp.peak.gr)
-                                ed = rbind(ov$query.id, ov$subject.id+length(tmp.peak))[1:(length(ov)*2)]
-                                cl = igraph::clusters(igraph::graph(ed), 'weak')$membership
-                                tmp = tmp.peak[cl[1:length(tmp.peak)] %in% cl[1]]
-                                peak = GRanges(seqnames(tmp)[1], IRanges(min(start(tmp)), max(end(tmp))))
-                                values(peak)[, field] = values(tmp.peak)[, field][1]
-                            }
-                        else
-                            peak = tmp.peak
-                        ## tmp.peak is the interval spanning all the top values in this region
-
-                        in.peak1 =  gr.in(peel.gr, gr.start(peak))
-                        in.peak2 = gr.in(peel.gr, gr.end(peak))
-                        in.peak = in.peak1 | in.peak2
-
-                        ## peak.gr are the gr supporting the peak
-                        peak.gr = peel.gr[in.peak1 & in.peak2] ## want to be more strict with segments used for peeling
-                        peak.hood = reduce(peak.gr) ## actual peak will be a subset of this, and we can this in further iterations to limit peak revision
-
-                        in.peak = rep(FALSE, length(gr))
-                        if (bootstrap && length(peak.gr))
-                            {
-                                ## asking across bootstrap smaples how does the intersection fluctuate
-                                ## among segments contributing to the peak
-
-                                if (!is.null(id.field))
-                                    {
-                                      peak.gr = seg2gr(gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
-                                                                             eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
-                                                                      by = eval(id.field)])
-                                      names(values(peak.gr))[ncol(values(peak.gr))] = field ## not sure why I need to do this line, should be done above
-                                    }
-
-                                B = matrix(sample(1:length(peak.gr), nbootstrap * length(peak.gr), prob = abs(values(peak.gr)[, field]), replace = TRUE), ncol = length(peak.gr))
-                                ## bootstrap segment samples
-                                ## the intersection is tha max start and min end among the segments in each
-                                st = apply(matrix(start(peak.gr)[B], ncol = length(peak.gr)), 1, max)
-                                en = apply(matrix(end(peak.gr)[B], ncol = length(peak.gr)), 1, min)
-
-                                ## take the left tail of the start position as the left peak boundary
-                                start(peak) = quantile(st, (1-pbootstrap)/2)
-
-                                ## and the right tail of the end position as the right peak boundary
-                                end(peak) = quantile(en, pbootstrap + (1-pbootstrap)/2)
-
-                                in.peak =  gr.in(gr, peak)
-                            }
-                        gr = gr[!in.peak]
-                        peak$peeled = TRUE
-                        out = c(out, peak)
-                        if (length(gr)==0)
-                            return(out)
-                    }
-                last$peeled = FALSE
-                return(c(out, last[-mix]))
+                tmp = NULL
+                if (any(in.peak))
+                    tmp = gr.peaks(gr[in.peak, ], field, minima, peel = 0, FUN = FUN, AGG.FUN = AGG.FUN, id.field = id.field)
+                last = grbind(last[!gr.in(last, peak.hood)], tmp)
+                names(values(last)) = field
             }
 
-        if (na.rm)
-            if (any(na <- is.na(values(gr)[, field])))
-                gr = gr[!na]
+            ## these are the regions with the maximum peak value
+            mix = which(values(last)[, field] == max(values(last)[, field]))
 
-        if (!is.null(FUN))
+            ## there can be more than one peaks with the same value
+            ## and some are related since they are supported by the same gr
+            ## we group these peaks and define a tmp.peak to span all the peaks that are related
+            ## to the top peak
+            ## the peak is the span beteween the first and last interval with the maximum
+            ## peak value that are connected through at least one segment to the peak value
+
+            ##
+            tmp.peak = last[mix]
+
+            if (length(tmp.peak)>1)
             {
-                agr = GenomicRanges::disjoin(gr)
-                values(agr)[, field] = NA
-                tmp.mat = cbind(as.matrix(values(gr.val(agr[, c()], gr, field, weighted = FALSE, verbose = verbose, by = id.field, FUN = FUN, default.val = 0))))
-                values(agr)[, field] = apply(tmp.mat, 1, AGG.FUN)
-                gr = agr
+                tmp.peak.gr = gr[gr.in(gr, tmp.peak)]
+                ov = gr.findoverlaps(tmp.peak, tmp.peak.gr)
+                ed = rbind(ov$query.id, ov$subject.id+length(tmp.peak))[1:(length(ov)*2)]
+                cl = igraph::clusters(igraph::graph(ed), 'weak')$membership
+                tmp = tmp.peak[cl[1:length(tmp.peak)] %in% cl[1]]
+                peak = GRanges(seqnames(tmp)[1], IRanges(min(start(tmp)), max(end(tmp))))
+                values(peak)[, field] = values(tmp.peak)[, field][1]
             }
+            else
+                peak = tmp.peak
+            ## tmp.peak is the interval spanning all the top values in this region
 
-        cov = as(GenomicRanges::coverage(gr, weight = values(gr)[, field]), 'GRanges')
+            in.peak1 =  gr.in(peel.gr, gr.start(peak))
+            in.peak2 = gr.in(peel.gr, gr.end(peak))
+            in.peak = in.peak1 | in.peak2
 
-        if (score.only)
-            return(cov)
+            ## peak.gr are the gr supporting the peak
+            peak.gr = peel.gr[in.peak1 & in.peak2] ## want to be more strict with segments used for peeling
+            peak.hood = reduce(peak.gr) ## actual peak will be a subset of this, and we can this in further iterations to limit peak revision
 
-        dcov = diff(cov$score)
-        dchrom = diff(as.integer(seqnames(cov)))
+            in.peak = rep(FALSE, length(gr))
+            if (bootstrap && length(peak.gr))
+            {
+                ## asking across bootstrap smaples how does the intersection fluctuate
+                ## among segments contributing to the peak
 
-        if (minima)
-            peak.ix = (c(0, dcov) < 0 & c(0, dchrom)==0) & (c(dcov, 0) > 0 & c(dchrom, 0)==0)
-        else
-            peak.ix = (c(0, dcov) > 0 & c(0, dchrom)==0) & (c(dcov, 0) < 0 & c(dchrom, 0)==0)
+                if (!is.null(id.field))
+                {
+                    peak.gr = seg2gr(gr2dt(peak.gr)[, list(seqnames = seqnames[1], start = min(start),
+                                                           eval(parse(text = paste(field, '= sum(', field, '*(end-start))/sum(end-start)'))),end = max(end)),
+                                                    by = eval(id.field)])
+                    names(values(peak.gr))[ncol(values(peak.gr))] = field ## not sure why I need to do this line, should be done above
+                }
 
-        out = cov[which(peak.ix)]
+                B = matrix(sample(1:length(peak.gr), nbootstrap * length(peak.gr), prob = abs(values(peak.gr)[, field]), replace = TRUE), ncol = length(peak.gr))
+                ## bootstrap segment samples
+                ## the intersection is tha max start and min end among the segments in each
+                st = apply(matrix(start(peak.gr)[B], ncol = length(peak.gr)), 1, max)
+                en = apply(matrix(end(peak.gr)[B], ncol = length(peak.gr)), 1, min)
 
-        if (minima)
-            out = out[order(out$score)]
-        else
-            out = out[order(-out$score)]
+                ## take the left tail of the start position as the left peak boundary
+                start(peak) = quantile(st, (1-pbootstrap)/2)
 
-        names(values(out))[1] = field
+                ## and the right tail of the end position as the right peak boundary
+                end(peak) = quantile(en, pbootstrap + (1-pbootstrap)/2)
 
-        return(out)
+                in.peak =  gr.in(gr, peak)
+            }
+            gr = gr[!in.peak]
+            peak$peeled = TRUE
+            out = c(out, peak)
+            if (length(gr)==0)
+                return(out)
+        }
+        last$peeled = FALSE
+        return(c(out, last[-mix]))
     }
+
+    if (na.rm)
+        if (any(na <- is.na(values(gr)[, field])))
+            gr = gr[!na]
+
+    if (!is.null(FUN))
+    {
+        agr = GenomicRanges::disjoin(gr)
+        values(agr)[, field] = NA
+        tmp.mat = cbind(as.matrix(values(gr.val(agr[, c()], gr, field, weighted = FALSE, verbose = verbose, by = id.field, FUN = FUN, default.val = 0))))
+        values(agr)[, field] = apply(tmp.mat, 1, AGG.FUN)
+        gr = agr
+    }
+
+    cov = as(GenomicRanges::coverage(gr, weight = values(gr)[, field]), 'GRanges')
+
+    if (score.only)
+        return(cov)
+
+    dcov = diff(cov$score)
+    dchrom = diff(as.integer(seqnames(cov)))
+
+    if (minima)
+        peak.ix = (c(0, dcov) < 0 & c(0, dchrom)==0) & (c(dcov, 0) > 0 & c(dchrom, 0)==0)
+    else
+        peak.ix = (c(0, dcov) > 0 & c(0, dchrom)==0) & (c(dcov, 0) < 0 & c(dchrom, 0)==0)
+
+    out = cov[which(peak.ix)]
+
+    if (minima)
+        out = out[order(out$score)]
+    else
+        out = out[order(-out$score)]
+
+    names(values(out))[1] = field
+
+    return(out)
+}
 
 ############################################
 #' ra_breaks
@@ -1580,15 +1650,15 @@ ra_breaks = function(rafile,
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-          
-          require(VariantAnnotation)
-          vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
-          ## vgr = rowData(vcf) ## parse BND format
-          vgr = skidb::read_vcf(rafile, swap.header = swap.header, geno=geno)
-          if (!is.null(info(vcf)$SCTG))
-            vgr$SCTG = info(vcf)$SCTG
-          
-          return(vgr2ra(vgr, force.bnd = force.bnd, get.loose = get.loose))
+            
+            require(VariantAnnotation)
+            vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+            ## vgr = rowData(vcf) ## parse BND format
+            vgr = skidb::read_vcf(rafile, swap.header = swap.header, geno=geno)
+            if (!is.null(info(vcf)$SCTG))
+                vgr$SCTG = info(vcf)$SCTG
+            
+            return(vgr2ra(vgr, force.bnd = force.bnd, get.loose = get.loose))
         }
         else{
             rafile = read.delim(rafile)
@@ -1689,11 +1759,11 @@ ra_breaks = function(rafile,
         out = split(out, out$ra.index)
     }
     else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
-                         {
-                             ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-                             ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
-                             out = grl.pivot(GRangesList(ra1, ra2))
-                         }
+    {
+        ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+        ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+        out = grl.pivot(GRangesList(ra1, ra2))
+    }
 
 
 
@@ -1718,382 +1788,382 @@ ra_breaks = function(rafile,
 
 vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 {    
-  mc = data.table(as.data.frame(mcols(vgr)))
-  
-  if (!('SVTYPE' %in% colnames(mc))) {
-    warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-    return(GRangesList());
-  }
-  
-  if (any(w.0 <- (width(vgr)<1))){
-    warning("Some breakpoint width==0.")
-    ## right bound smaller coor
-    ## and there's no negative width GR allowed
-    vgr[which(w.0)] = gr.start(vgr[which(w.0)]) %-% 1
-  }
-  
-  ## BND format doesn't have duplicated rownames
-  if (any(duplicated(names(vgr)))) names(vgr) = NULL
-  
-  ## no events
-  if (length(vgr) == 0)
-    return (GRangesList())
-  
-  ## local function that turns old VCF to BND
-  .vcf2bnd = function(vgr){
-    if (!"END" %in% colnames(values(vgr)))
-      stop("Non BND SV should have the second breakpoint coor in END columns!")
+    mc = data.table(as.data.frame(mcols(vgr)))
     
-    if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2)))
-      vgr$CHR2 = as.character(seqnames(vgr))
+    if (!('SVTYPE' %in% colnames(mc))) {
+        warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+        return(GRangesList());
+    }
     
-    bp2 = data.table(as.data.frame(mcols(vgr)))
-    bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
-    bp2.gr = dt2gr(bp2)
-    mcols(bp2.gr) = mcols(vgr)
+    if (any(w.0 <- (width(vgr)<1))){
+        warning("Some breakpoint width==0.")
+        ## right bound smaller coor
+        ## and there's no negative width GR allowed
+        vgr[which(w.0)] = gr.start(vgr[which(w.0)]) %-% 1
+    }
+    
+    ## BND format doesn't have duplicated rownames
+    if (any(duplicated(names(vgr)))) names(vgr) = NULL
+    
+    ## no events
+    if (length(vgr) == 0)
+        return (GRangesList())
+    
+    ## local function that turns old VCF to BND
+    .vcf2bnd = function(vgr){
+        if (!"END" %in% colnames(values(vgr)))
+            stop("Non BND SV should have the second breakpoint coor in END columns!")
+        
+        if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2)))
+            vgr$CHR2 = as.character(seqnames(vgr))
+        
+        bp2 = data.table(as.data.frame(mcols(vgr)))
+        bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
+        bp2.gr = dt2gr(bp2)
+        mcols(bp2.gr) = mcols(vgr)
 
-    if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
-      jid = names(vgr)
-    } else {
-      jid = seq_along(vgr)
+        if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
+            jid = names(vgr)
+        } else {
+            jid = seq_along(vgr)
+        }
+
+        if (length(vgr)==0)
+            return(vgr)
+
+        names(vgr) = paste(paste0("exp", jid), "1", sep=":")
+        names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
+
+        vgr=resize(c(vgr, bp2.gr), 1)
+
+        if (all(grepl("[_:][12]$",names(vgr)))){
+            ## row naming same with Snowman
+            nm <- vgr$MATEID <- names(vgr)
+            ix <- grepl("1$",nm)
+            vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
+            vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
+            vgr$SVTYPE="BND"
+        }
+        return(vgr)
     }
 
-    if (length(vgr)==0)
-      return(vgr)
+    ## TODO: Delly and Novobreak
+    ## fix mateids if not included
+    if (!"MATEID" %in% colnames(mcols(vgr))) {
+        ## TODO: don't assume every row is a different junction
+        ## Novobreak, I'm looking at you.
+        ## now delly...
+        ## if SVTYPE is BND but no MATEID, don't pretend to be
+        if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
+            values(vgr[fake.bix])$SVTYPE = "TRA"
+        }
 
-    names(vgr) = paste(paste0("exp", jid), "1", sep=":")
-    names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
+        ## add row names just like Snowman
+        if (all(names(vgr)=="N" | ## Novobreak
+                is.null(names(vgr)) |
+                all(grepl("^DEL|DUP|INV|BND", names(vgr)))) ## Delly
+            ){
+            ## otherwise if all "N", as Novobreak
+            ## or starts with DEL|DUP|INV|BND, as Delly
+            ## expand and match MATEID
+            vgr=.vcf2bnd(vgr)
+        }
+    } else if (any(is.na(mid <- as.character(vgr$MATEID)))){
+        ## like Lumpy, the BND rows are real BND but blended with non-BND rows
+        ## treat them separately
+        if (is.null(vgr$CHR2)){
+            vgr$CHR2 = as.character(NA)
+        }
 
-    vgr=resize(c(vgr, bp2.gr), 1)
+        names(vgr) = gsub("_", ":", names(vgr))
+        vgr$MATEID = sapply(vgr$MATEID, function(x) gsub("_", ":", x))
 
-    if (all(grepl("[_:][12]$",names(vgr)))){
-      ## row naming same with Snowman
-      nm <- vgr$MATEID <- names(vgr)
-      ix <- grepl("1$",nm)
-      vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
-      vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
-      vgr$SVTYPE="BND"
-    }
-    return(vgr)
-  }
+        values(vgr) = data.table(as.data.frame(values(vgr)))
 
-  ## TODO: Delly and Novobreak
-  ## fix mateids if not included
-  if (!"MATEID" %in% colnames(mcols(vgr))) {
-    ## TODO: don't assume every row is a different junction
-    ## Novobreak, I'm looking at you.
-    ## now delly...
-    ## if SVTYPE is BND but no MATEID, don't pretend to be
-    if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
-      values(vgr[fake.bix])$SVTYPE = "TRA"
-    }
+        ## break up the two junctions in one INV line!
+        if ("STRANDS" %in% colnames(mc) & any(ns <- sapply(vgr$STRANDS, length)>1)){
+            ## first fix format errors, two strand given, but not comma separeted
+            ## so you'd have taken them as single
+            if (any(fuix <- sapply(vgr[which(!ns)]$STRANDS, str_count, ":")>1)){
+                which(!ns)[fuix] -> tofix
+                vgr$STRANDS[tofix] = lapply(vgr$STRANDS[tofix],
+                                            function(x){
+                                                strsplit(gsub("(\\d)([\\+\\-])", "\\1,\\2", x), ",")[[1]]
+                                            })
+                ns[tofix] = TRUE
+            }
 
-    ## add row names just like Snowman
-    if (all(names(vgr)=="N" | ## Novobreak
-            is.null(names(vgr)) |
-            all(grepl("^DEL|DUP|INV|BND", names(vgr)))) ## Delly
-        ){
-      ## otherwise if all "N", as Novobreak
-      ## or starts with DEL|DUP|INV|BND, as Delly
-      ## expand and match MATEID
-      vgr=.vcf2bnd(vgr)
-    }
-  } else if (any(is.na(mid <- as.character(vgr$MATEID)))){
-    ## like Lumpy, the BND rows are real BND but blended with non-BND rows
-    ## treat them separately
-    if (is.null(vgr$CHR2)){
-      vgr$CHR2 = as.character(NA)
-    }
+            ## for the one line two junction cases
+            ## split into two lines
+            vgr.double = vgr[which(ns)]
+            j1 = j2 = vgr.double
+            st1 = lapply(vgr.double$STRANDS, function(x)x[1])
+            st2 = lapply(vgr.double$STRANDS, function(x)x[2])
+            j1$STRANDS = st1
+            j2$STRANDS = st2
+            vgr.double = c(j1, j2)
+            names(vgr.double) = dedup(names(vgr.double))
+            vgr = c(vgr[which(!ns)], vgr.double)
+        }
 
-    names(vgr) = gsub("_", ":", names(vgr))
-    vgr$MATEID = sapply(vgr$MATEID, function(x) gsub("_", ":", x))
+        mid <- as.logical(sapply(vgr$MATEID, length))
+        vgr.bnd = vgr[which(mid)]
+        vgr.nonbnd = vgr[which(!mid)]
 
-    values(vgr) = data.table(as.data.frame(values(vgr)))
+        vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
 
-    ## break up the two junctions in one INV line!
-    if ("STRANDS" %in% colnames(mc) & any(ns <- sapply(vgr$STRANDS, length)>1)){
-      ## first fix format errors, two strand given, but not comma separeted
-      ## so you'd have taken them as single
-      if (any(fuix <- sapply(vgr[which(!ns)]$STRANDS, str_count, ":")>1)){
-        which(!ns)[fuix] -> tofix
-        vgr$STRANDS[tofix] = lapply(vgr$STRANDS[tofix],
-                                    function(x){
-                                      strsplit(gsub("(\\d)([\\+\\-])", "\\1,\\2", x), ",")[[1]]
-                                    })
-        ns[tofix] = TRUE
-      }
+        mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
+        mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
+        mc.bnd$MATEID = as.character(mc.bnd$MATEID)
 
-      ## for the one line two junction cases
-      ## split into two lines
-      vgr.double = vgr[which(ns)]
-      j1 = j2 = vgr.double
-      st1 = lapply(vgr.double$STRANDS, function(x)x[1])
-      st2 = lapply(vgr.double$STRANDS, function(x)x[2])
-      j1$STRANDS = st1
-      j2$STRANDS = st2
-      vgr.double = c(j1, j2)
-      names(vgr.double) = dedup(names(vgr.double))
-      vgr = c(vgr[which(!ns)], vgr.double)
+        vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
+        values(vgr) = rbind(mc.bnd, mc.nonbnd)
     }
 
-    mid <- as.logical(sapply(vgr$MATEID, length))
-    vgr.bnd = vgr[which(mid)]
-    vgr.nonbnd = vgr[which(!mid)]
+    ## sanity check
+    if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
+        stop("MATEID or SVTYPE not included. Required")
 
-    vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
+    vgr$mateid = vgr$MATEID
+    ## what's this???
+    vgr$svtype = vgr$SVTYPE
 
-    mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
-    mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
-    mc.bnd$MATEID = as.character(mc.bnd$MATEID)
+    if (force.bnd)
+        vgr$svtype = "BND"
 
-    vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
-    values(vgr) = rbind(mc.bnd, mc.nonbnd)
-  }
-
-  ## sanity check
-  if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
-    stop("MATEID or SVTYPE not included. Required")
-
-  vgr$mateid = vgr$MATEID
-  ## what's this???
-  vgr$svtype = vgr$SVTYPE
-
-  if (force.bnd)
-    vgr$svtype = "BND"
-
-  if (any(is.na(names(vgr))))
-  {
-    stop('vgr names not provided, input likely malformed')
-  }
-
-  if (any(is.na(vgr$svtype)))
-  {
-    warning('rearrangements found with NA SVTYPE will assume BND for these')
-    vgr$svtype[is.na(vgr$svtype)] = 'BND'
-  }
-
-  if (sum(vgr$svtype == 'BND')==0)
-    warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
-
-  if (!all(vgr$svtype == 'BND')){
-    warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
-                    sum(vgr$svtype != 'BND')))
-
-  }
-
-  bix = which(vgr$svtype == "BND")
-  vgr = vgr[bix]
-  alt <- sapply(vgr$ALT, function(x) x[1])
-
-  ## Determine each junction's orientation
-  if ("CT" %in% colnames(mcols(vgr))){
-    message("CT INFO field found.")
-    if ("SVLEN" %in% colnames(values(vgr))){
-      ## proceed as Novobreak
-      ## ALERT: overwrite its orientation!!!!
-      del.ix = which(vgr$SVTYPE=="DEL")
-      dup.ix = which(vgr$SVTYPE=="DUP")
-      vgr$CT[del.ix] = "3to5"
-      vgr$CT[dup.ix] = "5to3"
-    }
-
-    ## also, Delly is like this
-    ori = strsplit(vgr$CT, "to")
-    iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
-    orimap = setNames(c("+", "-"), c("5", "3"))
-    strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
-    strand(vgr) = strd
-    vgr.pair1 = vgr[which(iid==1)]
-    vgr.pair2 = vgr[which(iid==2)]
-  }
-  else if ("STRANDS" %in% colnames(mcols(vgr))){
-    ## TODO!!!!!!!!!!!!!!!
-    ## sort by name, record bp1 or bp2
-    message("STRANDS INFO field found.")
-    iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
-    vgr$iid = iid
-    vgr = vgr[order(names(vgr))]
-    iid = vgr$iid
-
-    ## get orientations
-    ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
-    orimap = setNames(c("+", "-"), c("-", "+"))
-
-    ## map strands
-    strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
-    strand(vgr) = strd
-
-    vgr.pair1 = vgr[which(iid==1)]
-    vgr.pair2 = vgr[which(iid==2)]
-  }
-  else if (any(grepl("[\\|[\\]]", alt, perl = TRUE))){
-    message("ALT field format like BND")
-    ## proceed as Snowman
-    vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
-    vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-    vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
-    vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
-    vgr$mcoord = gsub('chr', '', vgr$mcoord)
-
-    ## add extra genotype fields to vgr
-    if (all(is.na(vgr$mateid)))
-      if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-      {
-        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-      }
-      else if (!is.null(vgr$SCTG))
+    if (any(is.na(names(vgr))))
     {
-      warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-      require(igraph)
-      ucoord = unique(c(vgr$coord, vgr$mcoord))
-      vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-
-      if (any(duplicated(vgr$mateid)))
-      {
-        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-        bix = bix[!duplicated(vgr$mateid)]
-        vgr = vgr[!duplicated(vgr$mateid)]
-      }
-    }
-      else{
-      stop('Error: MATEID tag missing')
+        stop('vgr names not provided, input likely malformed')
     }
 
-    vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
-
-    pix = which(!is.na(vgr$mix))
-
-    vgr.pair = vgr[pix]
-
-    if (length(vgr.pair)==0){
-      stop('Error: No mates found despite nonzero number of BND rows in VCF')
-    }
-
-    vgr.pair$mix = match(vgr.pair$mix, pix)
-
-    vix = which(1:length(vgr.pair)<vgr.pair$mix)
-    vgr.pair1 = vgr.pair[vix]
-    vgr.pair2 = vgr.pair[vgr.pair1$mix]
-
-    ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
-
-    ## if "first" and "right" then we set this entry "-" and the second entry "+"
-    tmpix = vgr.pair1$first & vgr.pair1$right
-    if (any(tmpix))
+    if (any(is.na(vgr$svtype)))
     {
-      strand(vgr.pair1)[tmpix] = '-'
-      strand(vgr.pair2)[tmpix] = '+'
+        warning('rearrangements found with NA SVTYPE will assume BND for these')
+        vgr$svtype[is.na(vgr$svtype)] = 'BND'
     }
 
-    ## if "first" and "left" then "-", "-"
-    tmpix = vgr.pair1$first & !vgr.pair1$right
-    if (any(tmpix))
-    {
-      strand(vgr.pair1)[tmpix] = '-'
-      strand(vgr.pair2)[tmpix] = '-'
+    if (sum(vgr$svtype == 'BND')==0)
+        warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+
+    if (!all(vgr$svtype == 'BND')){
+        warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
+                        sum(vgr$svtype != 'BND')))
+
     }
 
-    ## if "second" and "left" then "+", "-"
-    tmpix = !vgr.pair1$first & !vgr.pair1$right
-    if (any(tmpix))
-    {
-      strand(vgr.pair1)[tmpix] = '+'
-      strand(vgr.pair2)[tmpix] = '-'
+    bix = which(vgr$svtype == "BND")
+    vgr = vgr[bix]
+    alt <- sapply(vgr$ALT, function(x) x[1])
+
+    ## Determine each junction's orientation
+    if ("CT" %in% colnames(mcols(vgr))){
+        message("CT INFO field found.")
+        if ("SVLEN" %in% colnames(values(vgr))){
+            ## proceed as Novobreak
+            ## ALERT: overwrite its orientation!!!!
+            del.ix = which(vgr$SVTYPE=="DEL")
+            dup.ix = which(vgr$SVTYPE=="DUP")
+            vgr$CT[del.ix] = "3to5"
+            vgr$CT[dup.ix] = "5to3"
+        }
+
+        ## also, Delly is like this
+        ori = strsplit(vgr$CT, "to")
+        iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+        orimap = setNames(c("+", "-"), c("5", "3"))
+        strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+        strand(vgr) = strd
+        vgr.pair1 = vgr[which(iid==1)]
+        vgr.pair2 = vgr[which(iid==2)]
+    }
+    else if ("STRANDS" %in% colnames(mcols(vgr))){
+        ## TODO!!!!!!!!!!!!!!!
+        ## sort by name, record bp1 or bp2
+        message("STRANDS INFO field found.")
+        iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+        vgr$iid = iid
+        vgr = vgr[order(names(vgr))]
+        iid = vgr$iid
+
+        ## get orientations
+        ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
+        orimap = setNames(c("+", "-"), c("-", "+"))
+
+        ## map strands
+        strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+        strand(vgr) = strd
+
+        vgr.pair1 = vgr[which(iid==1)]
+        vgr.pair2 = vgr[which(iid==2)]
+    }
+    else if (any(grepl("[\\|[\\]]", alt, perl = TRUE))){
+        message("ALT field format like BND")
+        ## proceed as Snowman
+        vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
+        vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
+        vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+        vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
+        vgr$mcoord = gsub('chr', '', vgr$mcoord)
+
+        ## add extra genotype fields to vgr
+        if (all(is.na(vgr$mateid)))
+            if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+            {
+                warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+            }
+            else if (!is.null(vgr$SCTG))
+            {
+                warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                require(igraph)
+                ucoord = unique(c(vgr$coord, vgr$mcoord))
+                vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+
+                if (any(duplicated(vgr$mateid)))
+                {
+                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                    bix = bix[!duplicated(vgr$mateid)]
+                    vgr = vgr[!duplicated(vgr$mateid)]
+                }
+            }
+            else{
+                stop('Error: MATEID tag missing')
+            }
+
+        vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
+
+        pix = which(!is.na(vgr$mix))
+
+        vgr.pair = vgr[pix]
+
+        if (length(vgr.pair)==0){
+            stop('Error: No mates found despite nonzero number of BND rows in VCF')
+        }
+
+        vgr.pair$mix = match(vgr.pair$mix, pix)
+
+        vix = which(1:length(vgr.pair)<vgr.pair$mix)
+        vgr.pair1 = vgr.pair[vix]
+        vgr.pair2 = vgr.pair[vgr.pair1$mix]
+
+        ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
+
+        ## if "first" and "right" then we set this entry "-" and the second entry "+"
+        tmpix = vgr.pair1$first & vgr.pair1$right
+        if (any(tmpix))
+        {
+            strand(vgr.pair1)[tmpix] = '-'
+            strand(vgr.pair2)[tmpix] = '+'
+        }
+
+        ## if "first" and "left" then "-", "-"
+        tmpix = vgr.pair1$first & !vgr.pair1$right
+        if (any(tmpix))
+        {
+            strand(vgr.pair1)[tmpix] = '-'
+            strand(vgr.pair2)[tmpix] = '-'
+        }
+
+        ## if "second" and "left" then "+", "-"
+        tmpix = !vgr.pair1$first & !vgr.pair1$right
+        if (any(tmpix))
+        {
+            strand(vgr.pair1)[tmpix] = '+'
+            strand(vgr.pair2)[tmpix] = '-'
+        }
+
+        ## if "second" and "right" then "+", "+"
+        tmpix = !vgr.pair1$first & vgr.pair1$right
+        if (any(tmpix))
+        {
+            strand(vgr.pair1)[tmpix] = '+'
+            strand(vgr.pair2)[tmpix] = '+'
+        }
+
+        pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+        if (any(pos1))
+        {
+            start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
+            end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
+        }
+
+        pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+        if (any(pos2))
+        {
+            start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
+            end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
+        }
     }
 
-    ## if "second" and "right" then "+", "+"
-    tmpix = !vgr.pair1$first & vgr.pair1$right
-    if (any(tmpix))
-    {
-      strand(vgr.pair1)[tmpix] = '+'
-      strand(vgr.pair2)[tmpix] = '+'
+    ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
+
+    ## ALERT: vgr has already been subsetted to only include BND rows
+    ## bix is the original indices, so NOT compatible!
+    ## this.inf = values(vgr)[bix[pix[vix]], ]
+    if (exists("pix") & exists("vix")) this.inf = values(vgr)[pix[vix], ]
+    if (exists("iid")) this.inf = values(vgr[which(iid==1)])
+
+    if (is.null(this.inf$POS)){
+        this.inf = cbind(data.frame(POS = ''), this.inf)
+    }
+    if (is.null(this.inf$CHROM)){
+        this.inf = cbind(data.frame(CHROM = ''), this.inf)
     }
 
-    pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-    if (any(pos1))
-    {
-      start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
-      end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
+    if (is.null(this.inf$MATL)){
+        this.inf = cbind(data.frame(MALT = ''), this.inf)
     }
 
-    pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-    if (any(pos2))
-    {
-      start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
-      end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
-    }
-  }
-
-  ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
-
-  ## ALERT: vgr has already been subsetted to only include BND rows
-  ## bix is the original indices, so NOT compatible!
-  ## this.inf = values(vgr)[bix[pix[vix]], ]
-  if (exists("pix") & exists("vix")) this.inf = values(vgr)[pix[vix], ]
-  if (exists("iid")) this.inf = values(vgr[which(iid==1)])
-
-  if (is.null(this.inf$POS)){
-    this.inf = cbind(data.frame(POS = ''), this.inf)
-  }
-  if (is.null(this.inf$CHROM)){
-    this.inf = cbind(data.frame(CHROM = ''), this.inf)
-  }
-
-  if (is.null(this.inf$MATL)){
-    this.inf = cbind(data.frame(MALT = ''), this.inf)
-  }
-
-  this.inf$CHROM = seqnames(vgr.pair1)
-  this.inf$POS = start(vgr.pair1)
-  this.inf$MATECHROM = seqnames(vgr.pair2)
-  this.inf$MATEPOS = start(vgr.pair2)
-  this.inf$MALT = vgr.pair2$AL
-
-  ## NOT SURE WHY BROKEN
-  ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
-  ## if (!is.null(tmp))
-  ##     values(ra) = tmp
-  ## else
-  ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
-
-  values(ra) = this.inf
-
-  if (is.null(values(ra)$TIER)){
-    ## baseline tiering of PASS vs non PASS variants
-    ## ALERT: mind the naming convention by diff programs
-    ## TODO: make sure it is compatible with Delly, Novobreak, Meerkat
-    ## Snowman/SvABA uses "PASS"
-    ## Lumpy/Speedseq uses "."
-    values(ra)$tier = ifelse(values(ra)$FILTER %in% c(".", "PASS"), 2, 3)
-  }
-  else {
-    values(ra)$tier = values(ra)$TIER
-  }
-
-  ra = ra.dedup(ra)
-
-  if (!get.loose | is.null(vgr$mix)){
-    return(ra)
-  }
-  else
-  {
-    npix = is.na(vgr$mix)
-    vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
+    this.inf$CHROM = seqnames(vgr.pair1)
+    this.inf$POS = start(vgr.pair1)
+    this.inf$MATECHROM = seqnames(vgr.pair2)
+    this.inf$MATEPOS = start(vgr.pair2)
+    this.inf$MALT = vgr.pair2$AL
 
     ## NOT SURE WHY BROKEN
-    tmp =  tryCatch( values(vgr)[bix[npix], ],
-                    error = function(e) NULL)
-    if (!is.null(tmp)){
-      values(vgr.loose) = tmp
+    ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
+    ## if (!is.null(tmp))
+    ##     values(ra) = tmp
+    ## else
+    ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
+
+    values(ra) = this.inf
+
+    if (is.null(values(ra)$TIER)){
+        ## baseline tiering of PASS vs non PASS variants
+        ## ALERT: mind the naming convention by diff programs
+        ## TODO: make sure it is compatible with Delly, Novobreak, Meerkat
+        ## Snowman/SvABA uses "PASS"
+        ## Lumpy/Speedseq uses "."
+        values(ra)$tier = ifelse(values(ra)$FILTER %in% c(".", "PASS"), 2, 3)
     }
-    else{
-      values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+    else {
+        values(ra)$tier = values(ra)$TIER
     }
 
-    return(list(junctions = ra, loose.ends = vgr.loose))
-  }
+    ra = ra.dedup(ra)
+
+    if (!get.loose | is.null(vgr$mix)){
+        return(ra)
+    }
+    else
+    {
+        npix = is.na(vgr$mix)
+        vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
+
+        ## NOT SURE WHY BROKEN
+        tmp =  tryCatch( values(vgr)[bix[npix], ],
+                        error = function(e) NULL)
+        if (!is.null(tmp)){
+            values(vgr.loose) = tmp
+        }
+        else{
+            values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+        }
+
+        return(list(junctions = ra, loose.ends = vgr.loose))
+    }
 }
 
 #' @name score.walks
@@ -2114,99 +2184,99 @@ vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 #' @author Marcin Imielinski
 score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, rthresh = 4, thresh = 1e5, pad = 1e4, raw = FALSE, allpaths = TRUE, verbose = TRUE)
 {
-  shift = data.table::shift
-  rowSums = Matrix::rowSums
-  colSums = Matrix::colSums
-  if (is.null(wins))
-  {
-
-    tmp = unique(disjoin(gr.stripstrand(unlist(wks))))
-    wins = sort(disjoin(c(gr.start(tmp, pad), gr.end(tmp, pad))))
-    strand(wins) = '+'
-  }
-
-  ## add 1 unit of "padding" to any cyclic walks to adequately measure
-  cyc.ix = values(wks)$is.cyc
-
-  if (any(cyc.ix))
-    wks[cyc.ix] = do.call(GRangesList, lapply(which(cyc.ix), function(x) c(wks[[x]], wks[[x]])))
-
-
-  THRESH = thresh
-
-  if (!is.null(win))
-    wins = wins[gr.in(wins, win)]
-
-  if (verbose)
-    message('Total territory to analyze is ', round(sum(as.numeric(width(wins)))/1e6,2), 'MB')
-
-  if (sum(as.numeric(width(wins)))/1e6==0)
-    stop('No walk areas intersect with provided win')
-
-  reads.dt = NULL;
-  if (!is.null(bam))
-  {
-    if (verbose)
-      message('Pulling out reads')
-
-    reads = dt2gr(read.bam(bam, streduce(wins), tag = 'BX', as.data.table = TRUE))
-  }
-
-  if (!inherits(reads, 'GRanges'))
-    reads = dt2gr(reads)
-
-
-  if (verbose)
-    message("Computing insert size distro for ", length(reads), " reads")
-
-  reads = reads[!is.na(reads$BX), ]
-  reads.dt = as.data.table(reads)
-
-  ## rthresh is reads per barcode filter
-  ## i.e. remove all barcodes with fewer than rthresh reads per barcode
-  if (!is.na(rthresh))
+    shift = data.table::shift
+    rowSums = Matrix::rowSums
+    colSums = Matrix::colSums
+    if (is.null(wins))
     {
-      keep.bx = reads.dt[, length(start), keyby = "BX"][V1>=rthresh, BX]
-      reads.dt = reads.dt[BX %in% keep.bx, ]
+
+        tmp = unique(disjoin(gr.stripstrand(unlist(wks))))
+        wins = sort(disjoin(c(gr.start(tmp, pad), gr.end(tmp, pad))))
+        strand(wins) = '+'
     }
-  bxlev = unique(reads$BX)
 
-  zthresh = 3
+    ## add 1 unit of "padding" to any cyclic walks to adequately measure
+    cyc.ix = values(wks)$is.cyc
 
-  reads.dt[, sn:= as.integer(seqnames)]
-  reads.dt[, str := strand == '+']
+    if (any(cyc.ix))
+        wks[cyc.ix] = do.call(GRangesList, lapply(which(cyc.ix), function(x) c(wks[[x]], wks[[x]])))
 
-  ## nullify isize for discordant pairs
-  if (verbose)
-    message("Identifying discordant pairs")
 
-  reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
-  reads.dt[, both := any(R1) & any(!R1), by = qname]
-  reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
-                              first.strand.pos = str[1],
-                              other.strand.pos = any(str[R1!=R1[1]])
-                              ), by = qname]
+    THRESH = thresh
 
-  reads.dt[first.strand.pos & !other.strand.pos & !sn.diff, insert.size := max(end[R1!=R1[1]])-start[1], by = qname]
+    if (!is.null(win))
+        wins = wins[gr.in(wins, win)]
 
-  #reads.dt[, insert.sizez := scale(insert.size)]
-  ithresh.high = quantile(reads.dt$insert.size, 0.99, na.rm = TRUE)
-  ithresh.low = quantile(reads.dt$insert.size, 0.80, na.rm = TRUE)
-  reads.dt[, count := length(start), by = qname]
-  reads.dt[both == TRUE, discordant := insert.size > ithresh.high]
-  init.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
+    if (verbose)
+        message('Total territory to analyze is ', round(sum(as.numeric(width(wins)))/1e6,2), 'MB')
+
+    if (sum(as.numeric(width(wins)))/1e6==0)
+        stop('No walk areas intersect with provided win')
+
+    reads.dt = NULL;
+    if (!is.null(bam))
+    {
+        if (verbose)
+            message('Pulling out reads')
+
+        reads = dt2gr(read.bam(bam, streduce(wins), tag = 'BX', as.data.table = TRUE))
+    }
+
+    if (!inherits(reads, 'GRanges'))
+        reads = dt2gr(reads)
+
+
+    if (verbose)
+        message("Computing insert size distro for ", length(reads), " reads")
+
+    reads = reads[!is.na(reads$BX), ]
+    reads.dt = as.data.table(reads)
+
+    ## rthresh is reads per barcode filter
+    ## i.e. remove all barcodes with fewer than rthresh reads per barcode
+    if (!is.na(rthresh))
+    {
+        keep.bx = reads.dt[, length(start), keyby = "BX"][V1>=rthresh, BX]
+        reads.dt = reads.dt[BX %in% keep.bx, ]
+    }
+    bxlev = unique(reads$BX)
+
+    zthresh = 3
+
+    reads.dt[, sn:= as.integer(seqnames)]
+    reads.dt[, str := strand == '+']
+
+    ## nullify isize for discordant pairs
+    if (verbose)
+        message("Identifying discordant pairs")
+
+    reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
+    reads.dt[, both := any(R1) & any(!R1), by = qname]
+    reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
+                                first.strand.pos = str[1],
+                                other.strand.pos = any(str[R1!=R1[1]])
+                                ), by = qname]
+
+    reads.dt[first.strand.pos & !other.strand.pos & !sn.diff, insert.size := max(end[R1!=R1[1]])-start[1], by = qname]
+
+                                        #reads.dt[, insert.sizez := scale(insert.size)]
+    ithresh.high = quantile(reads.dt$insert.size, 0.99, na.rm = TRUE)
+    ithresh.low = quantile(reads.dt$insert.size, 0.80, na.rm = TRUE)
+    reads.dt[, count := length(start), by = qname]
+    reads.dt[both == TRUE, discordant := insert.size > ithresh.high]
+    init.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
 
                                         #      ithresh.high = reads.dt[insert.sizez>zthresh, min(insert.size)]
 
 
-  ## filter "short dup" read pairs from  discordants (- to the left of + read ...)
-  ## which seems to be artifact mode in 10X data
-  ## (i.e. no longer call them discordant)
-  dthresh = 1e4
-  reads.dt[discordant == TRUE, ddist := abs(end-mpos)]
-  reads.dt[discordant == TRUE & ddist<dthresh & sn.diff == 0 & !first.strand.pos & other.strand.pos, discordant := NA]
+    ## filter "short dup" read pairs from  discordants (- to the left of + read ...)
+    ## which seems to be artifact mode in 10X data
+    ## (i.e. no longer call them discordant)
+    dthresh = 1e4
+    reads.dt[discordant == TRUE, ddist := abs(end-mpos)]
+    reads.dt[discordant == TRUE & ddist<dthresh & sn.diff == 0 & !first.strand.pos & other.strand.pos, discordant := NA]
 
-  if (verbose)
+    if (verbose)
   {
     final.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
     message('Found ', final.disc, ' discordant pairs after removing ', init.disc - final.disc, ' small dup-like pairs')
@@ -3126,8 +3196,9 @@ is.dup = function(x)
 #' @export
 install.packages.bioc = function(pkg)
   {
-    source('http://bioconductor.org/biocLite.R')
-    sapply(pkg, biocLite)
+##    source('http://bioconductor.org/biocLite.R')
+    ##    sapply(pkg, biocLite)
+    BiocManager::install(pkg)
   }
 
 ##########################
@@ -3649,7 +3720,7 @@ brewer.master = function(n, palette = NULL, wes = FALSE,  list = FALSE)
     palette = names(palettes)[1]
 
   nms = NULL
-    if (is.character(n))
+    if (is.character(n) | is.factor(n))
     {
         nms = unique(n)
         n = length(nms)
@@ -4315,14 +4386,20 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 #' @author Marcin Imielinski9
 #' @export
 #############################################################
-dunlist = function(x)
+dunlist = function (x) 
 {
-  if (is.null(names(x)))
-    names(x) = 1:length(x)
-  tmp = lapply(x, as.data.table)  
-  out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
-  setkey(out, listid)
-  return(out)
+    listid = rep(1:length(x), elementNROWS(x))
+    if (!is.null(names(x))) 
+        listid = names(x)[listid]
+    xu = unlist(x, use.names = FALSE)
+    if (is.null(xu)) {
+        return(as.data.table(list(listid = c(), V1 = c())))
+    }
+    if (!(inherits(xu, "data.frame")) | inherits(xu, "data.table")) 
+        xu = data.table(V1 = xu)
+    out = cbind(data.table(listid = listid), xu)
+    setkey(out, listid)
+    return(out)
 }
 
 
@@ -9488,8 +9565,11 @@ ddd = function(x)
 relib = function(lib = 'Flow')
     {
         if (sprintf("package:%s", lib) %in% search())
-            {
-                txt = sprintf("detach('package:%s', force = TRUE)", lib)
+        {
+                txt = sprintf("unload('%s')", lib)
+                eval(parse(text = txt))
+
+                txt = sprintf("muffle(detach('package:%s', force = TRUE))", lib)
                 eval(parse(text = txt))
             }
         txt = sprintf("library(%s)", lib)
@@ -9525,572 +9605,6 @@ queues = function()
         close(p)
         return(out)
     }
-
-
-#####################################
-#' @name heatmap.plus
-#' @title heatmap.plus
-#' @description
-#'
-#' Additional features:
-#'    allows several label tracks on top, bottom, left, and right, with separate top and bottom legend frames tohouse each
-#'    allows use of coloredData in tracks
-#'
-#' @export
-###################################
-heatmap.plus = function (x, Rowv = NULL, Colv = if (symm) "Rowv" else NULL,
-  bar = FALSE, ## if TRUE will draw barplot for central panel instead of heatmap
-  show.rdend = TRUE, # show row dendogram flag
-  show.cdend = TRUE,  # show column dendrogram flag
-  # these next four args can be coloredData or list of coloredData with category labels
-  # for each column / row data point.  If named will be indexed by corresponding row/column names in X
-  # otherwise they will be indexed in order.  These args can alternatively can be vector or list of vectors (which
-  # will be mapped to default colormaps)
-  topColAttr = NULL, # see above
-  bottomColAttr = NULL, # ...
-  leftRowAttr = NULL, # ...
-  rightRowAttr = NULL, # ...
-  leg.args = NULL,  ## legend will be populated by color mappings from coloredData and additional args (excluding position) here
-  dim.heatmap = c(4, 4), ## use this to make heatmap tall or fat (instead of margins arg)
-  distfun = dist, hclustfun = hclust,
-  reorderfun = function(d, w) reorder(d, w),
-  add.expr,
-  symm = FALSE,
-  revC = identical(Colv, "Rowv"), scale = c("row", "column", "none"), na.rm = TRUE,
-  margins = c(1, 1),
-  cexRow = 0.2 +  1/log10(nr), cexCol = 0.2 + 1/log10(nc), labRow = NULL,
-  add.grid = F,
-  col.grid = 'gray',
-  lwd.grid = 1,
-  size.legend.panel = 0.4,
-  size.feature.panel = 0.2,
-  col = topo.colors(100),
-  optimal.leaf = T,
-  return.clust = F,
-  labCol = NULL, main = NULL, xlab = NULL, ylab = NULL, keep.dendro = FALSE, las.col = 2,
-  verbose = getOption("verbose"), ...)
-{
-  require(cba)
-  hcr = hcc = NULL
-
-  ### set up top and bottom color palettes
-  if (!is.null(topColAttr) | !is.null(bottomColAttr) | !is.null(leftRowAttr) | !is.null(rightRowAttr))
-    {
-      require(RColorBrewer)
-
-      brewer.palettes = brewer.pal.info
-      brewer.palettes = brewer.palettes[order(brewer.palettes$category), ]
-
-      if (!is.null(topColAttr) & !is.list(topColAttr))
-        topColAttr = list(topColAttr)
-
-      if (!is.null(bottomColAttr) & !is.list(bottomColAttr))
-        bottomColAttr = list(bottomColAttr)
-
-      if (!is.null(leftRowAttr) & !is.list(leftRowAttr))
-        leftRowAttr = list(leftRowAttr)
-
-      if (!is.null(rightRowAttr) & !is.list(rightRowAttr))
-        rightRowAttr = list(rightRowAttr)
-
-      last.palette = 0;
-
-      .convert.to.cData = function(x) {
-        if (!is.null(x) & class(x) != 'coloredData')
-          {
-            x = as.vector(x);
-            last.palette <<- last.palette + 1;
-            if (is.factor(x))
-              uval = levels(x)
-            else
-              uval = unique(x)
-            cmap = brewer.pal(min(brewer.palettes[last.palette, 'maxcolors'], length(uval)), rownames(brewer.palettes)[last.palette])
-
-            if (length(uval)>length(cmap))
-              {
-                warning('Number of colors exceeded for colormap: duplicate colors will be created. ')
-                cmap = cmap[((1:length(uval))%%length(cmap))+1]  ## we will repeat colors if the number of unique items is larger than the colormap
-              }
-            names(cmap) = uval;
-            return(coloredData(data = x, colormap = cmap))
-          }
-        else
-          return(x)
-      }
-      topColAttr = lapply(topColAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
-      bottomColAttr = lapply(bottomColAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
-      leftRowAttr = lapply(leftRowAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
-      bottomColAttr = lapply(bottomColAttr, .convert.to.cData) ## if any attributes are not already colored data, transform them using coloredData using pre-applied palettes
-    }
-
-  if (!is.null(colnames(x)))
-    colNames = colnames(x)
-  else
-    colNames = 1:ncol(x)
-
-  if (!is.null(rownames(x)))
-    rowNames = rownames(x)
-  else
-    rowNames = 1:nrow(x)
-
-    scale <- if (symm && missing(scale))
-        "none"
-    else match.arg(scale)
-    if (length(di <- dim(x)) != 2 || !is.numeric(x))
-        stop("'x' must be a numeric matrix")
-    nr <- di[1L]
-    nc <- di[2L]
-    if (nr <= 1 || nc <= 1)
-        stop("'x' must have at least 2 rows and 2 columns")
-    if (!is.numeric(margins) || length(margins) != 2L)
-        stop("'margins' must be a numeric vector of length 2")
-    doRdend <- !identical(Rowv, NA)
-    doCdend <- !identical(Colv, NA)
-    if (!doRdend && identical(Colv, "Rowv"))
-        doCdend <- FALSE
-    if (is.null(Rowv))
-        Rowv <- rowMeans(x, na.rm = na.rm)
-    if (is.null(Colv))
-        Colv <- colMeans(x, na.rm = na.rm)
-    if (doRdend) {
-        if (inherits(Rowv, "dendrogram"))
-            ddr <- Rowv
-        else {
-            d = distfun(x);
-            hcr = hclustfun(d);
-
-            if (optimal.leaf) ## MARCIN ADDED
-            {
-              tmp <- order.optimal(d, hcr$merge)
-              hcr$order = tmp$order;
-              hcr$merge = tmp$merge;
-              ddr <- as.dendrogram(hcr)
-            }
-          else
-            {
-              ddr <- as.dendrogram(hcr)
-              if (!is.logical(Rowv) || Rowv)
-                ddr <- reorderfun(ddr, Rowv)
-            }
-        }
-        if (nr != length(rowInd <- order.dendrogram(ddr)))
-            stop("row dendrogram ordering gave index of wrong length")
-    }
-    else rowInd <- 1L:nr
-    if (doCdend) {
-        if (inherits(Colv, "dendrogram"))
-            ddc <- Colv
-        else if (identical(Colv, "Rowv")) {
-            if (nr != nc)
-                stop("Colv = \"Rowv\" but nrow(x) != ncol(x)")
-            ddc <- ddr
-        }
-        else {
-          d = distfun(if (symm) x else t(x));
-          hcc = hclustfun(d);
-
-          if (optimal.leaf) ## MARCIN ADDED
-            {
-              tmp <- order.optimal(d, hcc$merge)
-              hcc$order = tmp$order;
-              hcc$merge = tmp$merge;
-              ddc <- as.dendrogram(hcc)
-            }
-          else
-            {
-              ddc <- as.dendrogram(hcc)
-              if (!is.logical(Colv) || Colv)
-                ddc <- reorderfun(ddc, Colv)
-            }
-        }
-        if (nc != length(colInd <- order.dendrogram(ddc)))
-          stop("column dendrogram ordering gave index of wrong length")
-      }
-    else colInd <- 1L:nc
-    x <- x[rowInd, colInd]
-    labRow <- if (is.null(labRow))
-        if (is.null(rownames(x)))
-            (1L:nr)[rowInd]
-        else rownames(x)
-    else labRow[rowInd]
-    labCol <- if (is.null(labCol))
-        if (is.null(colnames(x)))
-            (1L:nc)[colInd]
-        else colnames(x)
-    else labCol[colInd]
-    if (scale == "row") {
-        x <- sweep(x, 1L, rowMeans(x, na.rm = na.rm), check.margin = FALSE)
-        sx <- apply(x, 1L, sd, na.rm = na.rm)
-        x <- sweep(x, 1L, sx, "/", check.margin = FALSE)
-    }
-    else if (scale == "column") {
-        x <- sweep(x, 2L, colMeans(x, na.rm = na.rm), check.margin = FALSE)
-        sx <- apply(x, 2L, sd, na.rm = na.rm)
-        x <- sweep(x, 2L, sx, "/", check.margin = FALSE)
-    }
-    lmat <- rbind(c(NA, 3), 2:1)
-    lwid <- c(if (doRdend) 1 else 0.05, dim.heatmap[1])
-    lhei <- c((if (doCdend) 1 else 0.05) + if (!is.null(main)) 0.2 else 0,
-        dim.heatmap[2])
-
-  ## COL LABEL LAYOUTS
-  col.panel.height = size.feature.panel;
-  row.panel.width = size.feature.panel;
-  core.panel.ind = c(2,2);
-
-  if (!is.null(topColAttr))  ## add to top
-    lapply(topColAttr, function(x)
-           {
-             lmat <<- rbind(lmat[1, ]+1, c(NA, 1), lmat[2:nrow(lmat), ]+1)
-             lhei <<- c(lhei[1L], col.panel.height, lhei[2:length(lhei)])
-             core.panel.ind[1] <<- core.panel.ind[1]+1
-           })
-
-  if (!is.null(bottomColAttr)) # add to bottom
-    lapply(bottomColAttr, function(x)
-           {
-             lmat <<- rbind(lmat+1, c(NA, 1))
-             lhei <<- c(lhei, col.panel.height)
-           })
-
-  ## ROW LABEL LAYOUTS
-  if (!is.null(leftRowAttr))
-    lapply(leftRowAttr, function(x)
-           {
-             lmat <<- cbind(lmat[, 1] + 1, c(rep(NA, core.panel.ind[1]-1),  1, rep(NA, nrow(lmat)-core.panel.ind[1])), lmat[, 2:ncol(lmat)] + 1)
-             lwid <<- c(lwid[1L], row.panel.width, lwid[2L])
-             core.panel.ind[2] <<- core.panel.ind[2]+1;
-           })
-
-  if (!is.null(rightRowAttr))
-    lapply(rightRowAttr, function(x)
-           {
-             lmat <<- cbind(lmat + 1, c(rep(NA, core.panel.ind[1]-1),  1, rep(NA, nrow(lmat)-core.panel.ind[1])))
-             lwid <<- c(lwid, row.panel.width)
-           })
-
-  ## ADD ROW COL LEGEND PANELS
-
-  # top legend panel
-  new.row = rep(NA, ncol(lmat)); new.row[core.panel.ind[2]] = max(lmat, na.rm = T)+1;
-  core.panel.ind[1] = core.panel.ind[1]+1
-  lhei = c(size.legend.panel, lhei)
-  lmat = rbind(new.row, lmat)
-
-  # bottom legend panel
-  new.row = rep(NA, ncol(lmat)); new.row[core.panel.ind[2]] = max(lmat, na.rm = T)+1;
-  lmat = rbind(lmat, new.row)
-  lhei = c(lhei, size.legend.panel)
-
-  # left legend panel
-  new.col = rep(NA, nrow(lmat)); new.col[core.panel.ind[1]] = max(lmat, na.rm = T)+1;
-  core.panel.ind[2] = core.panel.ind[2]+1
-  lmat = cbind(new.col, lmat)
-  lwid = c(size.legend.panel, lwid)
-
-  # right legend panel
-  new.col = rep(NA, nrow(lmat)); new.col[core.panel.ind[1]] = max(lmat, na.rm = T)+1;
-  lmat = cbind(lmat, new.col)
-  lwid = c(lwid, size.legend.panel)
-
-  lmat[is.na(lmat)] <- 0
-  if (verbose) {
-    cat("layout: widths = ", lwid, ", heights = ", lhei,
-        "; lmat=\n")
-    print(lmat)
-    }
-  op <- par(no.readonly = TRUE)
-  on.exit(par(op))
-
-  ## LAYOUT
-  layout(lmat, widths = lwid, heights = lhei, respect = TRUE)
-
-  if (verbose)
-    print(lmat)
-
-  pad.feature.panel = 0.1
-
-  ## DRAW ROW LABEL PANELS
-  if (!is.null(rowAttr <- c(leftRowAttr, rightRowAttr)))
-    if (length(rowAttr)>0)
-      lapply(rev(rowAttr), function(x)
-             {
-               if (is.null(x)) return
-               par(mar = c(margins[1L]/2, pad.feature.panel, margins[1L]/2, pad.feature.panel))
-               if (is.null(names(getData(x)))) ## we assume attributes are ordered
-                 image(1, 1:nr, z = rbind(1L:nr), col = getColors(x)[rowInd], axes = FALSE, xlab = "", ylab = "")
-               else   ## otherwise will use attribute names to properly order (assuming that data rownames are specified)r
-                 image(1, 1:nr, z = rbind(1L:nr), col = getColors(x)[rowNames[rowInd]], axes = FALSE, xlab = "", ylab = "")
-             })
-
-  ## DRAW COLUMN LABEL PANELS
-  if (!is.null(colAttr <- c(topColAttr, bottomColAttr)))
-    if (length(colAttr)>0)
-      lapply(rev(colAttr), function(x)
-             {
-               if (is.null(x)) return
-               par(mar = c(pad.feature.panel, margins[2L]/2, pad.feature.panel, margins[2L]/2))
-               if (is.null(names(getData(x)))) ## we assume attributes are ordered
-                 image(1:nc, 1, z = cbind(1L:nc), col = getColors(x)[colInd], axes = FALSE, xlab = "", ylab = "")
-               else ## otherwise will use attribute names to properly order (assuming that data colnames are specified)
-                 image(1:nc, 1, z = cbind(1L:nc), col = getColors(x)[colNames[colInd]], axes = FALSE, xlab = "", ylab = "")
-             })
-
-  par(mar = c(margins[1L]/2, margins[2L]/2, margins[1L]/2, margins[2L]/2))
-  if (!symm || scale != "none")
-    x <- t(x)
-  if (revC) {
-    iy <- nr:1
-    if (doRdend)
-      ddr <- rev(ddr)
-    x <- x[, iy]
-  }
-  else iy <- 1L:nr
-
- ## CENTRAL PANEL (heatmap)
-  xlim = 0.5 + c(0, nc);
-  ylim = 0.5 + c(0, nr);
-
-  if (bar)
-    {
-      plot.blank()
-      par(usr = c(0, nc, 0, max(rowSums(x))))
-      barplot(t(x), axes = FALSE, xlab = "", ylab = "", col = col[rowInd], space = 0, names.arg = rep('', nc), add = T)
-
-      if (las.col == 2)
-      axis(1, (1L:nc)-0.5, labels = labCol, las = las.col, line = -0.5, tick = 0, cex.axis = cexCol)
-    else
-      axis(1, (1L:nc)-0.5, labels = labCol, las = las.col, padj = 1, line = -0.5, tick = 0, cex.axis = cexCol)
-
-    }
-  else
-    {
-      image(1L:nc, 1L:nr, x, xlim = xlim, ylim = ylim, axes = FALSE, xlab = "", ylab = "", col = col, ...)
-
-      if (las.col == 2)
-      axis(1, 1L:nc, labels = labCol, las = las.col, line = -0.5, tick = 0, cex.axis = cexCol)
-    else
-      axis(1, 1L:nc, labels = labCol, las = las.col, padj = 1, line = -0.5, tick = 0, cex.axis = cexCol)
-
-    }
-
-  if (add.grid)
-    {
-       segments(-.5 + 1:(nc+1), -.5, -.5 + 1:(nc+1), .5 + nr, col= col.grid, lwd=lwd.grid)
-       segments(-.5, -.5 + 1:(nr+1), .5 + nc, -.5 + 1:(nr+1), col= col.grid, lwd= lwd.grid)
-     }
-
-    if (!is.null(xlab))
-        mtext(xlab, side = 1, line = margins[1L] - 1.25)
-
-
-   axis(4, iy, labels = labRow, las = 2, line = -0.5, tick = 0, cex.axis = cexRow)
-    if (!is.null(ylab))
-        mtext(ylab, side = 4, line = margins[2L] - 1.25)
-    if (!missing(add.expr))
-        eval(substitute(add.expr))
-
-  ## LEFT DENDROGRAM
-  par(mar = c(margins[1L]/2, 0, margins[1L]/2, 0))
-    if (doRdend & show.rdend)
-        plot(ddr, horiz = TRUE, axes = FALSE, yaxs = "i", leaflab = "none")
-    else
-      if (!is.null(rownames(x)))
-        {
-          plot.blank(ylim = ylim, xlim = c(0, 1))
-          text(rep(0.96, length(labRow)), (1:nr), labRow, srt = 0, adj = c(1, 0.5), cex = cexRow)
-        }
-      else
-        frame()
-    par(mar = c(0, 0, if (!is.null(main)) 1 else 0, margins[2L]))
-
-  ## TOP DENDROGRAM
-  par(mar = c(0, margins[2L]/2, 0, margins[2L]/2))
-    if (doCdend & show.cdend)
-        plot(ddc, axes = FALSE, xaxs = "i", leaflab = "none")
-    else
-      if (!is.null(colnames(x)))
-        {
-          plot.blank(xlim = xlim, ylim = c(0, 1))
-          par(usr = c(xlim, 0, 1))
-          text((1:nc), rep(0.04, length(labCol)), labCol, srt = 90, adj = c(0, 0.5), cex = cexCol)
-        }
-      else
-        frame()
-
-    if (!is.null(main)) {
-        par(xpd = NA)
-        title(main, cex.main = 1.5 * op[["cex.main"]])
-    }
-
-  ### LEGENDS
-
-  # set defaults
-  if (is.null(leg.args$y)) leg.args$y = 0.5;
-  if (is.null(leg.args$x)) leg.args$x = 0.5;
-  if (is.null(leg.args$adj)) leg.args$adj = c(0, 0.5);
-  if (is.null(leg.args$xjust)) leg.args$xjust = 0.5;
-  if (is.null(leg.args$yjust)) leg.args$yjust = 0.5;
-
-  ## TOP
-  par(mar = c(1,0,0,0))
-  par(xpd = NA);
-  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
-  if (length(topColAttr)>0)
-    {
-      these.leg.args = lapply(1:length(topColAttr),  function(x) {
-        out = leg.args;
-        out$x = x/(length(topColAttr)+1)
-        out$legend = names(getColormap(topColAttr[[x]]))
-        out$fill = getColormap(topColAttr[[x]])
-        return(out)
-      })
-      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
-    }
-
-  ## BOTTOM
-  par(mar = c(0,0,1,0))
-  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
-  if (length(bottomColAttr)>0)
-    {
-      these.leg.args = lapply(1:length(bottomColAttr),  function(x) {
-        out = leg.args;
-        out$x = x/(length(bottomColAttr)+1)
-        out$legend = names(getColormap(bottomColAttr[[x]]))
-        out$fill = getColormap(bottomColAttr[[x]])
-        return(out)
-      })
-      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
-    }
-
-  ## LEFT
-  par(mar = c(0,0,0,1))
-  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
-  if (length(leftRowAttr)>0)
-    {
-      these.leg.args = lapply(1:length(leftRowAttr),  function(x) {
-        out = leg.args;
-        out$y = x/(length(leftRowAttr)+1)
-        out$legend = names(getColormap(leftRowAttr[[x]]))
-        out$fill = getColormap(leftRowAttr[[x]])
-        return(out)
-      })
-      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
-    }
-
-  ## RIGHT
-  par(mar = c(0,1,0,0))
-  plot(0:1,0:1, type = "n", axes = FALSE, xlab = "", ylab = "")
-  if (length(rightRowAttr)>0)
-    {
-      these.leg.args = lapply(1:length(rightRowAttr),  function(x) {
-        out = leg.args;
-        out$y = x/(length(rightRowAttr)+1)
-        out$legend = names(getColormap(rightRowAttr[[x]]))
-        out$fill = getColormap(rightRowAttr[[x]])
-        return(out)
-      })
-      sapply(these.leg.args, function(x) do.call('legend', x)) ## call all the legends
-    }
-
-  invisible(list(rowInd = rowInd, colInd = colInd, Rowv = if (keep.dendro &&
-                                                     doRdend) ddr, Colv = if (keep.dendro && doCdend) ddc))
-
-  if (return.clust)
-    return(list(row = hcr, col = hcc))
-}
-
-
-#' @name coloredData
-#' @rdname coloredData
-#'
-#' @description
-#' S4 class for data with colors used by heatmap.plus
-#'
-#' simple object with data (e.g. vector or matrix of categorical, real numbers) + a colormap
-#'
-#'  colormap is a (named) vector mapping factor levels / unique values in data into colors,
-#'  or otherwise assigning a color range to numeric data.
-#'
-#' @exportClass coloredData
-#' @author Marcin Imielinski
-setClass('coloredData', representation(data = 'array', colormap = 'vector', type = 'character', data.names = 'character'),
-         prototype(data = matrix(NA), colormap = NA, type = '', data.names = NULL)
-         )
-setMethod('initialize', 'coloredData', function(.Object, data, colormap, upright = T)
-         {
-           .Object = callNextMethod()
-           .Object@type = class(data)
-
-           if (!is.vector(colormap) | !any(!is.na(colormap)))
-             stop('colormap must be a vector with non NA entries')
-
-           .Object@colormap = colormap
-           if (is.vector(data) & !is.list(data))
-             {
-               if (!is.null(names(data)))
-                 .Object@data.names = names(data)
-               if (upright)
-                 data = array(data, dim = c(length(data), 1), dimnames = list(names(data), NULL))
-               else
-                 data = array(data, dim = c(1, length(data)), dimnames = list(NULL, names(data)))
-             }
-           else if (is.matrix(data))
-               data = array(as.vector(data), dim = dim(data), dimnames = dimnames(data))
-           else if (!is.array(data))
-             stop('Only vectors, matrices, and arrays supported')
-           .Object@data = data
-           if (!is.numeric(.Object@data)) {
-             if (is.factor(.Object@data))
-               uval = levels(.Object@data)
-             else if (is.character(.Object@data))
-               uval = unique(.Object@data)
-             else
-               uval = NULL;
-
-             if (!is.null(uval))
-               {
-                 if (is.null(names(.Object@colormap)))
-                   {
-                     ix = 1:min(length(uval), length(.Object@colormap))
-                     names(.Object@colormap)[ix] = uval[ix]
-                   }
-                 if (length(leftover <- setdiff(uval, c(NA, names(.Object@colormap))))>0)
-                   warning(sprintf('The following factors are unmapped in the colormap: %s.', paste(leftover, collapse = ",")))
-               }
-           }
-           .Object
-       })
-
-
-setGeneric('getColormap', function(.Object) standardGeneric('getColormap'))
-setGeneric('getData', function(.Object) standardGeneric('getData'))
-setGeneric('getColors', function(.Object) standardGeneric('getColors'))
-setMethod('getColormap', signature('coloredData'), function(.Object) .Object@colormap)
-setMethod('getColors', signature('coloredData'), function(.Object)
-          {
-            dat = getData(.Object);
-            cmap = getColormap(.Object);
-            dat[1:length(dat)] = cmap[dat];
-            return(dat)
-          })
-setMethod('getData', signature(.Object = 'coloredData'), function(.Object)
-          {
-            out = as(.Object@data, .Object@type)
-            if (!is.null(.Object@data.names))
-              names(out) = .Object@data.names
-            return(out)
-        })
-
-#' @name coloredData
-#' @title coloredData
-#' @description
-#'
-#' Instantiate coloredData
-#'
-#' @export
-coloredData = function(data, colormap, upright = T) new('coloredData', data = data, colormap = colormap, upright = upright)
-
 
 #' @name loud
 #' @title loud
@@ -10892,16 +10406,20 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         return(vcf)
   }
   else if (length(out)>0)
-    {
+  {
         out$REF = as.character(out$REF)
         out$ALT = as.character(unstrsplit(out$ALT))
         out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
                       ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))
-        out$eff = unstrsplit(out$ANN)
+        if (is.null(out$ANN))
+          stop('no $ANN column, check to see if annotated VCF is formatted in the SnpEff style')
+        else
+          out$eff = unstrsplit(out$ANN)
+
         out$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', out$eff)
         if (!keep.modifier)
               out = out[!out$modifier]
-        tmp = lapply(out$ANN, function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
+        tmp = lapply(strsplit(out$ANN, ','), function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
         tmpix = rep(1:length(out), elementNROWS(tmp))
         meta = as.data.frame(do.call(rbind, tmp))
         colnames(meta) = fn
@@ -10912,7 +10430,6 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         values(out2) = cbind(values(out2), meta)
         names(out2) = NULL
         out2$ANN = NULL
-
         precedence = c('trunc', 'cnadel', 'cnadup', 'complexsv', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory', 'noncoding', 'inv', 'synonymous', '')
         eff = readRDS(system.file('extdata', 'snpeff_ontology.rds', package = 'skitools'))[, short := factor(short, precedence)][!is.na(short), ]
 
@@ -10990,6 +10507,16 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
     cmd = paste(cmd, '-g hom')
   }
 
+  ## quick dunlist
+  .dunlist = function(x)
+  {
+    if (is.null(names(x)))
+      names(x) = 1:length(x)
+    out = data.table(listid = rep(names(x), elementNROWS(x)), V1 = unlist(x))
+    setkey(out, listid)
+    return(out)
+  }
+  
   if (verbose)
     message(cmd)
     
@@ -11013,25 +10540,26 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
       out[, seqnames := as.character(CHROM)]
       out[, start := POS]
       out[, end := POS]
-      out[, listid := as.character(1:.N)]
-
       ## unpack bcf "format" + sample fields
-      fdat = dunlist(strsplit(out$FORMAT, ':'))
+      fdat = .dunlist(strsplit(out$FORMAT, ':'))
       setnames(fdat,2,'field')
       out$FORMAT = NULL
       for (sfield in sfields) ## can be more than one sample field
-      {        
-        fdat$value = dunlist(strsplit(out[[sfield]], ':'))$V1
+      {
+        fdat$value = .dunlist(strsplit(out[[sfield]], ':'))$V1
         fdatc = dcast.data.table(copy(fdat)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'value')
+        out[, listid := as.character(1:.N)]
         out = merge(out, fdatc, by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
       }
       
       ## unpack "info" field
-      idat = dunlist(strsplit(out$INFO, ';'))
+      idat = .dunlist(strsplit(out$INFO, ';'))
       idat = cbind(idat, colsplit(idat$V1, pattern = "=", names = c("field","value")))
       idatc = dcast.data.table(idat, listid ~ field, value.var = 'value')
       out$INFO = NULL
-      out = merge(out, idatc, by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
+      out[, listid := as.character(1:.N)]
+      mcols = setdiff(names(idatc), c('REF', 'ALT'))
+      out = merge(out, idatc[, mcols, with = FALSE], by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
       out = dt2gr(out, seqlengths = sl)
       out = grok_vcf(out, keep.modifier = keep.modifier, long = long, oneliner = oneliner, verbose = verbose, label = label)
     }
@@ -18555,8 +18083,11 @@ rebin = function(cov, binwidth, field = names(values(cov))[1], FUN = mean, na.rm
 {
   tmp = as.data.table(cov[, c()])
   tmp$value =  values(cov)[[field]]
-  outdt = tmp[, FUN(value, na.rm = na.rm), by = .(seqnames,
-                                                   start = ceiling(start/binwidth)*binwidth)]
+  outdt = tmp[
+    , FUN(value, na.rm = na.rm),
+      by = .(seqnames, start = floor(start/binwidth)*binwidth + 1)]
+  ## xtYao update:
+  ## by = .(seqnames, start = ceiling(start/binwidth)*binwidth)]
   outdt[, end := start + binwidth -1]
   out = dt2gr(outdt)
   names(values(out)) = field
@@ -18996,8 +18527,11 @@ rr = function(x, y = c())
 
   if (is.data.table(x))
     y = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(y)))), parent.frame()),x, parent.frame(2)), error = function(e) NULL)
-  
-  x[y, ]
+
+  if (!is.null(dim(x)))
+    x[y, ]
+  else
+    x[y]
 }
 
 #' @name dd
@@ -19185,24 +18719,31 @@ variants = function(query, ref, expand.iupac = TRUE, verbose = FALSE)
 #' @param reads GRanges in SAM / BAM format e.g. output of read.bam or BWA, with fields $qname, $cigar, $flag $seq all populated in standard fashion, and optionally $AS
 #' @param contig GRanges in SAM / BAM format wth fields $qname, $cigar and $seq all [populated
 #' @param ref optional DNAStringSet representing a reference sequence to compute alignments against
-#' @param 
+#' @param chimeric logical flag whether to require reads to support junctions in chimericcontigs (ie discontiguous chunks on the reference), chimeric = FALSE
+#' @param strict strict requires that the alignment score of the read to contig alignment needs to be better for at least one read (and also not worse for any of the reads) 
+#' @param
 #' @return reads re-aligned to the reference through the contigs with additional metadata describing features of the alignment
 #' @export
 #' @author Marcin Imielinski
-contig.support = function(reads, contig, ref = NULL, cg.contig = gChain::cgChain(contig), min.bases = 20, min.aligned.frac = 0.95)
+contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = TRUE, cg.contig = gChain::cgChain(contig), isize.diff = 1e3, min.bases = 20, min.aligned.frac = 0.95, new = TRUE, 
+                          verbose = TRUE)
 {
   if (length(reads)==0)
     stop('reads must be non empty GRanges with $qname, $cigar, $seq, and $flag fields')
 
   if (length(contig)==0)
-    stop('contig must be non empty GRanges with $qname, $cigar and $seq fields')
+    stop('contigs must be non empty GRanges with $qname, $cigar and $seq fields')
 
+  if (verbose)
+    message('Prepping reads for contig alignment')
   seq = unique(gr2dt(contig), by = c('qname'))[, structure(as.character(seq), names = as.character(qname))]
   bwa.contig = RSeqLib::BWA(seq = seq)
   chunks = gChain::links(cg.contig)$x
   strand(chunks) = '+'
   chunks = disjoin(chunks)
-  reads$R1 = bamflag(reads$flag)[,'isFirstMateRead']>0
+  if (is.null(reads$R1))
+    reads$R1 = bamflag(reads$flag)[,'isFirstMateRead']>0
+  reads$read.id = 1:length(reads)
   if (is.null(reads$AS))
   {
     warning('AS not provided in reads, may want to consider using tag = "AS" argument to read.bam or provide a ref sequence to provide additional specificity to the contig support')
@@ -19214,8 +18755,10 @@ contig.support = function(reads, contig, ref = NULL, cg.contig = gChain::cgChain
   reads$seq[!reads$R1] = reverseComplement(DNAStringSet(reads$seq[!reads$R1])) ## flip R2 read sequences to R1 strand
   reads = reads %Q% (!duplicated(paste(qname, R1)))
 
-  if (!is.null(ref)) ## realign reads against reference DNAStringSet if provided
+  if (!is.null(ref)) ## realign reads against reference DNAStringSet if provided to get alignment scores
   {
+    if (verbose)
+      message('Realigning reads against reference DNAStringSet')
     bwa.ref = RSeqLib::BWA(seq = ref)
     tmp = bwa.ref[reads$seq] %>% gr2dt
     tmp$ix = as.numeric(as.character(tmp$qname))
@@ -19224,44 +18767,163 @@ contig.support = function(reads, contig, ref = NULL, cg.contig = gChain::cgChain
     tmp = unique(tmp, by = c('qname', 'R1'))
     setkeyv(tmp, c('qname', 'R1'))
     if (nrow(tmp))
+    {
+      tmp[, isize := ifelse(any(seqnames != seqnames[1] | any(strand != strand[1])), NA_integer_, diff(range(start, end))), by = qname]
+      reads$isize = pmin(tmp[.(reads$qname, reads$R1), isize], reads$isize, Inf, na.rm = TRUE)
       reads$AS = tmp[.(reads$qname, reads$R1), AS]
+    }
   }
-  
+
+  if (verbose)
+    message('Aligning reads against derivative contigs')
+ 
+  ## aligning reads to contig
+  rdt = as.data.table(reads)
+  rdt[, ref.aligned := countCigar(cigar)[, 'M']]
+  rdt[, ref.aligned.frac := ref.aligned/qwidth[1], by = .(qname, R1)]
+
+  reads$ref.aligned.frac = rdt$ref.aligned.frac
+  reads$ref.isize = rdt[, ref.isize := ifelse(
+                            all(seqnames == seqnames[1]) & all(strand == strand[1]),
+                            as.numeric(diff(range(c(start, end)))),                                   
+                            Inf), by = qname]$ref.isize
+
   readsc = bwa.contig[reads$seq] %>% gr2dt
+  readsc$cigar = as.character(readsc$cigar)
   readsc$ix = as.integer(as.character(readsc$qname))
-  readsc$R1 = reads$R1[as.numeric(readsc$ix)]
-  readsc[, nsplit := .N, by = .(qname, R1)] ## these are splits on the contig, not reference --> shouldn't be any for good alignment
+  readsc$R1 = reads$R1[readsc$ix]
+  readsc$read.id = reads$read.id[readsc$ix]
+
+  ## these are splits on the contig, not reference --> shouldn't be any for good alignment
+  readsc[, nsplit := .N, by = .(qname, R1)] 
   readsc[, aligned := countCigar(cigar)[, 'M']]
-  readsc[, aligned.frac := aligned/qwidth[1], by = .(qname, R1)] ## these are splits on the contig, not reference --> shouldn't be any for good alignment
+
+  ## these are splits on the contig, not reference --> shouldn't be any for good alignment
+  readsc[, aligned.frac := aligned/qwidth[1], by = .(qname, R1)]
   readsc$AS.og = reads$AS[readsc$ix]
+  readsc$isize = abs(reads$isize[readsc$ix])
+  readsc$ref.isize = abs(reads$ref.isize[readsc$ix])
+  readsc$ref.aligned.frac = reads$ref.aligned.frac[readsc$ix]
   readsc$AS.og[is.na(readsc$AS.og)] = 0
   readsc$qname = reads$qname[readsc$ix]
 
-  ov = dt2gr(readsc) %*% chunks
-  strand(ov) = readsc$strand[ov$query.id]
-  ov$subject.id = paste0('chunk', ov$subject.id)
-  ovagg = dcast.data.table(ov %>% gr2dt, qname ~ subject.id, value.var = 'width', fun.aggregate = sum)
-  ovagg$nchunks = rowSums(ovagg[, -1]>min.bases)  ## good means we hit multiple chunks with sufficient bases
-  rstats = gr2dt(ov)[, .(
-                  contig.id = unique(seqnames)[1],
-                  pos = sum(width[strand == '+']),
-                  neg = sum(width[strand == '-']),
-                  aligned.frac = min(aligned.frac),
-                  num.contigs = length(unique(seqnames)),
-                  isize.contig = diff(range(c(start, end))),
-                  qsplit = any(nsplit>1), ## any sequences in this qname split on the contig ie a bad alignment on the contig
-                  worse = any(AS.og>AS) ## any alignment in this qname worse than vs reference?
-                ), by = qname] %>% merge(ovagg, by = 'qname')
-  keepq = rstats[nchunks>1 & (pos == 0 | neg  == 0) & aligned.frac > min.aligned.frac & !worse & !qsplit & num.contigs == 1, ]
+  ## new scoring method based on cgChain of reads to contigs
+  if (new)
+    {
+      ## cgChain representing read to contig alignments
+      readsc$al.id = 1:nrow(readsc)
 
-  if (nrow(keepq)==0)
-    return(reads[c()])
+      if (verbose)
+        message('Generating read to contig cgChain')
+      alcg = gChain::cgChain(readsc)
+      alchunks = cbind(as.data.table(values(alcg)), as.data.table(gChain::links(alcg)$x), as.data.table(gChain::links(alcg)$y)[, .(contig = seqnames, contig.start = start, contig.end = end, contig.strand = strand)])
 
-  keepq$aligned.frac = NULL
+      ## strands should be aligned to read / fragment + strand, but if not let's flip
+      alchunks[strand == '-', ":="(strand = '+', contig.strand = c('+' = '-', '-' = '+')[contig.strand])]
+
+      ## now for each al.id (ie bam record) let's pick the left most gChain / links record on the read / fragment 
+      ## ie this is the lowest coordinate on the query
+      ## (note that cgChain will split indels into separate ranges hence giving one to many mapping of al.id
+      ## to records in links)
+      setkeyv(alchunks, c('qname', 'start', 'end'))
+      ## alchunks[, is.min := start == min(start), by = al.id]
+      ## alchunks = alchunks[is.min == TRUE, ]
+
+      ## so now we want to find alignments that are
+      ## (1) concordant with respect to the contig
+      ##  i.e. there is a monotonic increase (decrease) of contig.start if the contig.strand is + (-)
+      ## (2) most of the read (aligned.frac) is represented
+      ## (3) AS scores are better than original
+      ## (4) isize better than original (where isize is the contig. span between the first and last alignment) .. related to (1)
+
+
+      if (verbose)
+        message('Scoring read to contig to alignments')
+      alchunks[, contig.sign := ifelse(contig.strand == '+', 1, -1)]
+      alchunks[, concordant.sign := all(contig.sign == contig.sign[1]), by = qname]
+
+      ## check if we never go from R1 == FALSE to R1 == TRUE
+      alchunks[, concordant.R1R2 := all(diff(!R1)>=0), by = qname]
+
+      ## check to see that our contig.start always increasing or decreasing
+      alchunks[, concordant.start := all(diff(contig.sign[1]*contig.start)>0), by = qname]
+
+      alchunks[, contig.isize := diff(range(contig.start, contig.end)), by = qname]
+      alchunks[, bases := sum(width), by = qname]
+
+      alchunks[, AS.better := sum(width[AS>AS.og]), by = qname]
+      alchunks[, AS.worse := sum(width[AS<AS.og]), by = qname]
+      alchunks[, AS.equal := sum(width[AS==AS.og]), by = qname]
+
+      keepq = alchunks[concordant.sign & concordant.R1R2 & concordant.start &
+                       bases > min.bases & aligned.frac > min.aligned.frac & aligned.frac >= ref.aligned.frac & 
+                      (AS.better>0 | contig.isize<ref.isize) & AS.worse == 0, ]
+
+      
+      keepq = keepq[, .(qname, contig, contig.isize, contig.strand, bases, contig.sign, AS.better, AS.worse, AS.equal)] %>% unique(by = 'qname')
+    }
+  else ## old scoring method
+  {
+    ## if strict (default) remove any alignments that overlap others in the same qname
+    if (strict)
+    {
+      readsc = dt2gr(readsc)
+      readsc = readsc %Q% (rev(order(AS)))
+      readsc = readsc[!duplicated(gr.match(readsc, readsc, by = 'qname')), ] %>% gr2dt
+    }
+
+
+    if (verbose)
+      message('Computing overlap stats')
+
+    ov = dt2gr(readsc) %*% chunks
+    strand(ov) = readsc$strand[ov$query.id]
+    ov$subject.id = paste0('chunk', ov$subject.id)
+    ovagg = dcast.data.table(ov %>% gr2dt, qname ~ subject.id, value.var = 'width', fun.aggregate = sum)
+    ovagg$nchunks = rowSums(ovagg[, -1]>min.bases)  ## good means we hit multiple chunks with sufficient bases
+    rstats = gr2dt(ov)[, .(
+                    contig.id = unique(seqnames)[1],
+                    pos = sum(width[strand == '+']),
+                    neg = sum(width[strand == '-']),
+                    aligned.frac = min(aligned.frac),
+                    num.contigs = length(unique(seqnames)), ### fixing later ... multiple contigs as input could distort results
+                    paired = any(R1) & any(!R1), 
+                    isize.contig = diff(range(c(start, end))),
+                    isize.og = isize[1],
+                    qsplit = any(nsplit>1), ## any sequences in this qname split on the contig ie a bad alignment on the contig
+                    worse = any(AS.og>AS), ## any alignment in this qname worse than vs reference?
+                    better = any(AS>AS.og) ## any alignment in this qname better than vs reference?
+                  ), by = qname] %>% merge(ovagg, by = 'qname')
+
+    ## apply filters ie nchunks>1 if chimeric, all alignments have to be of one sign
+    ## if not paired then AS < AS.og else isize<isize.og
+    keepq = rstats[nchunks>chimeric & (pos == 0 | neg  == 0) & aligned.frac > min.aligned.frac & !worse & (better | !strict | (paired & isize.contig < isize.og - isize.diff)) & !qsplit & num.contigs == 1, ]
+    if (nrow(keepq)==0)
+      return(reads[c()])
+
+    keepq$aligned.frac = NULL
+  }
+
   readsc = merge(readsc, keepq, by = 'qname') %>% dt2gr
-  out = gChain::lift(cg.contig, readsc)  
-  out[!out$R1] = gr.flipstrand(out[!out$R1])
-  out$col = ifelse(out$R1, 'blue', 'gray')
+  
+  if (verbose)
+    message('Lifting reads through contig back to reference')
+
+  out = gChain::lift(cg.contig, readsc)
+
+  if (length(out)) ## add reads metadata back to out
+  {
+    out[!out$R1] = gr.flipstrand(out[!out$R1])
+    out$col = ifelse(out$R1, 'blue', 'gray')
+
+    if (verbose)
+      message('Adding metadata to reads')
+    metacols = setdiff(names(values(reads)), names(values(out)))
+    values(out) = cbind(values(out), values(reads)[match(out$read.id, reads$read.id), metacols])
+  }
+
+  if (verbose)
+    message('Done')
   out
 }
 
@@ -19279,18 +18941,51 @@ contig.support = function(reads, contig, ref = NULL, cg.contig = gChain::cgChain
 #' @param bwa RSeqLib BWA object and path to fasta file corresponding to the reference 
 #' @param ref optional DNAStringSet corresponding to reference genome sequence 
 #' @param pad padding around the junction breakpoint around  which to analyze contig and reference sequences, this should be several standard deviations above the average insert size (2000)
+#' @param realign flag whether to realign or just use existing alignments 
 #' @param verbose logical flag (TRUE)
 #' @param ... additional parameters to contig support
 #' @return reads re-aligned to the reference through the contigs with additional metadata describing features of the alignment
 #' @export
 #' @author Marcin Imielinski
-junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad = 2000, walks = NULL, verbose = TRUE, ...)
+junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad = 500, pad.ref = pad*20, realign = TRUE, walks = NULL, verbose = TRUE, ...)
 {
+
+  if (!inherits(reads, 'GRanges') || is.null(reads$qname) || is.null(reads$cigar) || is.null(reads$seq) || is.null(reads$flag))
+    stop('read input must be GRanges with fields $qname, $cigar, $seq, $flag and optionally $AS')
+
   if (!is.null(junctions))
     walks = jJ(junctions$grl)$gw(pad = pad)
 
   if (is.null(walks))
     stop('Either walks or junctions must be provided')
+
+  if (!realign)
+  {
+    if (is.null(junctions))
+      junctions = walks$edges$junctions
+
+    ## strand flip since 
+    ## read orientation convention
+    ## is opposite to junction convention
+    reads = gr.flipstrand(reads) 
+    reads$R1 = bamUtils::bamflag(reads$flag)[,'isFirstMateRead']>0
+    r1 = reads %Q% (R1 == TRUE) %>% as.data.table
+    r2 = reads %Q% (R1 == FALSE) %>% as.data.table
+    ov = merge(r1, r2, by = 'qname')
+    sl = seqlengths(reads)
+    grl = grl.pivot(
+      GRangesList(dt2gr(ov[, .(seqnames = seqnames.x, start = start.x, end =end.x, strand = strand.x)],
+                        seqlengths = sl),
+                  dt2gr(ov[, .(seqnames = seqnames.y, start = start.y, end = end.y, strand = strand.y)],
+                        seqlengths = sl)))
+    values(grl)$qname = ov$qname
+    ## make junctions out of reads and cross with "real" junctions
+    jn = merge(jJ(grl), junctions, cartesian = TRUE, pad = pad)
+    if (!length(jn))
+      return(reads[c()])
+    out = merge(as.data.table(reads), unique(jn$dt[, .(qname, junction.id = subject.id)]), by = 'qname') %>% dt2gr(seqlengths = sl)
+    return(out)
+  }
   
   if (inherits(bwa, 'character') && file.exists(bwa))
   {
@@ -19318,11 +19013,12 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
 
   if (verbose)
     message('Building and mapping derivative contigs')
+
   contig = bwa[ref[gr.fix(walks$grl, ref, drop = TRUE)]]
 
   if (verbose)
     message('Building reference contigs flanking junctions')
-  contigref = ref[gr.fix(walks$edges$junctions$footprint + pad, ref, drop = TRUE)]
+  contigref = ref[gr.fix(walks$edges$junctions$footprint + pad.ref, ref, drop = TRUE)]
 
 
   if (verbose)
@@ -19332,7 +19028,9 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
   if (verbose)
     message('Running contig support')
 
-  return(contig.support(reads, contig, ref = contigref, cg.contig = cg.contig, ...))
+  reads = contig.support(reads, contig, ref = contigref, cg.contig = cg.contig, ...)
+  reads$junction.id = reads$contig.id
+  return(reads)  
 }
 
 #' @name memu
@@ -19388,10 +19086,10 @@ memu = function()
 #' @param verbose logical flag 
 #' @author Marcin Imielinski
 #' @export
-oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5, mc.cores = 1)
+oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
 {
   if (is.null(gencode))
-    gencode = read_gencode()
+    gencode = skidb::read_gencode()
   else if (is.character(gencode))
   {
     if (grepl('.rds$', gencode))
@@ -19402,7 +19100,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del
 
   pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
 
-  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5)
+  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5, filter = 'PASS')
   {
     out = data.table()
 
@@ -19482,24 +19180,33 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del
     }
     else
       out = rbind(out, data.table(id = x, type = NA, source = 'signature_counts'), fill = TRUE, use.names = TRUE)
-    
+
     ## collect gene mutations
     if (!is.null(dat$annotated_bcf) && file.exists(dat[x, annotated_bcf]))
     {
       if (verbose)
-        message('pulling $annotated_bcf for ', x)
-      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE)
+        message('pulling $annotated_bcf for ', x, ' using FILTER=', filter)
+      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter)
+      if (verbose)
+        message(length(bcf), ' variants pass filter')
       genome.size = sum(seqlengths(bcf))/1e6
-      mut.density = data.table(id = x, value = c(length(bcf), length(bcf)/genome.size), type = c('count', 'density'),  track = 'tmb', source = 'annotated_bcf')
+      nmut = data.table(as.character(seqnames(bcf)), start(bcf), end(bcf), bcf$REF, bcf$ALT) %>% unique %>% nrow
+      mut.density = data.table(id = x, value = c(nmut, nmut/genome.size), type = c('count', 'density'),  track = 'tmb', source = 'annotated_bcf')
       out = rbind(out, mut.density, fill = TRUE, use.names = TRUE)
       keepeff = c('trunc', 'cnadel', 'cnadup', 'complexsv', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory','mir')
-      bcf = bcf %Q% (short %in% keepeff)
-      vars = gr2dt(bcf)[, .(id = x, gene, vartype, variant.p, distance, annotation, type = short, track = 'variants', source = 'annotated_bcf')]
+      bcf = bcf[bcf$short %in% keepeff]
+      if (verbose)
+        message(length(bcf), ' variants pass keepeff')
+      vars = NULL
+      if (length(bcf))
+      {
+        bcf$variant.g = paste0(seqnames(bcf), ':', start(bcf), '-', end(bcf), ' ', bcf$ALT, '>', bcf$REF)
+        vars = gr2dt(bcf)[, .(id = x, gene, vartype, variant.g, variant.p, distance, annotation, type = short, track = 'variants', source = 'annotated_bcf')] %>% unique
+      }
       out = rbind(out, vars, fill = TRUE, use.names = TRUE)
     }
     else
       out = rbind(out, data.table(id = x, type = NA, source = 'annotated_bcf'), fill = TRUE, use.names = TRUE)
-
 
     if (verbose)
       message('done ', x)
@@ -19507,8 +19214,16 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del
     return(out)
   }
 
+  if (is.null(key(tumors)))
+  {
+    if (is.null(tumors$id))
+      stop('Input tumors table must be keyed or have column $id')
+    else
+      setkey(tumors, id)
+  }
+
   out = mclapply(tumors[[key(tumors)]], .oncotable,
-                 dat = tumors, pge = pge, amp.thresh = amp.thresh, del.thresh = del.thresh, verbose = verbose, mc.cores = mc.cores)
+                 dat = tumors, pge = pge, amp.thresh = amp.thresh, filter = filter, del.thresh = del.thresh, verbose = verbose, mc.cores = mc.cores)
   out = rbindlist(out, fill = TRUE, use.names = TRUE)
 
   setnames(out, 'id', key(tumors))
@@ -19528,10 +19243,11 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del
 #' SNV signatures can be provided. 
 #' 
 #'
-#' @param tumors  keyed table of tumors (aka pairs table) with field $oncotab which points to a cached .rds file of an oncotable e.g. produced by oncotable function or Oncotable module / task
+#' @param tumors  keyed table of tumors (aka pairs table) with field $oncotable which points to a cached .rds file of an oncotable e.g. produced by oncotable function or Oncotable module / task
 #' @param oncotab output from oncotable function with field $id
 #' @param genes character vector of genes
 #' @param columns additional columns of tumors matrix to plot as horizontal tracks below the main track
+#' @param split character of name of column in tumors table to split on (NULL)
 #' @param sort  logical flag whether to automatically sort rows i.e. genes and columns i.e. tumors in a "stair step" pattern or default to the provided (TRUE)
 #' @param noncoding logical flag whether to show non protein coding mutations
 #' @param sort.genes logical flag whether to sort rows i.e. genes with respect to their frequency (TRUE)
@@ -19544,12 +19260,13 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del
 #' @param pp logical flag whether to show purity / ploidy (if data is provided / available) (TRUE)
 #' @param ppdf whether to print to pdf via ppdf
 #' @param track.height height of tracks in 'cm'
+#' @param split.gap  gap between splits
 #' @param signature.main integer indices of main COSMIC signatures to keep
 #' @param signature.thresh lower threshold for non main signature fraction in at least one sample to plot
 #' @param cex length 1 or 2 vector canvas expansion factor to apply to the oncoprint itself (relative to 10 x 10 cm) (c(1,3))
 #' @param return.mat whether to return.mat
 #' @param wes logical flag whether to use wesanderson coolors
-#' @param mc.cores multicore threads to use for $oncotab loading from tumors table (not relevant if oncotab provided)
+#' @param mc.cores multicore threads to use for $oncotable loading from tumors table (not relevant if oncotab provided)
 #' @param ... other arguments to ppdf
 #' @return ComplexHeatmap object (if ppdf = FALSE), and genotype matrix (if return)
 #' @author Marcin Imielinski
@@ -19557,6 +19274,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, del
 oncoprint = function(tumors = NULL,
                      oncotab = NULL,
                      genes = c('KRAS', 'EGFR', 'BRAF', 'TP53', 'TERT', 'CCND1', 'MYC', 'PIK3CA', 'PTEN', 'CDKN2A', 'ARID1A', 'SMARCA4'),
+                     split = NULL, 
                      sort = TRUE, sort.genes = sort, sort.tumors = sort,
                      columns = NULL,
                      noncoding = FALSE,
@@ -19570,6 +19288,7 @@ oncoprint = function(tumors = NULL,
                      signature.thresh = 0.2,
                      signature.main = c(1:5,7,9,13),
                      track.gap = track.height/2,
+                     split.gap = 1,
                      colnames.fontsize = 10,
                      rownames.fontsize = 10,
                      track.fontsize = 10,
@@ -19583,9 +19302,21 @@ oncoprint = function(tumors = NULL,
   if (basic)
     tmb = svevents = signature = FALSE
 
+  if (!length(genes))
+    stop('genes must be provided either as a vector or named list of gene identifiers')
+
+  if (is.list(genes))
+    genes = dunlist(genes)[, .(genes = V1, group = listid)]
+  else
+    genes = data.table(genes = genes, group = NA)
+
   if (!is.null(tumors))
   {
-    tumors$id = tumors[[key(tumors)]]
+    if (!is.null(key(tumors)))
+      tumors$id = tumors[[key(tumors)]]
+
+    if (is.null(tumors$id))
+      stop('tumors be either keyed or have $id field, if you are resorting e.g. manually sorting your input table the key may get lost so then you should set an $id field explicitly')
     
     if (any(duplicated(tumors$id)))
       stop('check key field in tumors table: duplicated ids present. The key should be unique per row, and matched to the $id field of oncotab')
@@ -19594,23 +19325,23 @@ oncoprint = function(tumors = NULL,
   missing = c()
   if (is.null(oncotab))
   {
-    errmsg = 'Either oncotab or tumors argument must be provided, where tumors is a keyed data table (where each row is a tumor) with column $oncotab of file paths pointing to the cached rds Oncotable results for each tumors'
-    if (is.null(tumors) || is.null(tumors$oncotab))
+    errmsg = 'Either oncotab or tumors argument must be provided, where tumors is a keyed data table (where each row is a tumor) with column $oncotable of file paths pointing to the cached rds Oncotable results for each tumors'
+    if (is.null(tumors) || is.null(tumors$oncotable))
       stop(errmsg)
 
-    fe = file.exists(tumors$oncotab)
+    fe = file.exists(tumors$oncotable)
     missing = union(missing, tumors$id[!fe])
 
-    if (any(fe))
-      warning(paste(sum(!fe), 'tumors with missing oncotab, will remove if drop = TRUE, otherwise mark'))
+    if (any(!fe))
+      warning(paste(sum(!fe), 'of', length(fe), 'tumors with missing oncotab, will remove if drop = TRUE, otherwise mark'))
 
     if (!nrow(tumors))
-      stop('No tumors with $oncotab field pointing to existing path')
+      stop('No tumors with $oncotable field pointing to existing path')
 
     if (verbose)
-      message('Scraping $oncotab paths for oncotable .rds files.  To speed up, consider multi-threading with mc.cores and if you will be creating multiple plots.  Also consider running this with return.oncotab = TRUE and use that for subsequent calls via oncotab = argument.')
+      message('Scraping $oncotable paths for oncotable .rds files.  To speed up, consider multi-threading with mc.cores and if you will be creating multiple plots.  Also consider running this with return.oncotab = TRUE and use that for subsequent calls via oncotab = argument.')
 
-    oncotab = tumors[fe, ]$oncotab %>% mclapply(readRDS, mc.cores = mc.cores) %>% rbindlist(fill = TRUE)
+    oncotab = mclapply(which(fe), function(x) {y = readRDS(tumors$oncotable[x]); if (nrow(y)) y[, id := tumors$id[x]]; return(y)}, mc.cores = mc.cores) %>% rbindlist(fill = TRUE)
     oncotab$id = factor(oncotab$id, tumors$id)    
   }
 
@@ -19632,7 +19363,7 @@ oncoprint = function(tumors = NULL,
       stop('empty oncotable provided, please check inputs')
   }
   
-  vars = oncotab[track == 'variants', ][gene %in% genes, ][type != 'synonymous', ]
+  vars = oncotab[track == 'variants', ][gene %in% genes$genes, ][type != 'synonymous', ]
 
   ## keep track of missing samples ie those that had either SNV, jabba, fusions
   ## will get a gray column in the plot
@@ -19644,13 +19375,21 @@ oncoprint = function(tumors = NULL,
   if (!cna)
     vars = vars[!(type %in% c('amp', 'hetdel', 'homdel')), ]  
 
-  vars[, gene := factor(gene, genes)]
+  vars[, gene := factor(gene, genes$genes)]
   vars = vars[!is.na(gene), ]
 
   ## convert to matrix format for complex heatmap
-  varc = dcast.data.table(data = vars, gene ~ id, value.var = "type", fill = '', drop = FALSE, fun.aggregate = function(x) paste(x, collapse = ','))
-  varm = as.matrix(varc[, -1])
-  rownames(varm) = varc$gene
+  if (nrow(vars))
+    {
+      varc = dcast.data.table(data = vars, gene ~ id, value.var = "type", fill = 'WT', drop = FALSE, fun.aggregate = function(x) paste(x, collapse = ','))
+      varm = as.matrix(varc[, -1])
+      rownames(varm) = varc$gene
+    }
+  else
+  {
+    varm = matrix('WT', nrow = length(levels(vars$gene)), ncol = length(levels(vars$id)),
+           dimnames = list(levels(vars$gene), levels(vars$id)))
+  }
 
   ## prune / label missing genotypes (ie either due to missing or incomplete oncotable entries)
   if (length(missing))
@@ -19665,14 +19404,14 @@ oncoprint = function(tumors = NULL,
   if (sort.genes)
     {
       ##ix = skitools::border(varm!='') %>% rev
-      ix = rev(order(rowSums(varm!='' & varm != 'missing', na.rm = TRUE)))
+      ix = rev(order(rowSums(varm!='WT' & varm != 'missing', na.rm = TRUE)))
       varm = varm[ix, , drop = FALSE]
     }
   
   ## then sample binary mutation order
   if (sort.tumors)
     {
-      jx = rev(skitools::border(t(varm)!='' & t(varm) != 'missing'))
+      jx = rev(skitools::border(t(varm)!='WT' & t(varm) != 'missing'))
       varm = varm[, jx, drop = FALSE]
     }
     
@@ -19683,7 +19422,7 @@ oncoprint = function(tumors = NULL,
     w = convertWidth(w, "cm")*0.7
     h = convertHeight(h, "cm")*0.7
     l = min(unit.c(w, h))
-    grid.rect(x, y, w, h, gp = gpar(fill = alpha("grey90", 0.4), col = NA))   
+    grid.rect(x, y, w, h, gp = gpar(fill = alpha("grey90", 0.4), col = NA))
     v = v[ord]
     for (i in which(v)) {
       if (names(v)[i] %in% c('amp', "hetdel", "homdel", 'fusion'))
@@ -19697,8 +19436,10 @@ oncoprint = function(tumors = NULL,
           grid.segments(x - w*0.5, y + h*0.5, x + w*0.5, y - h*0.5,
                         gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
         }
-      else if (grepl("(missense)|(missense)|(promoter)|(regulatory)", names(v)[i]))
+      else if (grepl("(missense)|(promoter)|(regulatory)", names(v)[i]))
+      {
         grid.circle(x,y,l*CSIZE, gp = gpar(fill = varcol[names(v)[i]], col = NA))
+      }
       else {
         if (grepl("indel", names(v)[i]))
           grid.rect(x,y,w*0.9,h*0.4, gp = gpar(fill = varcol[names(v)[i]], col = NA))
@@ -19706,7 +19447,8 @@ oncoprint = function(tumors = NULL,
     }
   }
 
-  varcol = c(  
+  varcol = c(
+    WT = alpha('gray', 0),
     fusion = alpha('green', 0.5),
     hetdel = 'lightblue',
     missing = 'gray',            
@@ -19727,7 +19469,7 @@ oncoprint = function(tumors = NULL,
 
   ## generate additional plots if requested / available
   bottom_data = top_data = list()
-  if (tmb)
+  if (tmb & any(oncotab$track == 'tmb'))
   {
     tmbd = oncotab[track == 'tmb' & type == 'density', structure(value, names = as.character(id))][ids]
     
@@ -19735,7 +19477,7 @@ oncoprint = function(tumors = NULL,
     out.mat = rbind(TMB = tmbd, out.mat)
   }
 
-  if (pp)
+  if (pp & any(oncotab$track == 'pp'))
   {
     top_data$Purity = oncotab[track == 'pp' & type == 'purity', structure(value, names = as.character(id))][ids]
     top_data$Ploidy = oncotab[track == 'pp' & type == 'ploidy', structure(value, names = as.character(id))][ids]
@@ -19762,7 +19504,7 @@ oncoprint = function(tumors = NULL,
 
   packed_legends = list()
   bottomtracks = list()
-  if (signature)
+  if (signature & any(oncotab$track == 'signature'))
   {
     sigd = oncotab[track == 'signature', ][type != 'Residual', ]
 
@@ -19775,6 +19517,7 @@ oncoprint = function(tumors = NULL,
     sigdm = as.matrix(sigdc[, -1])
     rownames(sigdm) = sigdc$id
     sigdm = sigdm[ids,, drop = FALSE]
+    sigdm = sigdm[, suppressWarnings(order(as.numeric(colnames(sigdm)))), drop = FALSE]
     out.mat = rbind(out.mat, t(sigdm))
     if (wes)
       sigcols = brewer.master(colnames(sigdm), 'BottleRocket1', wes = TRUE)
@@ -19794,7 +19537,7 @@ oncoprint = function(tumors = NULL,
       list(Legend(labels = names(sigcols), ncol = 2, legend_gp = gpar(fill = sigcols), title = 'COSMIC')))
   }
 
-  if (svevents)
+  if (svevents & any(oncotab$track %in% c('complex sv', 'simple sv')))
   {
     cx = dcast.data.table(oncotab[track == 'complex sv', ][, type := as.character(type)][, id := factor(id, ids)], id ~ type, fill = 0, drop = FALSE, value.var = 'value')
     simple = dcast.data.table(oncotab[track == 'simple sv', ][, type := as.character(type)][, id := factor(id, ids)], id ~ type, fill = 0, drop = FALSE, value.var = 'value')
@@ -19841,7 +19584,7 @@ oncoprint = function(tumors = NULL,
   if (!is.null(tumors) && length(intersect(columns, names(tumors))))
   {
     columns = intersect(columns, names(tumors))
-    custom = tumors[.(ids), columns, with = FALSE]
+    custom = tumors[match(ids, id), columns, with = FALSE]
     out.mat = rbind(out.mat, t(as.matrix(custom)))
     customcols = brewer.master(columns, wes = wes)
     customtracks = lapply(columns, function(x)
@@ -19893,13 +19636,52 @@ oncoprint = function(tumors = NULL,
 
   if (length(packed_legends))
     packed_legends = do.call(packLegend, packed_legends)
- 
+
+
+  if (!is.null(split))
+  {
+    if (is.null(tumors))
+      warning('split variable must be provided along with keyed tumors table')
+
+    if (split %in% names(tumors))
+      split = tumors[match(ids, id), ][[split]]
+    else
+    {
+      warning('split column not found in provided tumors table')
+      split = NULL
+    }
+  }
+
+  gene_split = NULL
+  if (!all(is.na(genes$group)))
+    gene_split = genes[match(rownames(varm), genes), group]
+
+  ## to overcome empty plot issue and also plot pct correctly
+  show_pct = TRUE
+  if (any(varm!='WT'))
+    varm[varm == 'WT'] = ''
+  else
+    show_pct = FALSE ## if plot has no alterations we keep the WT so oncoPrint doesn't freak 
+
+  if (!length(toptracks))
+    toptracks = NULL
+
+  if (!length(bottomtracks))
+    bottomtracks = NULL
+
   op = ComplexHeatmap::oncoPrint(varm,
                       get_type = function(x) unlist(strsplit(x, ",")), ##get type = separating each cell in matrix into vector
                       alter_fun = alter_fun,
                       top_annotation = toptracks,
                       bottom_annotation = bottomtracks,
+                      row_split = gene_split,
+                      show_pct = show_pct, 
+                      row_gap = unit(split.gap, 'cm'),
+                      column_split = split,
+                      column_gap = unit(split.gap, 'cm'),
                       col = varcol,
+                      remove_empty_columns = FALSE,
+                      remove_empty_rows = FALSE, 
                       row_order = 1:nrow(varm),
                       column_order = 1:ncol(varm),
                       pct_gp = gpar(fontsize = rownames.fontsize),
@@ -19919,7 +19701,110 @@ oncoprint = function(tumors = NULL,
   if (return.oncotab)
     oncotab
   else if (return.mat)
-    varm
+    out.mat
   else
     op
 } 
+
+#' @name alignment_metrics
+#' @title alignment_metrics
+#' @description
+#'
+#' Grabs alignment metrics from BWAMemFast like Job object (e.g. BWA mem fast)
+#' or paths to bam files aligned with some variant of alignment pipelines run with
+#' Picard alignment_summary_metrics postprocessing. 
+#' and returns the category = 'PAIR' rows of alignment_summary_metrics indexed by entity id
+#'
+#' @author Marcin Imielinski
+#' @export
+alignment_metrics = function(job)
+{
+  if (is(job, 'Job'))
+    fn = dirs(job, 'alignment_summary_metrics$')
+  else ## assume this is  a path
+  {
+    if (is.null(names(job)))
+      names(job) = 1:length(job)
+    job = job[file.exists(job)]
+    fn = lapply(dirname(job), dir, full = TRUE, pattern = 'alignment_summary_metrics')
+    names(fn) = names(job)
+  }
+  if (!length(fn))
+    return(data.table())
+  res = (lapply(names(fn), function(x) if (length(fn[[x]]>0)) (grep('#', readLines(fn[[x]][1]), invert = TRUE, value = TRUE) %>% fread(text = .))[, sample := x]) %>% rbindlist(fill = TRUE))[CATEGORY == 'PAIR', ]
+  return(res)
+}
+
+
+
+#' @name edge2tip
+#' @title edge2tip
+#'
+#' Returns matrix or data.table mapping edge to tips from ape tree
+#'
+edge2tip = function(tree, matrix = TRUE)
+{
+  dt = dunlist(phangorn::Descendants(tree, tree$edge[,2], type = 'tips'))[, tip := factor(tree$tip.label[V1], tree$tip.label)][ , value := 1][, .(edge = listid, tip)] %>% setkey(edge)
+  if (matrix)
+  {
+    dt$value = 1
+    tmpdt = dcast.data.table(dt, edge ~ tip, value.var = 'value', fill = 0)
+    return(as.matrix(tmpdt[,-1]>0)[, rownames(this.mat)])
+  }
+  return(dt)
+}
+
+
+
+#' @name PPplots
+#' @title PPplots
+#' @description
+#'
+#' plot bin and het copy number histogram as well as a contour plot for allele fractions
+#'
+#' @param mc.cores integer number of cores to use (default 1)
+#' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
+############################################
+PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
+
+            if (prefix!= ''){prefix = paste0(prefix, '_')}
+            #' histogram of bin copy number
+            cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
+            output = paste0(outputdir, '/', prefix, 'CN_hist_', suffix, '.png')
+            ppng(
+            {
+              hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
+              abline(v = 0:xmax, lty = 3, col = 'red')
+            }, output
+            )
+            #' histogram of het copy numbers
+            hetsc = rbind(
+              hets[, .(seqnames, start, end, count = alt.count.t, type = 'alt')],
+              hets[, .(seqnames, start, end, count = ref.count.t, type = 'ref')]
+            )
+            hetsc$ncn = 1
+            hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
+            output =  paste0(outputdir, '/', prefix, 'het_hist_', suffix, '.png')
+            ppng(
+            {
+              hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
+              abline(v = 0:xmax, lty = 3, col = 'red')
+            }, output)
+            #' density plots for hets
+            hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
+            hets2[, low := pmin(alt, ref)]
+            hets2[, high := pmax(alt, ref)]
+            output =  paste0(outputdir, '/', prefix, 'het_density_', suffix, '.png')
+
+            binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
+            if (binwidths[1] <= 0) | (binwidths[2] <= 0){
+                print('The density of the het allele count is too dense and so a stat_density_2d plot cannot be generated.')
+            else{
+                p = ggplot(hets2[sample(.N, N_subsample), ], aes(x = low, y = high, fill = ..level..)) +
+                        stat_density_2d(geom = "polygon") +
+                        scale_fill_distiller(palette = 4, direction = 1) +
+                        theme_bw(base_size = 25)
+                ppng(print(p), output)
+            }
+
+}
