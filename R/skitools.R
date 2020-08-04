@@ -19760,17 +19760,26 @@ edge2tip = function(tree, matrix = TRUE)
 #' @title PPplots
 #' @description
 #'
-#' plot bin and het copy number histogram as well as a contour plot for allele fractions
+#' Plot bin and het copy number histogram as well as a contour plot for allele fractions.
 #'
-#' @param mc.cores integer number of cores to use (default 1)
+#' @param cov bin coverage depth
+#' @param hets het_pileup
+#' @param pu purity
+#' @param pl ploidy
+#' @param xmax maximum value for x-axis of histograms
+#' @param outputdir output directory for plots
+#' @param prefix a prefix to use for output plots
+#' @param suffix a suffix to use for output plots
+#' @param N_subsample How many entries to randomly sample from hets when generating the contour plot
 #' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
-############################################
+#'
 PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
 
             if (prefix!= ''){prefix = paste0(prefix, '_')}
+            if (suffix!= ''){suffix = paste0('_', suffix)}
             #' histogram of bin copy number
             cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
-            output = paste0(outputdir, '/', prefix, 'CN_hist_', suffix, '.png')
+            output = paste0(outputdir, '/', prefix, 'CN_hist', suffix, '.png')
             ppng(
             {
               hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
@@ -19784,7 +19793,7 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
             )
             hetsc$ncn = 1
             hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
-            output =  paste0(outputdir, '/', prefix, 'het_hist_', suffix, '.png')
+            output =  paste0(outputdir, '/', prefix, 'het_hist', suffix, '.png')
             ppng(
             {
               hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
@@ -19794,7 +19803,7 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
             hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
             hets2[, low := pmin(alt, ref)]
             hets2[, high := pmax(alt, ref)]
-            output =  paste0(outputdir, '/', prefix, 'het_density_', suffix, '.png')
+            output =  paste0(outputdir, '/', prefix, 'het_density', suffix, '.png')
 
             binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
             if (binwidths[1] <= 0) | (binwidths[2] <= 0){
