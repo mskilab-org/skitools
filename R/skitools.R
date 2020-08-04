@@ -19781,7 +19781,7 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
     if (suffix!= ''){suffix = paste0('_', suffix)}
     #' histogram of bin copy number
     cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
-    output = paste0(outputdir, '/', prefix, 'CN_hist', suffix, '.png')
+    output = paste0(outputdir, '/', prefix, 'CN_hist', suffix, '.pdf')
     ppdf(
     {
       hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
@@ -19795,7 +19795,7 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
     )
     hetsc$ncn = 1
     hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
-    output =  paste0(outputdir, '/', prefix, 'het_hist', suffix, '.png')
+    output =  paste0(outputdir, '/', prefix, 'het_hist', suffix, '.pdf')
     ppdf(
     {
       hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
@@ -19805,7 +19805,7 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
     hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
     hets2[, low := pmin(alt, ref)]
     hets2[, high := pmax(alt, ref)]
-    output =  paste0(outputdir, '/', prefix, 'het_density', suffix, '.png')
+    output =  paste0(outputdir, '/', prefix, 'het_density', suffix, '.pdf')
 
     binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
     if ((binwidths[1] <= 0) | (binwidths[2] <= 0)){
