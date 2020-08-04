@@ -19771,12 +19771,9 @@ edge2tip = function(tree, matrix = TRUE)
 #' @param prefix a prefix to use for output plots
 #' @param suffix a suffix to use for output plots
 #' @param N_subsample How many entries to randomly sample from hets when generating the contour plot
-#' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
-#'
-#' @author Alon Shaiber
 #' @export
+#' @author Alon Shaiber
 PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
-
     if (prefix!= ''){prefix = paste0(prefix, '_')}
     if (suffix!= ''){suffix = paste0('_', suffix)}
     #' histogram of bin copy number
@@ -19818,5 +19815,4 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
                 theme_bw(base_size = 25)
         ppdf(print(p), output)
     }
-
 }
