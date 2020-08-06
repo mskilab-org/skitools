@@ -19829,7 +19829,7 @@ PPplots = function(cov, hets, pu, pl, somatic_vars=NA, xmax=10, hist_breaks=1e4,
 #' @author Alon Shaiber
 file.ready = function(path, dont_raise=TRUE){
     not_nas = !is.na(path)
-    if (any(nas)){
+    if (any(not_nas)){
         if (dont_raise == FALSE){
             stop('There was no file provided.')
         }
