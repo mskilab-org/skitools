@@ -19817,12 +19817,16 @@ PPplots = function(cov, hets, pu, pl, somatic_vars=NA, xmax=10, hist_breaks=1e4,
     }
 }
 
-#' @name file.empty
-#' @title file.empty
+#' @name file.ready
+#' @title file.ready
 #' @description
 #'
-#' Checks if a file exists and whether it is empty or not
+#' Checks if a file exists and whether it is empty or not.
 #'
+#' @details
+#' Returns TRUE if an input file path is not NA, exists, and not an empty file.
+#' If the path provided is NA then by default FALSE would be returned, unless dont_raise is set to TRUE
+#' and then an error would be raised.
 #' @param path path to the file
 #' @param dont_raise if set to FALSE then an error would be raised if there was no path provided
 #' @export
