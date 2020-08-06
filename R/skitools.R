@@ -19773,7 +19773,7 @@ edge2tip = function(tree, matrix = TRUE)
 #' @param N_subsample How many entries to randomly sample from hets when generating the contour plot
 #' @export
 #' @author Alon Shaiber
-PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
+PPplots = function(cov, hets, pu, pl, somatic_vars=NA, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
     if (prefix!= ''){prefix = paste0(prefix, '_')}
     if (suffix!= ''){suffix = paste0('_', suffix)}
     #' histogram of bin copy number
@@ -19816,3 +19816,29 @@ PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', p
         ppdf(print(p), output)
     }
 }
+
+#' @name file.empty
+#' @title file.empty
+#' @description
+#'
+#' Checks if a file exists and whether it is empty or not
+#'
+#' @param path path to the file
+#' @param dont_raise if set to FALSE then an error would be raised if there was no path provided
+#' @export
+#' @author Alon Shaiber
+file.ready = function(path, dont_raise=TRUE){
+    not_nas = !is.na(path)
+    if (any(nas)){
+        if (dont_raise == FALSE){
+            stop('There was no file provided.')
+        }
+    }
+    if (class(path) != "character"){
+        stop(sprintf('File name must be of type "character", but you provided a "%s" object.', class(path)))
+    }
+    exists = file.exists(path)
+    nonzero = file.size(path) > 0
+    return(not_nas & exists & nonzero)
+}
+

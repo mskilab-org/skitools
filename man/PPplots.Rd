@@ -9,6 +9,7 @@ PPplots(
   hets,
   pu,
   pl,
+  somatic_vars = NA,
   xmax = 10,
   hist_breaks = 10000,
   outputdir = ".",
