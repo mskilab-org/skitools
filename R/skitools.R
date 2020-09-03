@@ -19793,6 +19793,26 @@ edge2tip = function(tree, matrix = TRUE)
 #' @param chr.sum whether to chr.sub everything 
 #' @author Marcin Imielinski
 #' @export
+
+#' @name circos
+#' @title circos
+#'
+#' Quick utility function for circos plot with read depth, junctions, and segments
+#' 
+#' @param junctions Junction object with optional metadata field  $col to specify color
+#' @param cov GRanges of scatter points with optional fields $col
+#' @param segs GRanges of segments with optional fields $col and $border
+#' @param win GRanges window to limit plot to
+#' @param cytoband GRanges of cytoband
+#' @param y.field field in cov that specifies the y axis to draw
+#' @param cex.points cex for cov points
+#' @param max.ranges max ranges for cov points (1e4)
+#' @param ylim ylim on cov (default automatically computed)
+#' @param cytoband.path path to UCSC style cytoband path
+#' @param y.quantile quantile normalization
+#' @param chr.sum whether to chr.sub everything 
+#' @author Marcin Imielinski
+#' @export
 circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field = 'ratio', cytoband = NULL, y.field = field, ylim = NA, cytoband.path = '~/DB/UCSC/hg19.cytoband.txt', cex.points = 1, ideogram.outer = TRUE, scatter = TRUE, bar = FALSE, line = FALSE, gap.after = 1, labels.cex = 1, y.quantile = 0.9999, chr.sub = TRUE, max.ranges = 1e4, axis.frac = 0.02, palette = 'BrBg', ...)
 {
 
@@ -19854,14 +19874,14 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                                           track.height = bands.height,
                                           labels.cex = labels.cex)
 
-  circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
+  circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                 panel.fun = function(region, value, ...) {
                                   xlim = get.cell.meta.data("xlim")
                                   ylim = get.cell.meta.data("ylim")
                                   chr = get.cell.meta.data("sector.index") %>% gsub('chr', '', .)
                                   if (get.cell.meta.data("sector.index") != 'axis')
                                   {
-                                    circos.text(mean(xlim), 0.9, chr, cex = 1.5, facing = "clockwise", adj = c(0,1),
+                                    circlize::circos.text(mean(xlim), 0.9, chr, cex = 1.5, facing = "clockwise", adj = c(0,1),
                                                   niceFacing = TRUE)
                                   }
                                   }, track.height = 0.1, bg.border = NA)
@@ -19869,7 +19889,7 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
   ## inner ideogram
   if (ideogram.outer)
     {
-      circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
+      circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                     panel.fun = function(region, value, ...) {
                                       xlim = get.cell.meta.data("xlim")
                                       ylim = get.cell.meta.data("ylim")
@@ -19877,9 +19897,9 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                                       if (get.cell.meta.data("sector.index") != 'axis')
                                       {
                                         at = pretty(xlim, n = 3)
-                                        circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
-                                        circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
-                                        circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
+                                        circlize::circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
+                                        circlize::circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
+                                        circlize::circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
                                       }
                                     }, track.height = 0.05, bg.border = NA)
     }
@@ -19905,7 +19925,7 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     uchr = unique(cytoband$seqnames)
     cov = cov %&% dt2gr(cytoband)
     covdt = gr2dt(cov)[, seqnames := factor(seqnames, uchr)]
-    circos.genomicTrackPlotRegion(covdt[, .(seqnames, start, end, y, as.character(col), ytop = y)],
+    circlize::circos.genomicTrackPlotRegion(covdt[, .(seqnames, start, end, y, as.character(col), ytop = y)],
                                   ylim = ylim,
                                   track.height = cn.height,
                                   bg.border = ifelse(uchr == 'axis', NA, alpha('black', 0.2)),
@@ -19913,17 +19933,17 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                                     if (get.cell.meta.data("sector.index") != 'axis')
                                     {
                                       if (get.cell.meta.data("sector.index") == uchr[1])
-                                        circos.yaxis(side = 'left')                                    
+                                        circlize::circos.yaxis(side = 'left')                                    
                                       if (scatter)
-                                        circos.genomicPoints(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                        circlize::circos.genomicPoints(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
                                       if (bar)
-                                        circos.genomicRect(region, value[[1]], ytop.column = 1, border = value[[2]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                        circlize::circos.genomicRect(region, value[[1]], ytop.column = 1, border = value[[2]], col = value[[2]], pch = 16, cex = cex.points, ...)
                                       if (line)
-                                        circos.genomicLines(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                        circlize::circos.genomicLines(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
                                     }
                                   })
   }
-  circos.par(cell.padding = c(0, 0, 0, 0))
+  circlize::circos.par(cell.padding = c(0, 0, 0, 0))
 
   if (!is.null(segs))
   {
@@ -19945,17 +19965,17 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     if (chr.sub)
       segs[, seqnames := gsub('chr', '', seqnames)]
 
-    circos.genomicTrackPlotRegion(segs[, .(seqnames, start, end, col, border)], stack = TRUE,
+    circlize::circos.genomicTrackPlotRegion(segs[, .(seqnames, start, end, col, border)], stack = TRUE,
                                   panel.fun = function(region, value, ...) {
-                                    circos.genomicRect(region, value, col = value[[1]], border = value[[2]])
+                                    circlize::circos.genomicRect(region, value, col = value[[1]], border = value[[2]])
                                     xlim = get.cell.meta.data("xlim")
                                     ylim = get.cell.meta.data("ylim")
                                     chr = get.cell.meta.data("sector.index")
-#                                    circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
+#                                    circlize::circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
                                   }, track.height = 0.05, bg.border = NA)
   }
 
-  circos.par(cell.padding = c(0, 0, 0, 0))
+  circlize::circos.par(cell.padding = c(0, 0, 0, 0))
 
   spmap = structure(c(0.05, 0.2, 1), names = levels(bpdt$span))
 
@@ -19963,7 +19983,7 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
   ## inner ideogram
   if (!ideogram.outer)
     {
-      circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
+      circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                     panel.fun = function(region, value, ...) {
                                       xlim = get.cell.meta.data("xlim")
                                       ylim = get.cell.meta.data("ylim")
@@ -19971,9 +19991,9 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                                       if (get.cell.meta.data("sector.index") != 'axis')
                                       {
                                         at = pretty(xlim, n = 3)
-                                        circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
-                                        circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
-                                        circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
+                                        circlize::circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
+                                        circlize::circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
+                                        circlize::circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
                                       }
                                     }, track.height = 0.05, bg.border = NA)
     }
@@ -20004,6 +20024,8 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                   border=NA))
   }
   circlize::circos.clear()
+}
+
 
 
 #' Plot bin and het copy number histogram as well as a contour plot for allele fractions.
@@ -20090,3 +20112,4 @@ file.ready = function(path, dont_raise=TRUE){
     exists = file.exists(path)
     nonzero = file.size(path) > 0
     return(not_nas & exists & nonzero)
+}
