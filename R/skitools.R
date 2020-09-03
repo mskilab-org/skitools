@@ -19876,10 +19876,10 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
 
   circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                 panel.fun = function(region, value, ...) {
-                                  xlim = get.cell.meta.data("xlim")
-                                  ylim = get.cell.meta.data("ylim")
-                                  chr = get.cell.meta.data("sector.index") %>% gsub('chr', '', .)
-                                  if (get.cell.meta.data("sector.index") != 'axis')
+                                  xlim = circlize::get.cell.meta.data("xlim")
+                                  ylim = circlize::get.cell.meta.data("ylim")
+                                  chr = circlize::get.cell.meta.data("sector.index") %>% gsub('chr', '', .)
+                                  if (circlize::get.cell.meta.data("sector.index") != 'axis')
                                   {
                                     circlize::circos.text(mean(xlim), 0.9, chr, cex = 1.5, facing = "clockwise", adj = c(0,1),
                                                   niceFacing = TRUE)
@@ -19891,14 +19891,14 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     {
       circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                     panel.fun = function(region, value, ...) {
-                                      xlim = get.cell.meta.data("xlim")
-                                      ylim = get.cell.meta.data("ylim")
-                                      chr = get.cell.meta.data("sector.index")
-                                      if (get.cell.meta.data("sector.index") != 'axis')
+                                      xlim = circlize::get.cell.meta.data("xlim")
+                                      ylim = circlize::get.cell.meta.data("ylim")
+                                      chr = circlize::get.cell.meta.data("sector.index")
+                                      if (circlize::get.cell.meta.data("sector.index") != 'axis')
                                       {
                                         at = pretty(xlim, n = 3)
                                         circlize::circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
-                                        circlize::circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
+                                        circlize::circos.genomicRect(region, value, col =  circlize::cytoband.col(value[[2]]), border = NA)
                                         circlize::circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
                                       }
                                     }, track.height = 0.05, bg.border = NA)
@@ -19910,12 +19910,13 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     if (inherits(cov, 'data.frame'))
       cov = dt2gr(cov)
 
-    cov = cov %Q% ((!is.na(values(cov)[[y.field]])))
-    cov = cov %Q% (!is.infinite(values(cov)[[y.field]]))
+    cov = cov[!is.na(values(cov)[[y.field]])]
+    cov = cov[!is.infinite(values(cov)[[y.field]])]
+
     if (is.na(ylim))
       ylim = c(0, quantile(values(cov)[[y.field]], y.quantile, na.rm = TRUE))
     
-    cov$y = values(cov)[[y.field]]
+    cov$y = values(cov)[[y.field]] %>% as.numeric
     cov$y = cov$y %>% pmin(ylim[2]) %>% pmax(ylim[1])
 
     if (is.null(cov$col))
@@ -19930,12 +19931,12 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                                   track.height = cn.height,
                                   bg.border = ifelse(uchr == 'axis', NA, alpha('black', 0.2)),
                                   panel.fun = function(region, value, ...) {
-                                    if (get.cell.meta.data("sector.index") != 'axis')
+                                    if (circlize::get.cell.meta.data("sector.index") != 'axis')
                                     {
-                                      if (get.cell.meta.data("sector.index") == uchr[1])
+                                      if (circlize::get.cell.meta.data("sector.index") == uchr[1])
                                         circlize::circos.yaxis(side = 'left')                                    
                                       if (scatter)
-                                        circlize::circos.genomicPoints(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                        circlize::circos.genomicPoints(region, value, numeric.column = 1, col = value[[2]], pch = 16, cex = cex.points, ...)
                                       if (bar)
                                         circlize::circos.genomicRect(region, value[[1]], ytop.column = 1, border = value[[2]], col = value[[2]], pch = 16, cex = cex.points, ...)
                                       if (line)
@@ -19968,9 +19969,9 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     circlize::circos.genomicTrackPlotRegion(segs[, .(seqnames, start, end, col, border)], stack = TRUE,
                                   panel.fun = function(region, value, ...) {
                                     circlize::circos.genomicRect(region, value, col = value[[1]], border = value[[2]])
-                                    xlim = get.cell.meta.data("xlim")
-                                    ylim = get.cell.meta.data("ylim")
-                                    chr = get.cell.meta.data("sector.index")
+                                    xlim = circlize::get.cell.meta.data("xlim")
+                                    ylim = circlize::get.cell.meta.data("ylim")
+                                    chr = circlize::get.cell.meta.data("sector.index")
 #                                    circlize::circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
                                   }, track.height = 0.05, bg.border = NA)
   }
@@ -19985,14 +19986,14 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     {
       circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                     panel.fun = function(region, value, ...) {
-                                      xlim = get.cell.meta.data("xlim")
-                                      ylim = get.cell.meta.data("ylim")
-                                      chr = get.cell.meta.data("sector.index")
-                                      if (get.cell.meta.data("sector.index") != 'axis')
+                                      xlim = circlize::get.cell.meta.data("xlim")
+                                      ylim = circlize::get.cell.meta.data("ylim")
+                                      chr = circlize::get.cell.meta.data("sector.index")
+                                      if (circlize::get.cell.meta.data("sector.index") != 'axis')
                                       {
                                         at = pretty(xlim, n = 3)
                                         circlize::circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
-                                        circlize::circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
+                                        circlize::circos.genomicRect(region, value, col = circlize::cytoband.col(value[[2]]), border = NA)
                                         circlize::circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
                                       }
                                     }, track.height = 0.05, bg.border = NA)

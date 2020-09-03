@@ -2,7 +2,7 @@
 % Please edit documentation in R/skitools.R
 \name{PPplots}
 \alias{PPplots}
-\title{PPplots}
+\title{Plot bin and het copy number histogram as well as a contour plot for allele fractions.}
 \usage{
 PPplots(
   cov,
