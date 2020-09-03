@@ -13263,32 +13263,50 @@ ppgrid = function(
     NLLcr = rbind(b, cbind(a, a, NLL), b)
     NLLll = rbind(b, b, cbind(NLL, a, a))
     NLLlc = rbind(b, b, cbind(a, NLL, a))
-    NLLlr = rbind(b, b, cbind(a, a, NLL))
+  NLLlr = rbind(b, b, cbind(a, a, NLL))
 
-    if (min(c(ncol(NLL), nrow(NLL)))>1) ## up up down down left right left right ba ba start
-        M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
-    else if (ncol(NLL)==1) ## one column, only go up and down
-        M = (NLLc < NLLuc & NLLc < NLLlc)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
-    else ## only row, only go left right
-        M = (NLLc < NLLcl & NLLc < NLLcr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+  NLLm = melt(NLL) %>% as.data.table %>% setnames(c('purity', 'ploidy', 'NLL'))
 
-    if (length(M)>1)
-    {
-        ix = Matrix::which(M, arr.ind= T);
-        if (nrow(ix)>1)
-        {
-            C = hclust(d = dist(ix), method = 'single')
-            cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
-            minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
-        }
-        else
-            minima = ix[1,, drop = FALSE]
-    }
-    else
-        minima = cbind(1,1)
+  NLLm[, purity.id := factor(purity, purity.guesses) %>% as.integer]
+  NLLm[, ploidy.id := factor(ploidy, ploidy.guesses) %>% as.integer]
 
-    out = data.frame(purity = as.numeric(rownames(NLL)[minima[,1]]), ploidy = as.numeric(colnames(NLL)[minima[,2]]), NLL = NLL[minima],
-                     i = minima[,1], j = minima[,2])
+  setkeyv(NLLm, c('purity.id', 'ploidy.id'))
+  NLLm$NLL.lc = NLLm[.(NLLm$purity.id-1, NLLm$ploidy.id), NLL]
+  NLLm$NLL.rc = NLLm[.(NLLm$purity.id+1, NLLm$ploidy.id), NLL]
+  NLLm$NLL.lu = NLLm[.(NLLm$purity.id-1, NLLm$ploidy.id+1), NLL]
+  NLLm$NLL.ru = NLLm[.(NLLm$purity.id+1, NLLm$ploidy.id+1), NLL]
+  NLLm$NLL.ld = NLLm[.(NLLm$purity.id-1, NLLm$ploidy.id-1), NLL]
+  NLLm$NLL.rd = NLLm[.(NLLm$purity.id+1, NLLm$ploidy.id-1), NLL]
+  NLLm$NLL.cd = NLLm[.(NLLm$purity.id, NLLm$ploidy.id-1), NLL]
+  NLLm$NLL.cu = NLLm[.(NLLm$purity.id, NLLm$ploidy.id+1), NLL]
+  NLLm[, minima := NLL <= pmin(NLL.lc, NLL.rc, NLL.lu, NLL.ru, NLL.ld, NLL.rd, NLL.cd, NLL.cu, na.rm = TRUE)]
+  out = NLLm[minima == TRUE, .(purity, ploidy, NLL, i = purity.id, j = ploidy.id)]
+  
+
+    ## if (min(c(ncol(NLL), nrow(NLL)))>1) ## up up down down left right left right ba ba start
+    ##     M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+    ## else if (ncol(NLL)==1) ## one column, only go up and down
+    ##     M = (NLLc < NLLuc & NLLc < NLLlc)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+    ## else ## only row, only go left right
+    ##     M = (NLLc < NLLcl & NLLc < NLLcr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+
+    ## if (length(M)>1)
+    ## {
+    ##     ix = Matrix::which(M, arr.ind= T);
+    ##     if (nrow(ix)>1)
+    ##     {
+    ##         C = hclust(d = dist(ix), method = 'single')
+    ##         cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
+    ##         minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
+    ##     }
+    ##     else
+    ##         minima = ix[1,, drop = FALSE]
+    ## }
+    ## else
+    ##     minima = cbind(1,1)
+
+    ## out = data.frame(purity = as.numeric(rownames(NLL)[minima[,1]]), ploidy = as.numeric(colnames(NLL)[minima[,2]]), NLL = NLL[minima],
+    ##                  i = minima[,1], j = minima[,2])
 
     out = out[order(out$NLL), , drop = FALSE]
     rownames(out) = 1:nrow(out)
@@ -18119,7 +18137,7 @@ ssegment = function(cov, field = NULL, log = TRUE, verbose = TRUE, alpha = 1e-5)
     }
   cna = DNAcopy::CNA(cov$y, as.character(seqnames(cov)), start(cov), data.type = 'logratio')
   gc()
-  seg = DNAcopy::segment(smooth.CNA(cna), alpha = alpha, verbose = 0)
+  seg = DNAcopy::segment(DNAcopy::smooth.CNAsmooth.CNA(cna), alpha = alpha, verbose = 0)
   out = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
   out = gr.fix(out, new.sl, drop = T)
   if (verbose)
@@ -19756,55 +19774,235 @@ edge2tip = function(tree, matrix = TRUE)
 
 
 
-#' @name PPplots
-#' @title PPplots
-#' @description
+#' @name circos
+#' @title circos
 #'
-#' plot bin and het copy number histogram as well as a contour plot for allele fractions
-#'
-#' @param mc.cores integer number of cores to use (default 1)
-#' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
-############################################
-PPplots = function(cov, hets, pu, pl, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
+#' Quick utility function for circos plot with read depth, junctions, and segments
+#' 
+#' @param junctions Junction object with optional metadata field  $col to specify color
+#' @param cov GRanges of scatter points with optional fields $col
+#' @param segs GRanges of segments with optional fields $col and $border
+#' @param win GRanges window to limit plot to
+#' @param cytoband GRanges of cytoband
+#' @param y.field field in cov that specifies the y axis to draw
+#' @param cex.points cex for cov points
+#' @param max.ranges max ranges for cov points (1e4)
+#' @param ylim ylim on cov (default automatically computed)
+#' @param cytoband.path path to UCSC style cytoband path
+#' @param y.quantile quantile normalization
+#' @param chr.sum whether to chr.sub everything 
+#' @author Marcin Imielinski
+#' @export
+circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field = 'ratio', cytoband = NULL, y.field = field, ylim = NA, cytoband.path = '~/DB/UCSC/hg19.cytoband.txt', cex.points = 1, ideogram.outer = TRUE, scatter = TRUE, bar = FALSE, line = FALSE, gap.after = 1, labels.cex = 1, y.quantile = 0.9999, chr.sub = TRUE, max.ranges = 1e4, axis.frac = 0.02, palette = 'BrBg', ...)
+{
 
-            if (prefix!= ''){prefix = paste0(prefix, '_')}
-            #' histogram of bin copy number
-            cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
-            output = paste0(outputdir, '/', prefix, 'CN_hist_', suffix, '.png')
-            ppng(
-            {
-              hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
-              abline(v = 0:xmax, lty = 3, col = 'red')
-            }, output
-            )
-            #' histogram of het copy numbers
-            hetsc = rbind(
-              hets[, .(seqnames, start, end, count = alt.count.t, type = 'alt')],
-              hets[, .(seqnames, start, end, count = ref.count.t, type = 'ref')]
-            )
-            hetsc$ncn = 1
-            hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
-            output =  paste0(outputdir, '/', prefix, 'het_hist_', suffix, '.png')
-            ppng(
-            {
-              hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
-              abline(v = 0:xmax, lty = 3, col = 'red')
-            }, output)
-            #' density plots for hets
-            hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
-            hets2[, low := pmin(alt, ref)]
-            hets2[, high := pmax(alt, ref)]
-            output =  paste0(outputdir, '/', prefix, 'het_density_', suffix, '.png')
+  if (!file.exists(cytoband.path))
+    stop('cytoband not file, must be UCSC style tsv')
 
-            binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
-            if (binwidths[1] <= 0) | (binwidths[2] <= 0){
-                print('The density of the het allele count is too dense and so a stat_density_2d plot cannot be generated.')
-            else{
-                p = ggplot(hets2[sample(.N, N_subsample), ], aes(x = low, y = high, fill = ..level..)) +
-                        stat_density_2d(geom = "polygon") +
-                        scale_fill_distiller(palette = 4, direction = 1) +
-                        theme_bw(base_size = 25)
-                ppng(print(p), output)
-            }
+  if (is.null(cytoband))
+    cytoband = circlize::read.cytoband(cytoband.path)$df
 
+  cytoband = as.data.table(cytoband)
+  setnames(cytoband, c('seqnames', 'start', 'end', 'band', 'stain'))
+
+  if (chr.sub)
+    cytoband[, seqnames := gsub('chr', '', seqnames)]
+  
+  if (!is.null(win))
+  {
+    if (is.character(win) | is.integer(win) | is.numeric(win) | is.factor(win))
+      win = parse.gr(as.character(win))
+
+    if (inherits(win, 'data.frame'))
+      win = dt2gr(win)
+
+    cytoband  = as.data.table(dt2gr(cytoband) %*% win)[, .(seqnames, start, end, band, stain)]
+  }
+
+  total.width = cytoband[, sum(as.numeric(end-start))]
+  if (!is.na(axis.frac) && axis.frac>0)
+  {
+     axis.width = ceiling(axis.frac*total.width)
+     cytoband = rbind(cytoband, data.table(seqnames = 'axis', start = 0, end = axis.width, band = '', stain = ''), fill = TRUE)
+  }
+
+  if (chr.sub)
+  {
+    ix = ((junctions$left %>% gr.sub('chr', ''))  %^% dt2gr(cytoband)) &
+                          ((junctions$right %>% gr.sub('chr', '')) %^% dt2gr(cytoband))
+    junctions = junctions[ix]
+  }
+  else
+  {
+    ix = junctions$left %^% dt2gr(cytoband) & junctions$right %^% dt2gr(cytoband)
+    junctions = junctions[ix]
+  }
+
+  cytoband[, seqnames := as.character(seqnames)]
+  args  = list(...)
+  ## some important pars
+  labels.cex = ifelse(is.null(args$labels.cex), 1, args$labels.cex)
+  bands.height = ifelse(is.null(args$bands.height), 0.1, args$bands.height)
+  cn.height = ifelse(is.null(args$cn.height), 0.3, args$cn.height)
+  link.h.ratio = ifelse(is.null(args$link.h.ratio), 0.75, args$link.h.ratio)
+  bpdt = junctions$dt
+  bp1 = junctions$left %>% gr2dt
+  bp2 = junctions$right%>% gr2dt
+  circlize::circos.clear()
+  circlize::circos.par(start.degree = 90, gap.after = gap.after*1)
+  circlize::circos.genomicInitialize(cytoband, sector.names = unique(cytoband$seqnames), plotType = NULL, 
+                                          track.height = bands.height,
+                                          labels.cex = labels.cex)
+
+  circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
+                                panel.fun = function(region, value, ...) {
+                                  xlim = get.cell.meta.data("xlim")
+                                  ylim = get.cell.meta.data("ylim")
+                                  chr = get.cell.meta.data("sector.index") %>% gsub('chr', '', .)
+                                  if (get.cell.meta.data("sector.index") != 'axis')
+                                  {
+                                    circos.text(mean(xlim), 0.9, chr, cex = 1.5, facing = "clockwise", adj = c(0,1),
+                                                  niceFacing = TRUE)
+                                  }
+                                  }, track.height = 0.1, bg.border = NA)
+
+  ## inner ideogram
+  if (ideogram.outer)
+    {
+      circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
+                                    panel.fun = function(region, value, ...) {
+                                      xlim = get.cell.meta.data("xlim")
+                                      ylim = get.cell.meta.data("ylim")
+                                      chr = get.cell.meta.data("sector.index")
+                                      if (get.cell.meta.data("sector.index") != 'axis')
+                                      {
+                                        at = pretty(xlim, n = 3)
+                                        circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
+                                        circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
+                                        circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
+                                      }
+                                    }, track.height = 0.05, bg.border = NA)
+    }
+      
+  ## coverage scatter plot
+  if (!is.null(cov))
+  {
+    if (inherits(cov, 'data.frame'))
+      cov = dt2gr(cov)
+
+    cov = cov %Q% ((!is.na(values(cov)[[y.field]])))
+    cov = cov %Q% (!is.infinite(values(cov)[[y.field]]))
+    if (is.na(ylim))
+      ylim = c(0, quantile(values(cov)[[y.field]], y.quantile, na.rm = TRUE))
+    
+    cov$y = values(cov)[[y.field]]
+    cov$y = cov$y %>% pmin(ylim[2]) %>% pmax(ylim[1])
+
+    if (is.null(cov$col))
+      cov$col = 'black'
+
+    cov = cov[sample(length(cov), pmin(length(cov), max.ranges))]
+    uchr = unique(cytoband$seqnames)
+    cov = cov %&% dt2gr(cytoband)
+    covdt = gr2dt(cov)[, seqnames := factor(seqnames, uchr)]
+    circos.genomicTrackPlotRegion(covdt[, .(seqnames, start, end, y, as.character(col), ytop = y)],
+                                  ylim = ylim,
+                                  track.height = cn.height,
+                                  bg.border = ifelse(uchr == 'axis', NA, alpha('black', 0.2)),
+                                  panel.fun = function(region, value, ...) {
+                                    if (get.cell.meta.data("sector.index") != 'axis')
+                                    {
+                                      if (get.cell.meta.data("sector.index") == uchr[1])
+                                        circos.yaxis(side = 'left')                                    
+                                      if (scatter)
+                                        circos.genomicPoints(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                      if (bar)
+                                        circos.genomicRect(region, value[[1]], ytop.column = 1, border = value[[2]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                      if (line)
+                                        circos.genomicLines(region, value[[1]], col = value[[2]], pch = 16, cex = cex.points, ...)
+                                    }
+                                  })
+  }
+  circos.par(cell.padding = c(0, 0, 0, 0))
+
+  if (!is.null(segs))
+  {
+    if (inherits(segs, 'data.frame'))
+      segs = dt2gr(segs)
+
+    if (chr.sub)
+      segs = segs %>% gr.sub('chr', '')
+
+    segs = segs[segs %^% dt2gr(cytoband), ]
+
+    segs = as.data.table(segs)
+    if (is.null(segs$col))
+      segs$col = 'gray'
+
+    if (is.null(segs$border))
+      segs$border = segs$col
+
+    if (chr.sub)
+      segs[, seqnames := gsub('chr', '', seqnames)]
+
+    circos.genomicTrackPlotRegion(segs[, .(seqnames, start, end, col, border)], stack = TRUE,
+                                  panel.fun = function(region, value, ...) {
+                                    circos.genomicRect(region, value, col = value[[1]], border = value[[2]])
+                                    xlim = get.cell.meta.data("xlim")
+                                    ylim = get.cell.meta.data("ylim")
+                                    chr = get.cell.meta.data("sector.index")
+#                                    circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
+                                  }, track.height = 0.05, bg.border = NA)
+  }
+
+  circos.par(cell.padding = c(0, 0, 0, 0))
+
+  spmap = structure(c(0.05, 0.2, 1), names = levels(bpdt$span))
+
+
+  ## inner ideogram
+  if (!ideogram.outer)
+    {
+      circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
+                                    panel.fun = function(region, value, ...) {
+                                      xlim = get.cell.meta.data("xlim")
+                                      ylim = get.cell.meta.data("ylim")
+                                      chr = get.cell.meta.data("sector.index")
+                                      if (get.cell.meta.data("sector.index") != 'axis')
+                                      {
+                                        at = pretty(xlim, n = 3)
+                                        circos.axis(direction = "outside", labels.facing = "outside", major.at = at, minor.ticks = 10, labels = (at/1e6) %>% as.integer, labels.cex = labels.cex*0.3)
+                                        circos.genomicRect(region, value, col = cytoband.col(value[[2]]), border = NA)
+                                        circos.rect(xlim[1], ylim[1], xlim[2], ylim[2], border = "black")
+                                      }
+                                    }, track.height = 0.05, bg.border = NA)
+    }
+
+  if (nrow(bpdt))
+  {
+    if (is.null(bpdt$lwd))
+      bpdt$lwd = 1
+
+    if (is.null(bpdt$col))
+      bpdt$col = 'red'
+
+    if (is.null(bpdt$lty))
+      bpdt$lty = 1
+
+    if (nrow(bpdt))
+        bpdt$span  = cut(junctions$span, c(0, 1e6, 3e8, Inf))
+    ixs = split(1:nrow(bpdt), bpdt$span)
+    lapply(names(ixs), function(i)
+      circlize::circos.genomicLink(
+                  bp1[ixs[[i]], .(seqnames, start, end)],
+                  bp2[ixs[[i]], .(seqnames, start, end)],
+                  h = spmap[i],
+                  ## rou = circlize:::get_most_inside_radius()*c(0.1, 0.5, 1)[cut(junctions$span, c(0, 1e5, 1e7, Inf)) %>% as.integer],
+                  col = bpdt[ixs[[i]], ]$col,
+                  lwd =  bpdt[ixs[[i]], ]$lwd,
+                  lty =  bpdt[ixs[[i]], ]$lty,                    h.ratio = link.h.ratio,
+                  border=NA))
+  }
+  circlize::circos.clear()
 }
+
