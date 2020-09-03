@@ -19978,8 +19978,6 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
 
   circlize::circos.par(cell.padding = c(0, 0, 0, 0))
 
-  spmap = structure(c(0.05, 0.2, 1), names = levels(bpdt$span))
-
 
   ## inner ideogram
   if (!ideogram.outer)
@@ -20001,28 +19999,39 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
 
   if (nrow(bpdt))
   {
+
     if (is.null(bpdt$lwd))
-      bpdt$lwd = 1
+      bpdt$lwd = NA_integer_
+
+    bpdt[is.na(lwd), lwd := 1]
 
     if (is.null(bpdt$col))
-      bpdt$col = 'red'
+      bpdt$col = NA_character_
+
+    bpdt[is.na(col), col := 'red']
 
     if (is.null(bpdt$lty))
-      bpdt$lty = 1
+      bpdt$lty = NA_integer_
+
+    bpdt[is.na(lty), lty := 1]
 
     if (nrow(bpdt))
-        bpdt$span  = cut(junctions$span, c(0, 1e6, 3e8, Inf))
+      bpdt$span  = cut(junctions$span, c(0, 1e6, 3e8, Inf))
+
+    spmap = structure(c(0.05, 0.2, 1), names = levels(bpdt$span))
     ixs = split(1:nrow(bpdt), bpdt$span)
     lapply(names(ixs), function(i)
       circlize::circos.genomicLink(
                   bp1[ixs[[i]], .(seqnames, start, end)],
                   bp2[ixs[[i]], .(seqnames, start, end)],
                   h = spmap[i],
-                  ## rou = circlize:::get_most_inside_radius()*c(0.1, 0.5, 1)[cut(junctions$span, c(0, 1e5, 1e7, Inf)) %>% as.integer],
+#                  rou = circlize:::get_most_inside_radius()*c(0.1, 0.5, 1)[bpdt$span[ixs[[i]]] %>% as.integer],
                   col = bpdt[ixs[[i]], ]$col,
                   lwd =  bpdt[ixs[[i]], ]$lwd,
-                  lty =  bpdt[ixs[[i]], ]$lty,                    h.ratio = link.h.ratio,
-                  border=NA))
+                  lty =  bpdt[ixs[[i]], ]$lty,
+                  h.ratio = link.h.ratio,
+                  border=NA)
+      )
   }
   circlize::circos.clear()
 }
