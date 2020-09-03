@@ -20004,5 +20004,89 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
                   border=NA))
   }
   circlize::circos.clear()
+
+
+#' Plot bin and het copy number histogram as well as a contour plot for allele fractions.
+#'
+#' @param cov bin coverage depth
+#' @param hets het_pileup
+#' @param pu purity
+#' @param pl ploidy
+#' @param xmax maximum value for x-axis of histograms
+#' @param outputdir output directory for plots
+#' @param prefix a prefix to use for output plots
+#' @param suffix a suffix to use for output plots
+#' @param N_subsample How many entries to randomly sample from hets when generating the contour plot
+#' @export
+#' @author Alon Shaiber
+PPplots = function(cov, hets, pu, pl, somatic_vars=NA, xmax=10, hist_breaks=1e4, outputdir='.', prefix='', suffix = '', N_subsample=1e4){
+    if (prefix!= ''){prefix = paste0(prefix, '_')}
+    if (suffix!= ''){suffix = paste0('_', suffix)}
+    #' histogram of bin copy number
+    cov$cn = rel2abs(cov, field = 'foreground', purity = pu, ploidy = pl)
+    output = paste0(outputdir, '/', prefix, 'CN_hist', suffix, '.pdf')
+    ppdf(
+    {
+      hist(cov$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram')
+      abline(v = 0:xmax, lty = 3, col = 'red')
+    }, output
+    )
+    #' histogram of het copy numbers
+    hetsc = rbind(
+      hets[, .(seqnames, start, end, count = alt.count.t, type = 'alt')],
+      hets[, .(seqnames, start, end, count = ref.count.t, type = 'ref')]
+    )
+    hetsc$ncn = 1
+    hetsc$cn = rel2abs(hetsc %>% dt2gr, field = 'count', purity = pu, ploidy = pl/2)
+    output =  paste0(outputdir, '/', prefix, 'het_hist', suffix, '.pdf')
+    ppdf(
+    {
+      hist(hetsc$cn %>% pmin(xmax), hist_breaks, xlab = 'Rescaled copy number', main = 'Copy number histogram for alleles')
+      abline(v = 0:xmax, lty = 3, col = 'red')
+    }, output)
+    #' density plots for hets
+    hets2 = dcast.data.table(hetsc, seqnames + start + end ~ type, value.var = 'cn')
+    hets2[, low := pmin(alt, ref)]
+    hets2[, high := pmax(alt, ref)]
+    output =  paste0(outputdir, '/', prefix, 'het_density', suffix, '.pdf')
+
+    binwidths = c(MASS::bandwidth.nrd(hets2$low), MASS::bandwidth.nrd(hets2$high))
+    if ((binwidths[1] <= 0) | (binwidths[2] <= 0)){
+        print('The density of the het allele count is too dense and so a stat_density_2d plot cannot be generated.')
+    }
+    else{
+        p = ggplot(hets2[sample(.N, N_subsample), ], aes(x = low, y = high, fill = ..level..)) +
+                stat_density_2d(geom = "polygon") +
+                scale_fill_distiller(palette = 4, direction = 1) +
+                theme_bw(base_size = 25)
+        ppdf(print(p), output)
+    }
 }
 
+#' @name file.ready
+#' @title file.ready
+#' @description
+#'
+#' Checks if a file exists and whether it is empty or not.
+#'
+#' @details
+#' Returns TRUE if an input file path is not NA, exists, and not an empty file.
+#' If the path provided is NA then by default FALSE would be returned, unless dont_raise is set to TRUE
+#' and then an error would be raised.
+#' @param path path to the file
+#' @param dont_raise if set to FALSE then an error would be raised if there was no path provided
+#' @export
+#' @author Alon Shaiber
+file.ready = function(path, dont_raise=TRUE){
+    not_nas = !is.na(path)
+    if (any(not_nas)){
+        if (dont_raise == FALSE){
+            stop('There was no file provided.')
+        }
+    }
+    if (class(path) != "character"){
+        stop(sprintf('File name must be of type "character", but you provided a "%s" object.', class(path)))
+    }
+    exists = file.exists(path)
+    nonzero = file.size(path) > 0
+    return(not_nas & exists & nonzero)
