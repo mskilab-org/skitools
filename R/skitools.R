@@ -419,7 +419,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     else
     {
       subsample = pmin(pmax(0, subsample[1]), 1)
-      dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.y), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
+      dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
     }
     
     if (!is.null(dat$label) && any(nchar(dat$label)>0, na.rm = TRUE))
@@ -432,7 +432,8 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     if (!is.na(subsample))
       dat = dat[sample(nrow(dat), subsample*nrow(dat)), ]
 
-    lines(x=c(0, max.x), y = c(0, lambda*max.y), col = "red", lty = 2, lwd = lwd);
+
+    lines(x=c(0, max.x), y = c(0, lambda*max.x), col = "red", lty = 2, lwd = lwd);
     legend('bottomright',sprintf('lambda=\n %.2f', lambda), text.col='red', bty='n')
   }
   else{
@@ -10418,8 +10419,12 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
 
         out$modifier = !grepl('(HIGH)|(LOW)|(MODERATE)', out$eff)
         if (!keep.modifier)
-              out = out[!out$modifier]
-        tmp = lapply(strsplit(out$ANN, ','), function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
+          out = out[!out$modifier]
+        if (inherits(out$ANN, 'character'))
+          annlist = strsplit(out$ANN, ',')
+        else
+          annlist = out$ANN %>% as.list
+        tmp = lapply(annlist, function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
         tmpix = rep(1:length(out), elementNROWS(tmp))
         meta = as.data.frame(do.call(rbind, tmp))
         colnames(meta) = fn
@@ -19001,7 +19006,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
     jn = merge(jJ(grl), junctions, cartesian = TRUE, pad = pad)
     if (!length(jn))
       return(reads[c()])
-    out = merge(as.data.table(reads), unique(jn$dt[, .(qname, junction.id = subject.id)]), by = 'qname') %>% dt2gr(seqlengths = sl)
+    out = merge(as.data.table(gr.flipstrand(reads)), unique(jn$dt[, .(qname, junction.id = subject.id)]), by = 'qname') %>% dt2gr(seqlengths = sl)
     return(out)
   }
   
@@ -19303,7 +19308,8 @@ oncoprint = function(tumors = NULL,
                      return.oncotab = FALSE,
                      return.mat = FALSE,                     
                      wes = TRUE,
-                     drop = TRUE, 
+                     drop = TRUE,
+                     drop.genes = FALSE, 
                      track.height = 1,
                      signature.thresh = 0.2,
                      signature.main = c(1:5,7,9,13),
@@ -19330,6 +19336,8 @@ oncoprint = function(tumors = NULL,
     genes = dunlist(genes)[, .(genes = V1, group = listid)]
   else
     genes = data.table(genes = genes, group = NA)
+
+  genes = genes[!duplicated(genes), ]
 
   if (!is.null(tumors))
   {
@@ -19383,7 +19391,16 @@ oncoprint = function(tumors = NULL,
     else
       stop('empty oncotable provided, please check inputs')
   }
-  
+
+  ## temp FIX: remove hetdel for genes that have a homdel --> need to fix oncotable itself to deal with this
+  if (any(ix <- oncotab$type == 'homdel'))
+  {
+    oncotab[, rem := FALSE]
+    oncotab[type %in% c('amp', 'hetdel', 'homdel'), rem := type == 'hetdel' & any(type == 'homdel'), by = .(gene, id)]
+    oncotab = oncotab[rem == FALSE, ]
+    oncotab$rem = NULL
+  }
+
   vars = oncotab[track == 'variants', ][gene %in% genes$genes, ][type != 'synonymous', ]
 
   ## keep track of missing samples ie those that had either SNV, jabba, fusions
@@ -19706,7 +19723,7 @@ oncoprint = function(tumors = NULL,
                       column_gap = unit(split.gap, 'cm'),
                       col = varcol,
                       remove_empty_columns = FALSE,
-                      remove_empty_rows = FALSE, 
+                      remove_empty_rows = drop.genes, 
                       row_order = 1:nrow(varm),
                       column_order = 1:ncol(varm),
                       pct_gp = gpar(fontsize = rownames.fontsize),
