@@ -19135,8 +19135,9 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
       fus = readRDS(dat[x, fusions])$meta
       if (nrow(fus))
       {
-        fus = fus[in.frame == TRUE & silent == FALSE, ][!duplicated(genes), ]
-        fus = fus[, .(gene = strsplit(genes, ',') %>% unlist)][, id := x][, track := 'variants'][, type := 'fusion'][, source := 'fusions'][, vartype := 'fusion']
+        fus = fus[silent == FALSE, ][!duplicated(genes), ]
+        fus[, vartype := ifelse(in.frame == TRUE, 'fusion', 'outframe_fusion')] # annotate out of frame fusions
+        fus = fus[, .(gene = strsplit(genes, ',') %>% unlist, vartype = rep(vartype, sapply(strsplit(genes, ','), length)))][, id := x][, track := 'variants'][, type := vartype][, source := 'fusions']
         out = rbind(out, fus, fill = TRUE, use.names = TRUE)
       }
     } 
@@ -19305,6 +19306,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
 #' @param split.gap  gap between splits
 #' @param signature.main integer indices of main COSMIC signatures to keep
 #' @param signature.thresh lower threshold for non main signature fraction in at least one sample to plot
+#' @param outframe.fusions show fusions that are out-of-frame (FALSE)
 #' @param cex length 1 or 2 vector canvas expansion factor to apply to the oncoprint itself (relative to 10 x 10 cm) (c(1,3))
 #' @param return.mat whether to return.mat
 #' @param wes logical flag whether to use wesanderson coolors
@@ -19330,6 +19332,7 @@ oncoprint = function(tumors = NULL,
                      track.height = 1,
                      signature.thresh = 0.2,
                      signature.main = c(1:5,7,9,13),
+                     outframe.fusions = FALSE,
                      track.gap = track.height/2,
                      split.gap = 1,
                      colnames.fontsize = 10,
@@ -19470,7 +19473,10 @@ oncoprint = function(tumors = NULL,
     }
     
   ## customize appeagrid appearance with mix of rectangles and circles
-  ord = c("amp", "hetdel", "homdel", "fusion", "missense", "splice", 'trunc', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory')
+  ord = c("amp", "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory')
+  if (outframe.fusions == TRUE){
+      ord = c("amp", "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'outframe_fusion', 'fusion', 'missense', 'promoter', 'regulatory')
+  }
   alter_fun = function(x, y, w, h, v) {
     CSIZE = 0.25
     w = convertWidth(w, "cm")*0.7
@@ -19479,7 +19485,7 @@ oncoprint = function(tumors = NULL,
     grid.rect(x, y, w, h, gp = gpar(fill = alpha("grey90", 0.4), col = NA))
     v = v[ord]
     for (i in which(v)) {
-      if (names(v)[i] %in% c('amp', "hetdel", "homdel", 'fusion'))
+      if (names(v)[i] %in% c('amp', "hetdel", "homdel", 'fusion', 'outframe_fusion'))
         grid.rect(x,y,w,h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else if (grepl("missing", names(v)[i]))
         grid.rect(x, y, w, h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
@@ -19504,6 +19510,7 @@ oncoprint = function(tumors = NULL,
   varcol = c(
     WT = alpha('gray', 0),
     fusion = alpha('green', 0.5),
+    outframe_fusion = alpha('greenyellow', 0.5),
     hetdel = 'lightblue',
     missing = 'gray',            
     amp = "red",
