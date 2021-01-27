@@ -19170,10 +19170,29 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
 
       gg = gG(jab = jab)
 
+      # get the ncn data from jabba
+      kag = readRDS(dat[x, gsub("jabba.simple.rds", "karyograph.rds", jabba_rds)])
+      ngr = gg$nodes$gr
+      if ('ncn' %in% names(mcols(kag$segstats))){
+          ngr = ngr %$% kag$segstats[, c('ncn')]
+      } else {
+          # if there is no ncn in jabba then assume ncn = 2
+          ngr$ncn = 2
+      }
+      ndt = gr2dt(ngr)
+
+      # we will use the normal ploidy to determine hetdels 
+      # so instead of a cutoff of del.thresh * ploidy, we use:
+      # del.thresh * ploidy * ncn / normal_ploidy
+      # where ncn is the local normal copy number
+      seq_widths = as.numeric(width(ngr))
+      # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
+      normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
+
       scna = rbind(
-        gg$nodes$dt[cn>=amp.thresh*jab$ploidy, ][, type := 'amp'],
-        gg$nodes$dt[cn == 1 | cn<del.thresh*jab$ploidy, ][, type := 'hetdel'],
-        gg$nodes$dt[cn == 0, ][, type := 'homdel']
+        ndt[cn>=amp.thresh*jab$ploidy, ][, type := 'amp'],
+        ndt[cn < ncn | cn<del.thresh*jab$ploidy*ncn/normal_ploidy, ][, type := 'hetdel'],
+        ndt[cn == 0, ][, type := 'homdel']
       )
 
       if (nrow(scna))
