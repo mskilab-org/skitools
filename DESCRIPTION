@@ -1,0 +1,44 @@
+Package: skitools
+Title: Various mskilab R utilties
+Version: 0.0.0.9000
+Maintainer: Marcin Imielinski <mimielinski@nygenome.org>
+Author: Marcin Imielinski <mimielinski@nygenome.org>
+Authors@R: person("Marcin", "Imielinski", email = "mimielinski@nygenome.org", role = c("aut", "cre"))
+Description: R miscellaneous utilities for basic data manipulation, debugging,
+    viz, lsf management, and common mskilab tasks.
+Imports:
+    gplots,
+    hwriter,
+    S4Vectors,
+    RColorBrewer,
+    methods,		
+    reshape2,		
+    IRanges,		
+    tools,		
+    Biostrings,
+    DT,
+    GenomeInfoDb	
+Depends:
+    R (>= 3.1.0),
+    GenomicRanges,
+    ComplexHeatmap,
+    VariantAnnotation,
+    htmlwidgets,
+    devtools,
+    gUtils,
+    stringr,
+    plotly,
+    ggplot2,	
+    data.table,
+    reshape2, 
+    igraph
+Remotes: 
+  github::mskilab/gUtils,
+  github::mskilab/gTrack
+Suggests:
+    testthat,
+    parallel,
+    BSgenome.Hsapiens.UCSC.hg19
+License: MIT
+LazyData: true
+RoxygenNote: 7.1.1
