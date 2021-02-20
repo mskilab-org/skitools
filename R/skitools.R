@@ -18829,7 +18829,7 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
   readsc$strand.og = strand(reads)[readsc$ix] %>% as.character
   readsc$start.og = start(reads)[readsc$ix]
   readsc$end.og = end(reads)[readsc$ix]
-  readsc$ref.isizep = gr2dt(readsc)[, ref.isize := ifelse(
+  readsc$ref.isize = gr2dt(readsc)[, ref.isize := ifelse(
                                        all(seqnames.og == seqnames.og[1]) & all(strand.og == strand.og[1]),
                                        as.numeric(diff(range(c(start.og, end.og)))),                                   
                                        Inf), by = qname]$ref.isize %>% abs
