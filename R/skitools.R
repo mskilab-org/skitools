@@ -2180,6 +2180,7 @@ vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 #' @param wins tiles to chop up genome further (beyond walk segments)
 #' @param raw  returns raw barcode by walk matrix of barcode scores
 #'
+#' @import gChain
 #' @return scores of walks or (if raw == tRUE) raw barcode to walk maps
 #' @export
 #' @author Marcin Imielinski
@@ -2347,14 +2348,14 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     ## lift read onto walk coordinates using gChain
     wk.nm = names(wks)
     names(wks) = 1:length(wks)
-    wks.chain = spChain(wks)
+    wks.chain = gChain::spChain(wks)
 
     ## now we want to ask what are the read pairs that now become concordant
     ## on each lifted walk??
     ## then score per BX and walk, how many discordant pairs are made concordant post-lift
     ## and finally note which barcodes have the maximum number of their discordant pairs
     ## lifted onto the walk
-    readsdl = wks.chain * readsd
+    readsdl = gChain::lift(wks.chain, readsd)
     readsdl.dt = as.data.table(readsdl)[order(seqnames, start), ]
 
     ## use similar criteria to above to identify discordant / concordant reads in "lifted coordinates"
@@ -2380,8 +2381,8 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     if (verbose)
       message("Lifting concordant linked read footprints onto walks")
 
-    rovcl = wks.chain * readsc
-    rovclb = t(wks.chain) * rovcl
+    rovcl = gChain::lift(wks.chain, readsc)
+    rovclb = gChain::lift(t(wks.chain),  rovcl)
     values(rovclb)$walk = as.integer(seqnames(rovcl)[rovclb$query.id]) ## without as.integer(), gr.findoverlaps fails below
     values(rovclb)$bx.walk = paste(values(rovclb)$BX, values(rovclb)$walk)
 
@@ -12510,7 +12511,7 @@ reads.to.walks = function(bam, walks, outdir = './test', hg = skidb::read_hg(fft
 
     if (!all(file.exists(walks.gff)))
       {
-        tmp = spChain(walks)$y;
+        tmp = gChain::spChain(walks)$y;
         export.gff(split(tmp, seqnames(tmp)), walks.gff)
       }
 
