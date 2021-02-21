@@ -2382,7 +2382,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
       message("Lifting concordant linked read footprints onto walks")
 
     rovcl = gChain::lift(wks.chain, readsc)
-    rovclb = gChain::lift(t(wks.chain),  rovcl)
+    rovclb = gChain::lift(gChain::t(wks.chain),  rovcl)
     values(rovclb)$walk = as.integer(seqnames(rovcl)[rovclb$query.id]) ## without as.integer(), gr.findoverlaps fails below
     values(rovclb)$bx.walk = paste(values(rovclb)$BX, values(rovclb)$walk)
 
