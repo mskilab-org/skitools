@@ -34,6 +34,7 @@ Depends:
     igraph
 Remotes: 
   github::mskilab/gUtils,
+  github::mskilab/gChain, 
   github::mskilab/gTrack
 Suggests:
     testthat,
