@@ -2251,6 +2251,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     if (verbose)
         message("Identifying discordant pairs")
 
+    setkey(reads.dt, "qname")
     reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
     reads.dt[, both := any(R1) & any(!R1), by = qname]
     reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
