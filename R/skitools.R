@@ -19220,7 +19220,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
       normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
 
       scna = rbind(
-        ndt[cn>=amp.thresh*jab$ploidy, ][, type := 'amp'],
+        ndt[cn>=amp.thresh*jab$ploidy * ncn / normal_ploidy, ][, type := 'amp'],
         ndt[cn < ncn | cn<del.thresh*jab$ploidy*ncn/normal_ploidy, ][, type := 'hetdel'],
         ndt[cn == 0, ][, type := 'homdel']
       )
