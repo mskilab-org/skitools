@@ -2255,11 +2255,14 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
       if (verbose)
         message("Identifying discordant pairs")
 
-      reads.dt[, both := any(R1) & any(!R1), by = qname]
-      reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
-                                  first.strand.pos = str[1],
-                                  other.strand.pos = any(str[R1!=R1[1]])
-                                  ), by = qname]
+
+    setkey(reads.dt, "qname")
+    reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
+    reads.dt[, both := any(R1) & any(!R1), by = qname]
+    reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
+                                first.strand.pos = str[1],
+                                other.strand.pos = any(str[R1!=R1[1]])
+                                ), by = qname]
 
       reads.dt[first.strand.pos & !other.strand.pos & !sn.diff, insert.size := max(end[R1!=R1[1]])-start[1], by = qname]
 
@@ -19227,7 +19230,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
       normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
 
       scna = rbind(
-        ndt[cn>=amp.thresh*jab$ploidy, ][, type := 'amp'],
+        ndt[cn>=amp.thresh*jab$ploidy * ncn / normal_ploidy, ][, type := 'amp'],
         ndt[cn < ncn | cn<del.thresh*jab$ploidy*ncn/normal_ploidy, ][, type := 'hetdel'],
         ndt[cn == 0, ][, type := 'homdel']
       )
@@ -20204,3 +20207,59 @@ file.ready = function(path, dont_raise=TRUE){
     return(not_nas & exists & nonzero)
 }
 
+
+#' @name get.pileup.gtrack
+#' @title get.pileup.gtrack
+#' @description
+#'
+#' Get a gTrack object with fraction reads matching the major and minor allele in het pileup counts.
+#'
+#' @details
+#' Returns a gTrack object with two tracks one for tumor reads and one for the matched normal.
+#' Minor and major allele are colored by green and red respectively.
+#' @param sites output of het pileup (either a data.table object or a path to the tab-delimited file containing the output)
+#' @return gTrack object with two tracks corresponding to normal and tumor minor and major allele frequencies
+#' @export
+#' @author Alon Shaiber
+get.pileup.gtrack = function(sites){
+    if (!inherits(sites, 'data.table')){
+        if (file.ready(sites) == TRUE){
+            sites = fread(sites)
+        } else {
+            stop('sites object must be either a data.table or a path to the tab-delimited file with the output of het pileup.')
+        }
+    }
+    sites[, `:=`(minor = pmin(ref.count.t, alt.count.t),
+               major = pmax(ref.count.t, alt.count.t),
+               minor.frac = pmin(ref.frac.t, alt.frac.t),
+               major.frac = pmax(ref.frac.t, alt.frac.t))]
+    sites[minor == 0 & major == 0, `:=`(major.frac = 0,
+                                      minor.frac = 0)]
+
+    sites[, `:=`(minor.n = pmin(ref.count.n, alt.count.n),
+               major.n = pmax(ref.count.n, alt.count.n),
+               minor.frac.n = pmin(ref.frac.n, alt.frac.n),
+               major.frac.n = pmax(ref.frac.n, alt.frac.n))]
+    sites[minor.n == 0 & major.n == 0, `:=`(major.frac.n = 0,
+                                      minor.frac.n = 0)]
+
+    sites[, id:=.I]
+
+    frac.mn = melt(sites, id.vars = 'id',
+         measure.vars = names(sites)[grepl('r.frac', names(sites))],
+         variable.name = 'frac.type',
+         value.name = 'frac')
+
+    fracgr.t = dt2gr(merge(sites, frac.mn[frac.type %in% c('minor.frac', 'major.frac')], by = 'id'))
+    fracgr.n = dt2gr(merge(sites, frac.mn[frac.type %in% c('minor.frac.n', 'major.frac.n')], by = 'id'))
+
+    frac.colors.t = c('red', 'green')
+    names(frac.colors.t) = c('major.frac', 'minor.frac')
+    frac.colors.n = c('red', 'green')
+    names(frac.colors.n) = c('major.frac.n', 'minor.frac.n')
+    gt.het.t = gTrack(fracgr.t, 'frac', y0 = 0, y1 = 1, lwd.border = 0.2, circles = TRUE, colormap = list('frac.type' = frac.colors.t))
+    gt.het.n = gTrack(fracgr.n, 'frac', name = 'frac.n', y0 = 0, y1 = 1, lwd.border = 0.2, circles = TRUE, colormap = list('frac.type' = frac.colors.n))
+    gt.het.n$legend = FALSE
+
+    return(c(gt.het.t, gt.het.n))
+}
