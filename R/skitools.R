@@ -2179,12 +2179,13 @@ vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 #' @param win  genomic window in which to score (default is just reduce(unlist(wks))))
 #' @param wins tiles to chop up genome further (beyond walk segments)
 #' @param raw  returns raw barcode by walk matrix of barcode scores
+#' @param use.discordant logical flag whether to process discordant
 #'
 #' @import gChain
 #' @return scores of walks or (if raw == tRUE) raw barcode to walk maps
 #' @export
 #' @author Marcin Imielinski
-score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, rthresh= 4, thresh = 1e5, pad = 1e4, raw = FALSE, allpaths = TRUE, verbose = TRUE)
+score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, use.discordant = FALSE, rthresh= 4, thresh = 1e5, pad = 1e4, raw = FALSE, allpaths = TRUE, verbose = TRUE)
 {
     shift = data.table::shift
     rowSums = Matrix::rowSums
@@ -2194,42 +2195,42 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
 
         tmp = unique(disjoin(gr.stripstrand(unlist(wks))))
         wins = sort(disjoin(c(gr.start(tmp, pad), gr.end(tmp, pad))))
-        strand(wins) = '+'
+      strand(wins) = '+'
     }
 
     ## add 1 unit of "padding" to any cyclic walks to adequately measure
     cyc.ix = values(wks)$is.cyc
 
     if (any(cyc.ix))
-        wks[cyc.ix] = do.call(GRangesList, lapply(which(cyc.ix), function(x) c(wks[[x]], wks[[x]])))
+      wks[cyc.ix] = do.call(GRangesList, lapply(which(cyc.ix), function(x) c(wks[[x]], wks[[x]])))
 
 
     THRESH = thresh
 
     if (!is.null(win))
-        wins = wins[gr.in(wins, win)]
+      wins = wins[gr.in(wins, win)]
 
     if (verbose)
-        message('Total territory to analyze is ', round(sum(as.numeric(width(wins)))/1e6,2), 'MB')
+      message('Total territory to analyze is ', round(sum(as.numeric(width(wins)))/1e6,2), 'MB')
 
     if (sum(as.numeric(width(wins)))/1e6==0)
-        stop('No walk areas intersect with provided win')
+      stop('No walk areas intersect with provided win')
 
     reads.dt = NULL;
     if (!is.null(bam))
     {
-        if (verbose)
-            message('Pulling out reads')
+      if (verbose)
+        message('Pulling out reads')
 
-        reads = dt2gr(read.bam(bam, streduce(wins), tag = 'BX', as.data.table = TRUE))
+      reads = dt2gr(read.bam(bam, streduce(wins), tag = 'BX', as.data.table = TRUE))
     }
 
     if (!inherits(reads, 'GRanges'))
-        reads = dt2gr(reads)
+      reads = dt2gr(reads)
 
 
     if (verbose)
-        message("Computing insert size distro for ", length(reads), " reads")
+      message("Computing insert size distro for ", length(reads), " reads")
 
     reads = reads[!is.na(reads$BX), ]
     reads.dt = as.data.table(reads)
@@ -2237,8 +2238,8 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     ## rthresh is reads per barcode filter
     ## i.e. remove all barcodes with fewer than rthresh reads per barcode
     if (!is.na(rthresh))    {
-        keep.bx = reads.dt[, length(start), keyby = "BX"][V1>=rthresh, BX]
-        reads.dt = reads.dt[BX %in% keep.bx, ]
+      keep.bx = reads.dt[, length(start), keyby = "BX"][V1>=rthresh, BX]
+      reads.dt = reads.dt[BX %in% keep.bx, ]
     }
     bxlev = unique(reads$BX)
 
@@ -2246,43 +2247,45 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, r
     
     reads.dt[, sn:= as.integer(seqnames)]
     reads.dt[, str := strand == '+']
+    reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
 
-    ## nullify isize for discordant pairs
-    if (verbose)
+    if (use.discordant)
+    {
+      ## nullify isize for discordant pairs
+      if (verbose)
         message("Identifying discordant pairs")
 
-    reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
-    reads.dt[, both := any(R1) & any(!R1), by = qname]
-    reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
-                                first.strand.pos = str[1],
-                                other.strand.pos = any(str[R1!=R1[1]])
-                                ), by = qname]
+      reads.dt[, both := any(R1) & any(!R1), by = qname]
+      reads.dt[both == TRUE, ":="(sn.diff = any(diff(sn)!=0),
+                                  first.strand.pos = str[1],
+                                  other.strand.pos = any(str[R1!=R1[1]])
+                                  ), by = qname]
 
-    reads.dt[first.strand.pos & !other.strand.pos & !sn.diff, insert.size := max(end[R1!=R1[1]])-start[1], by = qname]
+      reads.dt[first.strand.pos & !other.strand.pos & !sn.diff, insert.size := max(end[R1!=R1[1]])-start[1], by = qname]
 
                                         #reads.dt[, insert.sizez := scale(insert.size)]
-    ithresh.high = quantile(reads.dt$insert.size, 0.99, na.rm = TRUE)
-    ithresh.low = quantile(reads.dt$insert.size, 0.80, na.rm = TRUE)
-    reads.dt[, count := length(start), by = qname]
-    reads.dt[both == TRUE, discordant := insert.size > ithresh.high]
-    init.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
-    
+      ithresh.high = quantile(reads.dt$insert.size, 0.99, na.rm = TRUE)
+      ithresh.low = quantile(reads.dt$insert.size, 0.80, na.rm = TRUE)
+      reads.dt[, count := length(start), by = qname]
+      reads.dt[both == TRUE, discordant := insert.size > ithresh.high]
+      init.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
+      
                                         #      ithresh.high = reads.dt[insert.sizez>zthresh, min(insert.size)]
 
 
-    ## filter "short dup" read pairs from  discordants (- to the left of + read ...)
-    ## which seems to be artifact mode in 10X data
-    ## (i.e. no longer call them discordant)
-    dthresh = 1e4
-    reads.dt[discordant == TRUE, ddist := abs(end-mpos)]
-    reads.dt[discordant == TRUE & ddist<dthresh & sn.diff == 0 & !first.strand.pos & other.strand.pos, discordant := NA]
+      ## filter "short dup" read pairs from  discordants (- to the left of + read ...)
+      ## which seems to be artifact mode in 10X data
+      ## (i.e. no longer call them discordant)
+      dthresh = 1e4
+      reads.dt[discordant == TRUE, ddist := abs(end-mpos)]
+      reads.dt[discordant == TRUE & ddist<dthresh & sn.diff == 0 & !first.strand.pos & other.strand.pos, discordant := NA]
 
-    if (verbose)
-  {
-    final.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
-    message('Found ', final.disc, ' discordant pairs after removing ', init.disc - final.disc, ' small dup-like pairs')
-  }
-
+      if (verbose)
+      {
+        final.disc = reads.dt[!duplicated(qname), sum(discordant, na.rm = TRUE)]
+        message('Found ', final.disc, ' discordant pairs after removing ', init.disc - final.disc, ' small dup-like pairs')
+      }
+    }
   if (verbose)
     message("Identifying barcode strobe width")
 
@@ -10360,10 +10363,17 @@ match.seq = function(query, subject, mc.cores = 1, verbose = FALSE, ...)
 #' @title grok_vcf
 #' @description
 #'
-#' Does additional processing of annotated vcf output and produces
+#' Does additional processing of annotated  vcf output and produces
 #' a more readable granges output.
 #'
+#' Warning: this function expects SnpEFF VCF input!!!
+#'
 #' @param x GRanges input
+#' @param label character value that will be added as a $label column
+#' @param keep.modifier logical flag whether to keep modifier output
+#' @param long logical flag whether to expand output so that every annotation has its own row, warning: will create duplicate rows for a given variant
+#' @param oneliner logical flag whether to add a oneliner for the annotation
+#' @param verbose logical flag whether to pritn output
 #' @export
 grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner = FALSE, verbose = FALSE)
 {
@@ -10425,6 +10435,7 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         else
           annlist = out$ANN %>% as.list
         tmp = lapply(annlist, function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
+        browser()
         tmpix = rep(1:length(out), elementNROWS(tmp))
         meta = as.data.frame(do.call(rbind, tmp))
         colnames(meta) = fn
@@ -10511,14 +10522,12 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
   {
     cmd = paste(cmd, '-g hom')
   }
-
+  
   ## quick dunlist
   .dunlist = function(x)
   {
-    if (is.null(names(x)))
-      names(x) = 1:length(x)
-    out = data.table(listid = rep(names(x), elementNROWS(x)), V1 = unlist(x))
-    setkey(out, listid)
+    ## simplified dunlist to output integer listid and also listiid 
+    out = data.table(listid = rep(1:length(x), elementNROWS(x)), V1 = unlist(x))[, listiid := 1:.N, by = listid]
     return(out)
   }
   
@@ -10545,26 +10554,25 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcfto
       out[, seqnames := as.character(CHROM)]
       out[, start := POS]
       out[, end := POS]
+      out[, listid := 1:.N] ## set listid to keep track of lists
       ## unpack bcf "format" + sample fields
+
       fdat = .dunlist(strsplit(out$FORMAT, ':'))
       setnames(fdat,2,'field')
-      out$FORMAT = NULL
+    #  out$FORMAT = NULL ### keep in for now for sanity checks 
       for (sfield in sfields) ## can be more than one sample field
       {
-        fdat$value = .dunlist(strsplit(out[[sfield]], ':'))$V1
-        fdatc = dcast.data.table(copy(fdat)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'value')
-        out[, listid := as.character(1:.N)]
-        out = merge(out, fdatc, by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
-      }
-      
+        fdatm = fdat %>% merge(.dunlist(strsplit(out[[sfield]], ':')), by = c('listid', 'listiid')) ## merge on both listid and listiid 
+        fdatc = dcast.data.table(copy(fdatm)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'V1')
+        out = merge(out, fdatc, by = 'listid', all.x = TRUE) ## order of out should be maintained here since keyed by listid which (now) is an integer
+      }      
       ## unpack "info" field
       idat = .dunlist(strsplit(out$INFO, ';'))
       idat = cbind(idat, colsplit(idat$V1, pattern = "=", names = c("field","value")))
       idatc = dcast.data.table(idat, listid ~ field, value.var = 'value')
       out$INFO = NULL
-      out[, listid := as.character(1:.N)]
       mcols = setdiff(names(idatc), c('REF', 'ALT'))
-      out = merge(out, idatc[, mcols, with = FALSE], by = 'listid', all.x = TRUE, allow.cartesian = TRUE)
+      out = merge(out, idatc[, mcols, with = FALSE], by = 'listid', all.x = TRUE) ## 
       out = dt2gr(out, seqlengths = sl)
       out = grok_vcf(out, keep.modifier = keep.modifier, long = long, oneliner = oneliner, verbose = verbose, label = label)
     }
@@ -18142,7 +18150,7 @@ ssegment = function(cov, field = NULL, log = TRUE, verbose = TRUE, alpha = 1e-5)
     }
   cna = DNAcopy::CNA(cov$y, as.character(seqnames(cov)), start(cov), data.type = 'logratio')
   gc()
-  seg = DNAcopy::segment(DNAcopy::smooth.CNAsmooth.CNA(cna), alpha = alpha, verbose = 0)
+  seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = alpha, verbose = 0)
   out = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
   out = gr.fix(out, new.sl, drop = T)
   if (verbose)
