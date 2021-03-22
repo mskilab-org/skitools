@@ -10438,7 +10438,7 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         else
           annlist = out$ANN %>% as.list
         tmp = lapply(annlist, function(y) do.call(rbind, lapply(strsplit(y, '\\|'), '[', 1:15)))
-        browser()
+        #browser()
         tmpix = rep(1:length(out), elementNROWS(tmp))
         meta = as.data.frame(do.call(rbind, tmp))
         colnames(meta) = fn
