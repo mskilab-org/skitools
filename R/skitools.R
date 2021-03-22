@@ -19229,6 +19229,14 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
       {
         scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
 
+        # for genes that have amp - filter any gene that has portion covered lower than 100%
+        pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
+        pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
+        pge_amps_dt = gr2dt(pge_amps)
+        min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
+        amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
+        scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+
         if (nrow(scna))
         {
           scna[, track := 'variants'][, source := 'jabba_rds'][, vartype := 'scna']
