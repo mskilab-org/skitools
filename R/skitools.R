@@ -19369,6 +19369,7 @@ oncoprint = function(tumors = NULL,
                      sort = TRUE, sort.genes = sort, sort.tumors = sort,
                      columns = NULL,
                      noncoding = FALSE,
+                     plot_custom_track = TRUE, custom_track_label = "custom", custom_split_field = "custom_split_field",
                      cna = TRUE, tmb = TRUE, pp = TRUE, signature = TRUE, svevents = TRUE, basic = FALSE, 
                      ppdf = TRUE,
                      return.oncotab = FALSE,
@@ -19734,6 +19735,37 @@ oncoprint = function(tumors = NULL,
     if (any(ix))
       packed_legends = c(packed_legends,
                          lapply(customtracks[ix], function(x) x$legend))
+  }
+
+
+  if (any(oncotab$track %in% custom_track_label) && isTRUE(plot_custom_track)) {
+    
+    thisenv = environment()
+    custom_fields = na.omit(unique(oncotab[track == thisenv$custom_track_label][[custom_split_field]]))
+    for (custom_field_ in custom_fields)  {
+      
+      custom_data = oncotab[track == custom_track_label][get(thisenv$custom_split_field) == thisenv$custom_field_]
+      custom_levels = unique(oncotab[track == custom_track_label][get(thisenv$custom_split_field) == thisenv$custom_field_]$type)
+      custom_data_dc = dcast.data.table(custom_data, id ~ type, value.var = "value")
+      custom_data_mat = as.matrix(custom_data_dc[,-1])
+      rownames(custom_data_mat) = custom_data_dc[[1]]
+      custom_data_mat = custom_data_mat[ids, as.character(custom_levels), drop = FALSE]
+      out.mat = rbind(out.mat, t(custom_data_mat))
+      
+      if (wes) {
+        custom_data_cols = brewer.master(colnames(custom_data_mat), "BottleRocket1", 
+          wes = TRUE)
+      } else { custom_data_cols = brewer.master(colnames(custom_data_mat), "Dark2") }
+      
+      bottomtracks[[custom_field_]] = anno_barplot(custom_data_mat, legend = TRUE,
+        axis_param = list(gp = gpar(fontsize = track.fontsize)),
+        height = unit(3 * track.height, "cm"), border = FALSE,
+        gp = gpar(fill = custom_data_cols, col = custom_data_cols))
+      packed_legends = c(packed_legends, list(Legend(labels = names(custom_data_cols), 
+        ncol = 2, legend_gp = gpar(fill = custom_data_cols), title = custom_field_)))
+      
+    }
+    
   }
   
   if (length(bottomtracks))
