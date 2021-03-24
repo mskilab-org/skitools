@@ -19419,15 +19419,6 @@ oncoprint = function(tumors = NULL,
       stop('empty oncotable provided, please check inputs')
   }
 
-  ## temp FIX: remove hetdel for genes that have a homdel --> need to fix oncotable itself to deal with this
-  if (any(ix <- oncotab$type == 'homdel'))
-  {
-    oncotab[, rem := FALSE]
-    oncotab[type %in% c('amp', 'hetdel', 'homdel'), rem := type == 'hetdel' & any(type == 'homdel'), by = .(gene, id)]
-    oncotab = oncotab[rem == FALSE, ]
-    oncotab$rem = NULL
-  }
-
   vars = oncotab[track == 'variants', ][gene %in% genes$genes, ][type != 'synonymous', ]
 
   ## keep track of missing samples ie those that had either SNV, jabba, fusions
