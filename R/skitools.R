@@ -19150,15 +19150,7 @@ memu = function()
 #' @export
 oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
 {
-  if (is.null(gencode))
-    gencode = skidb::read_gencode()
-  else if (is.character(gencode))
-  {
-    if (grepl('.rds$', gencode))
-      gencode = readRDS(gencode)
-    else
-      gencode = rtracklayer::import(gencode)
-  }
+  gencode = process_gencode(gencode)
 
   pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
 
@@ -19208,44 +19200,14 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
                   data.table(id = x, value = c(jab$purity, jab$ploidy), type = c('purity', 'ploidy'), track = 'pp'),
                   fill = TRUE, use.names = TRUE)
 
-      gg = gG(jab = jab)
-
       # get the ncn data from jabba
       kag = readRDS(dat[x, gsub("jabba.simple.rds", "karyograph.rds", jabba_rds)])
-      ngr = gg$nodes$gr
+      nseg = NULL
       if ('ncn' %in% names(mcols(kag$segstats))){
-          ngr = ngr %$% kag$segstats[, c('ncn')]
-      } else {
-          # if there is no ncn in jabba then assume ncn = 2
-          ngr$ncn = 2
+          nseg = kag$segments[,c('ncn')]
       }
-      ndt = gr2dt(ngr)
-
-      # we will use the normal ploidy to determine hetdels 
-      # so instead of a cutoff of del.thresh * ploidy, we use:
-      # del.thresh * ploidy * ncn / normal_ploidy
-      # where ncn is the local normal copy number
-      seq_widths = as.numeric(width(ngr))
-      # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
-      normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
-
-      scna = rbind(
-        ndt[cn>=amp.thresh*jab$ploidy * ncn / normal_ploidy, ][, type := 'amp'],
-        ndt[cn < ncn | cn<del.thresh*jab$ploidy*ncn/normal_ploidy, ][, type := 'hetdel'],
-        ndt[cn == 0, ][, type := 'homdel']
-      )
-
-      if (nrow(scna))
-      {
-        scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
-
-        # for genes that have amp - filter any gene that has portion covered lower than 100%
-        pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
-        pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
-        pge_amps_dt = gr2dt(pge_amps)
-        min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
-        amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
-        scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+      scna = get_gene_ampdels_from_jabba(jab, amp.thresh = amp.thresh,
+                                     del.thresh = del.thresh, pge = pge, nseg = nseg)
 
         if (nrow(scna))
         {
@@ -19254,10 +19216,9 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
                       scna[, .(id = x, value = cn, type, track, gene = gene_name)],
                       fill = TRUE, use.names = TRUE)
         }
-      }
-    }
-    else
+    } else {
       out = rbind(out, data.table(id = x, type = NA, source = 'jabba_rds'), fill = TRUE, use.names = TRUE)
+    }
 
     ## collect signatures
     if (!is.null(dat$signature_counts) && file.exists(dat[x, signature_counts]))
@@ -19477,7 +19438,7 @@ oncoprint = function(tumors = NULL,
     vars = vars[!(type %in% c('promoter', 'noncoding', 'regulatory')), ]
 
   if (!cna)
-    vars = vars[!(type %in% c('amp', 'hetdel', 'homdel')), ]  
+    vars = vars[!(type %in% c('amp', 'del', 'hetdel', 'homdel')), ]  
 
   vars[, gene := factor(gene, genes$genes)]
   vars = vars[!is.na(gene), ]
@@ -19520,9 +19481,9 @@ oncoprint = function(tumors = NULL,
     }
     
   ## customize appeagrid appearance with mix of rectangles and circles
-  ord = c("amp", "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory')
+  ord = c("amp", 'del', "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory')
   if (outframe.fusions == TRUE){
-      ord = c("amp", "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'outframe_fusion', 'fusion', 'missense', 'promoter', 'regulatory')
+      ord = c("amp", 'del', "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'outframe_fusion', 'fusion', 'missense', 'promoter', 'regulatory')
   }
   alter_fun = function(x, y, w, h, v) {
     CSIZE = 0.25
@@ -19532,7 +19493,7 @@ oncoprint = function(tumors = NULL,
     grid.rect(x, y, w, h, gp = gpar(fill = alpha("grey90", 0.4), col = NA))
     v = v[ord]
     for (i in which(v)) {
-      if (names(v)[i] %in% c('amp', "hetdel", "homdel", 'fusion', 'outframe_fusion'))
+      if (names(v)[i] %in% c('amp', 'del', "hetdel", "homdel", 'fusion', 'outframe_fusion'))
         grid.rect(x,y,w,h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else if (grepl("missing", names(v)[i]))
         grid.rect(x, y, w, h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
@@ -19563,6 +19524,7 @@ oncoprint = function(tumors = NULL,
     amp = "red",
     drop = FALSE,
     homdel = "darkblue",
+    del = 'cyan',
     missense = 'gray40',
     inframe_indel = 'darkgreen',
     promoter  = alpha('red', 0.5),
@@ -19813,6 +19775,96 @@ oncoprint = function(tumors = NULL,
   else
     op
 } 
+
+
+#' @title process_gencode
+#' @description
+#'
+#' Helper script to process gencode parameter
+#'
+#' @param gencode path to gencode file. Gencode file must be either rds or some format accepted by rtracklayer::import (e.g. GTF)
+#' @return gencode_gr GRanges
+#' @author Marcin Imielinski
+process_gencode = function(gencode = NULL){
+  if (is.null(gencode))
+    gencode = skidb::read_gencode()
+  else if (is.character(gencode))
+  {
+    if (grepl('.rds$', gencode))
+      gencode = readRDS(gencode)
+    else
+      gencode = rtracklayer::import(gencode)
+  }
+  return(gencode)
+}
+
+
+
+#' @title get_gene_ampdels_from_jabba
+#' @description
+#'
+#' Takes a jabba_rds output and returns a GRanges with the genes that have either amplifications or deletions
+#'
+#' @param jab either path to jabba_rds output or an object containing the jabba output
+#' @param pge GRanges of genes (must contain field "gene_name")
+#' @param amp.thresh threshold to determine amplifications (this is relative to the ploidy normalized copy number. Values are also normalized using the normal copy number so that amplifications and deletions in chromosome X in male samples can be called correctly.
+#' @param del.thresh threshold to determine deletions.
+#' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
+#' @return scna data.table with genes that have either amplification or deletion
+#' @author Alon Shaiber
+#' @export 
+get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
+                                     del.thresh = 0.5, nseg = NULL){
+    if (is.character(jab)){
+      jab = readRDS(jab)
+    }
+      gg = gG(jab = jab)
+
+      ngr = gg$nodes$gr
+      if (!is.null(nseg)){
+          ngr = ngr %$% nseg[, c('ncn')]
+      } else {
+          # if there is no nseg then assume ncn = 2
+          ngr$ncn = 2
+      }
+      ndt = gr2dt(ngr)
+
+      # we will use the normal ploidy to determine hetdels 
+      # so instead of a cutoff of del.thresh * ploidy, we use:
+      # del.thresh * ploidy * ncn / normal_ploidy
+      # where ncn is the local normal copy number
+      seq_widths = as.numeric(width(ngr))
+      # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
+      normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
+
+      ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
+      scna = rbind(
+        ndt[normalized_cn >= amp.thresh, ][, type := 'amp'],
+        ndt[cn > 1 & normalized_cn < del.thresh, ][, type := 'del'],
+        ndt[cn == 1 & cn < ncn][, type := 'hetdel'],
+        ndt[cn == 0, ][, type := 'homdel']
+      )
+
+      if (nrow(scna))
+      {
+        scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
+
+        # for genes that have amp - filter any gene that has portion covered lower than 100%
+        pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
+        pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
+        pge_amps_dt = gr2dt(pge_amps)
+        min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
+        amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
+        scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+
+        # remove del
+        oncotab[, rem := FALSE]
+        oncotab[type %in% c('amp', 'hetdel', 'homdel'), rem := type == 'hetdel' & any(type == 'homdel'), by = .(gene, id)]
+        oncotab = oncotab[rem == FALSE, ]
+        oncotab$rem = NULL
+      }
+    return(scna)
+}
 
 #' @name alignment_metrics
 #' @title alignment_metrics
