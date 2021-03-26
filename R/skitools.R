@@ -19847,12 +19847,6 @@ get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
         min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
         amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
         scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
-
-        # remove del
-        oncotab[, rem := FALSE]
-        oncotab[type %in% c('amp', 'hetdel', 'homdel'), rem := type == 'hetdel' & any(type == 'homdel'), by = .(gene, id)]
-        oncotab = oncotab[rem == FALSE, ]
-        oncotab$rem = NULL
       }
     return(scna)
 }
