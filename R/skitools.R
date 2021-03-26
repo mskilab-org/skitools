@@ -19204,7 +19204,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
       kag = readRDS(dat[x, gsub("jabba.simple.rds", "karyograph.rds", jabba_rds)])
       nseg = NULL
       if ('ncn' %in% names(mcols(kag$segstats))){
-          nseg = kag$segments[,c('ncn')]
+          nseg = kag$segstats[,c('ncn')]
       }
       scna = get_gene_ampdels_from_jabba(jab, amp.thresh = amp.thresh,
                                      del.thresh = del.thresh, pge = pge, nseg = nseg)
