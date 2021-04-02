@@ -18291,19 +18291,22 @@ write_ggjs = function(gr, filename, field = 'score')
 #' @param ploidy ploidy of sample
 #' @param gamma gamma fit of solution (over-rides purity and ploidy)
 #' @param beta beta fit of solution (over-rides purity and ploidy)
-#' @param field meta data field in "gr" variable from which to extract signal, default "mean"
+#' @param field meta data field in "gr" variable from which to extract signal, default "ratio"
 #' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
+#' @param data_mean optionally provide a mean value to use in the transformation. Usually a mean value is computed from the input data, but in unique cases, where the input data does not represent the full set of data, then this value could be provided. For example, this is usefull when transforming SNV read counts, you can provide the ALT read count as the input that you want transformed, and provide the average count of ALT + REF as the data_mean
 #' @return
 #' numeric vector of integer copy numbers
 #' @export
-rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA)
 {
   mu = values(gr)[, field]
   mu[is.infinite(mu)] = NA
   w = as.numeric(width(gr))
   w[is.na(mu)] = NA
   sw = sum(w, na.rm = T)
-  mutl = sum(mu * w, na.rm = T)
+  if (is.na(data_mean)){
+      data_mean = sum(mu * w, na.rm = T) / sw
+  }
 
   ncn = rep(2, length(mu))
   if (!is.null(field.ncn))
@@ -18316,11 +18319,8 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
     gamma = 2*(1-purity)/purity
 
   if (is.na(beta))
-    beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
-                                        #      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
+    beta = ((1-purity)*ploidy_normal + purity*ploidy) / (purity * data_mean)
 
-
-                                        # return(beta * mu - gamma)
   return(beta * mu - ncn * gamma / 2)
 }
 
