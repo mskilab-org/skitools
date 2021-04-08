@@ -20308,3 +20308,158 @@ get.pileup.gtrack = function(sites){
 
     return(c(gt.het.t, gt.het.n))
 }
+
+#' @name read_pon_dict
+#' @title read_pon_dict
+#' @description
+#'
+#' Check the validity and read the TAB delimited dictionary for dryclean PONs
+#'
+#' @param pon_dict_path path to the TAB delimited file.
+#' @return pon_dict data.table object
+#' @export
+#' @author Alon Shaiber
+read_pon_dict_path = function(pon_dict_path){
+    if (!file.exists(pon_dict_path)){
+        stop('You must provide a valid path to a TAB-delimited PON dictionary.')
+    }
+    pdict = fread(pon_dict_path)
+    for (cname in c('pon_name', 'pon_path', 'template_GRanges', 'reference_genome_name')){
+        if (!(cname %in% names(pdict))){
+            stop('The dictionary that was provided ', pon_dict_path, ' does not have a column "', cname, '". ',
+                 'The PON dictionary must be a TAB-delimited file with at least four columns: "pon_name", "pon_path", "template_GRanges", "reference_genome_name".')
+        }
+    }
+    return(pdict)
+}
+
+
+#' @name get_dryclean_pon_path
+#' @title get_dryclean_pon_path
+#' @description
+#'
+#' return the path to the PON RDS (detergent) file corresponding to the provided pon_name
+#'
+#' @param pon_name name of the PON.
+#' @param pon_dict_path path to the TAB delimited file.
+#' @return detergent path to the PON RDS file.
+#' @export
+#' @author Alon Shaiber
+get_dryclean_pon_path = function(pon_name, pon_dict = '/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv'){
+    pdict = read_pon_dict(pon_dict)
+    if (!(pon_name %in% pdict$pon_name)){
+        stop('The PON name you provided "', pon_name, '" is not in the PON dictionary. ',
+             'Here is a list of the available PONs: ', paste(pdict$pon_name, collapse = ', '), '.')
+    }
+    pname = pon_name
+    pon_path = pdict[pon_name == pname, pon_path]
+    if (!file.ready(pon_path)){
+        stop('The PON path for ', pon_name, ' is not valid, please make sure that ',
+             'the following file exists and is not empty or fix the PON dictionary: ', pon_path)
+    }
+    return(pon_path)
+}
+
+
+#' @name get_dryclean_pon_template
+#' @title get_dryclean_pon_template
+#' @description
+#'
+#' return the template GRanges for the PON corresponding to the provided pon_name
+#'
+#' @param pon_name name of the PON.
+#' @param pon_dict_path path to the TAB delimited file.
+#' @return template GRanges object with the ranges that are compatible with the provided pon_name
+#' @export
+#' @author Alon Shaiber
+get_dryclean_pon_template = function(pon_name, pon_dict = '/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv'){
+    pdict = read_pon_dict(pon_dict)
+    if (!(pon_name %in% pdict$pon_name)){
+        stop('The PON name you provided "', pon_name, '" is not in the PON dictionary. ',
+             'Here is a list of the available PONs: ', paste(pdict$pon_name, collapse = ', '), '.')
+    }
+    pname = pon_name
+    template_path = pdict[pon_name == pname, template_GRanges]
+    if (!file.ready(template_path)){
+        stop('The provided template is not valid: ', template_path, '. Please provide a path to a file that exists and is not empty')
+    }
+    if (!grepl('.rds$', template_path)){
+        stop('The template file must have a ".rds" suffix')
+    }
+    template = readRDS(template_path)
+    if (!inherits(template, 'GRanges')){
+        stop('The template file must be of class GRanges, but the one provided: "', template_path, '" is of class: ', class(template), '.')
+    }
+    return(template)
+}
+
+#' @name preprocess_cov_for_dryclean
+#' @title preprocess_cov_for_dryclean
+#' @description
+#'
+#' preprocess coverage file by rebinning to match the ranges that are compatible with the PON and by normalizing the coverage by the mean
+#'
+#' @param cov GRanges with coverage data
+#' @param field field to use as input from the coverage GRanges
+#' @param template_rds path to a RDS file containing the template GRanges to use for re-binning
+#' @param seqnames.to.include which seqnames to include in the output
+#' @param output.field field name for the output normalized and rebinned data
+#' @param pon_name name of the PON.
+#' @param pon_dict path to the TAB delimited file PON dictionary (if no template_rds was provided then you must provide a pon_name)
+#' @param pon_name name of the PON. This is used to get the path to the template RDS from the pon_dict (if no template_rds was provided then you must provide a pon_name)
+#' @param nochr by default all chr prefix is removed, if you wish the output to have chr you must specify nochr=FALSE
+#' @return new.cov GRanges object with the normalized and rebinned coverage values
+#' @export
+#' @author Alon Shaiber
+preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
+                                       template_rds = '',
+                                       seqnames.to.include = c(as.character(1:22), "X"),
+                                       output.field = 'reads.corrected',
+                                       pon_dict = '/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv',
+                                       pon_name = NULL,
+                                       nochr = TRUE){
+    if (!inherits(cov, 'GRanges')){
+        stop('The input coverage object must be of class GRanges')
+    }
+    if (!file.exists(template_rds)){
+        if (!is.null(pon_name)){
+            template = get_dryclean_pon_template(pon_name) %>% gr.nochr
+        } else {
+            stop('Template RDS file was not found: ', template_rds)
+        }
+    } else {
+        if (!grepl('.rds$', template_rds)){
+            stop('The template file name must have a ".rds" suffix. The provided file was not valid: ', template_rds)
+        }
+        template = readRDS(template_rds) %>% gr.nochr
+        if (!inherits(template, 'GRanges')){
+            stop('The template must be of type GRanges.')
+        }
+    }
+    cov = gr.nochr(cov)
+    seqnames.to.include = gsub('chr', '', seqnames.to.include)
+    if (!(field %in% names(values(cov)))){
+        stop(sprintf('The provided field %s is not in the input coverage GRanges.
+                     Here are the fields that were found: %s', field, names(values(cov))))
+    }
+    if (length(intersect(seqnames.to.include, unique(seqnames(cov)))) == 0){
+        stop('The input coverage does not contain any of the specified seqnames: ', seqnames.to.include)
+    }
+    if (length(intersect(unique(seqnames(template)), unique(seqnames(cov)))) == 0){
+        stop('There is no overlap between the sequence names in your template and in the input coverage.')
+    }
+    if (length(intersect(seqnames.to.include, unique(seqnames(template)))) == 0){
+        stop('The template does not contain any of the specified seqnames: ', seqnames.to.include)
+    }
+    covv.new = template[, c()] %$% cov[, field]
+    covv.new = gr2dt(covv.new)
+    covv.new = covv.new[seqnames %in% seqnames.to.include]
+    covv.new[, mean.r := mean(get(field), na.rm = T)]
+    covv.new[, (output.field) := get(field)/mean.r]
+    covv.new = dt2gr(covv.new)
+    covv.new = covv.new[, output.field]
+    if (nochr == FALSE){
+        covv.new = gr.chr(covv.new)
+    }
+    return(covv.new)
+}
