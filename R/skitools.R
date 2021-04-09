@@ -18294,10 +18294,11 @@ write_ggjs = function(gr, filename, field = 'score')
 #' @param field meta data field in "gr" variable from which to extract signal, default "ratio"
 #' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
 #' @param data_mean optionally provide a mean value to use in the transformation. Usually a mean value is computed from the input data, but in unique cases, where the input data does not represent the full set of data, then this value could be provided. For example, this is usefull when transforming SNV read counts, you can provide the ALT read count as the input that you want transformed, and provide the average count of ALT + REF as the data_mean
+#' @param ncn.gr GRanges with the copy number values for normal samples (if the field.ncn is found in the input gr then the ncn.gr parameter is ignored). Notice the the input ncn.gr must contain the field specified by field.ncn
 #' @return
 #' numeric vector of integer copy numbers
 #' @export
-rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA)
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA)
 {
   mu = values(gr)[, field]
   mu[is.infinite(mu)] = NA
@@ -18308,10 +18309,22 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
       data_mean = sum(mu * w, na.rm = T) / sw
   }
 
-  ncn = rep(2, length(mu))
+  ncn = NA
   if (!is.null(field.ncn))
     if (field.ncn %in% names(values(gr)))
       ncn = values(gr)[, field.ncn]
+
+  if (is.na(ncn)){
+      if (!is.na(ncn.gr)){
+          if (!inherits(ncn.gr, 'GRanges')){
+              stop('ncn.gr must be of class GRanges, but ', class(GRanges), ' was provided.')
+          }
+          ncn = values(gr %$% ncn.gr[, field.ncn])[, field.ncn]
+      } else {
+      ncn = rep(2, length(mu))
+      }
+  }
+
 
   ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
 
