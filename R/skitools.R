@@ -19854,12 +19854,17 @@ get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
         scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
 
         # for genes that have amp - filter any gene that has portion covered lower than 100%
-        pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
-        pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
-        pge_amps_dt = gr2dt(pge_amps)
-        min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
-        amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
-        scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+        if (scna[type == 'amp', .N] > 0){
+              pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
+              pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
+              pge_amps_dt = gr2dt(pge_amps)
+              min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
+              # FIXME: we should instead check for the minimal CN of genes and report that CN in the oncotable as well as the appropriate CNV type. Currently we still end up with multiple entries for each gene
+              amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
+              scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+        }
+        # take only the row with the minimal CN for each gene
+        scna = scna[, .SD[which.min(normalized_cn)], by = gene_name][, .(gene_name, type, normalized_cn, cn, ncn)]
       }
     return(scna)
 }
@@ -20332,7 +20337,7 @@ get.pileup.gtrack = function(sites){
 #' @return pon_dict data.table object
 #' @export
 #' @author Alon Shaiber
-read_pon_dict_path = function(pon_dict_path){
+read_pon_dict = function(pon_dict_path){
     if (!file.exists(pon_dict_path)){
         stop('You must provide a valid path to a TAB-delimited PON dictionary.')
     }
@@ -20452,8 +20457,8 @@ preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
     cov = gr.nochr(cov)
     seqnames.to.include = gsub('chr', '', seqnames.to.include)
     if (!(field %in% names(values(cov)))){
-        stop(sprintf('The provided field %s is not in the input coverage GRanges.
-                     Here are the fields that were found: %s', field, names(values(cov))))
+        stop(sprintf('The provided field "%s" is not in the input coverage GRanges.
+                     Here are the fields that were found: "%s"', field, paste(names(values(cov)), collapse = '", "')))
     }
     if (length(intersect(seqnames.to.include, unique(seqnames(cov)))) == 0){
         stop('The input coverage does not contain any of the specified seqnames: ', seqnames.to.include)
