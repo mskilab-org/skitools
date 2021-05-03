@@ -19819,29 +19819,6 @@ process_gencode = function(gencode = NULL){
 #' @export 
 get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
                                      del.thresh = 0.5, nseg = NULL){
-    if (is.character(jab)){
-      jab = readRDS(jab)
-    }
-      gg = gG(jab = jab)
-
-      ngr = gg$nodes$gr
-      if (!is.null(nseg)){
-          ngr = ngr %$% nseg[, c('ncn')]
-      } else {
-          # if there is no nseg then assume ncn = 2
-          ngr$ncn = 2
-      }
-      ndt = gr2dt(ngr)
-
-      # we will use the normal ploidy to determine hetdels 
-      # so instead of a cutoff of del.thresh * ploidy, we use:
-      # del.thresh * ploidy * ncn / normal_ploidy
-      # where ncn is the local normal copy number
-      seq_widths = as.numeric(width(ngr))
-      # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
-      normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
-
-      ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
       scna = rbind(
         ndt[normalized_cn >= amp.thresh, ][, type := 'amp'],
         ndt[cn > 1 & normalized_cn < del.thresh, ][, type := 'del'],
@@ -19868,6 +19845,118 @@ get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
       }
     return(scna)
 }
+
+check_GRanges_compatibility = function(gr1, gr2, name1 = 'first', name2 = 'second'){
+      # check which seqnames overlap and which don't 
+      non_overlapping_seqnames1 = setdiff(seqlevels(gr1), seqlevels(gr2))
+      non_overlapping_seqnames2 = setdiff(seqlevels(gr2), seqlevels(gr1))
+      overlap = intersect(seqlevels(gr1), seqlevels(gr2))
+      message('The following seqnames are only in the ', name1, ' GRanges, but not in the ', name2, ' GRanges: ', paste(non_overlapping_seqnames1, collapse = ', '))
+      message('The following seqnames are only in the ', name2, ' GRanges, but not in the ', name1, ' GRanges: ', paste(non_overlapping_seqnames2, collapse = ', '))
+      message('The follosing seqnames are in both GRanges objects: ', paste(overlap, collapse = ', '))
+      if (length(non_overlapping_seqnames1) > 0 | length(non_overlapping_seqnames2) > 0){
+          return(FALSE)
+      }
+      return(TRUE)
+}
+
+
+#' @title get_gene_copy_numbers
+#' @description
+#'
+#' Takes a jabba_rds output and returns a GRanges with the genes that have either amplifications or deletions
+#'
+#' @param gg either path to rds of a gGraph or an object containing the gGraph with JaBbA output
+#' @param gene_ranges GRanges of genes (must contain field "gene_name"). Alternatively a path to a file that could be parsed by rtracklayer::import (such as gtf) is acceptable.
+#' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
+#' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
+#' @param gene_id_col the name of the column to be used in order to identify genes (must be unique for each gene, so usually "gene_name" is not the right choice).
+#' @param simplify_seqnames when set to TRUE, then gr.sub is ran on the seqnames of the gGraph segments and the genes GRanges
+#' @param mfields the metadata fields that the output should inherit from the genes GRanges
+#' @param output_type either GRanges or data.table
+#' @return GRanges or data.table with genes CN
+#' @author Alon Shaiber
+#' @export 
+get_gene_copy_numbers = function(gg, gene_ranges, nseg = NULL, gene_id_col = 'gene_id',
+                                      simplify_seqnames = FALSE,
+                                      mfields = c("gene_name", "source", "gene_id", "gene_type", "level", "hgnc_id", "havana_gene"),
+                                      output_type = 'data.table'){
+    if (is.character(gg)){
+      gg = readRDS(gg)
+    }
+    if (!inherits(gene_ranges, 'GRanges')){
+        # try to import with rtracklayer
+        gene_ranges = rtracklayer::import(gene_ranges)
+    }
+
+    if (!(output_type %in% c('GRanges', 'data.table'))){
+        stop('Invalid output_type: ', output_type, '. outputtype must be either "GRanges" or "data.table".')
+    }
+    ngr = gg$nodes$gr
+    if (simplify_seqnames){
+        ngr = gr.sub(ngr)
+        gene_ranges = gr.sub(gene_ranges)
+    }
+    GRanges_are_compatible = check_GRanges_compatibility(ngr, gene_ranges, 'gGraph segments', 'genes')
+
+    if (!is.null(nseg)){
+        ngr = ngr %$% nseg[, c('ncn')]
+    } else {
+        # if there is no nseg then assume ncn = 2
+        message('No normal copy number segmentation was provided so assuming CN = 2 for all seqnames.')
+        ngr$ncn = 2
+    }
+    ndt = gr2dt(ngr)
+
+    seq_widths = as.numeric(width(ngr))
+    # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
+    normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
+
+    # normalize the CN by ploidy and by local normal copy number
+    ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
+
+    # overlapping copy number segments with gene ranges
+    gene_cn_segments = dt2gr(ndt, seqlengths = seqlengths(gg)) %*% gene_ranges %>% gr2dt
+    # let's find genes that overlap with multiple copy number segments 
+    # we would want to report the minimum and maximum CN for these genes as well as the number of CN segments overlapping the gene
+    # we could do the same computation for all genes, but it is much more efficient to do it separately since the split_genes are a minority
+    split_genes = gene_cn_segments[duplicated(get(gene_id_col)), get(gene_id_col)]
+
+    gene_cn_non_split_genes = gene_cn_segments[!(get(gene_id_col) %in% split_genes)]
+    gene_cn_non_split_genes[, `:=`(max_normalized_cn = normalized_cn,
+                                   min_normalized_cn = normalized_cn,
+                                   max_cn = cn,
+                                   min_cn = cn,
+                                   number_of_cn_segments = 1,
+                                   cn = NULL,
+                                   normalized_cn = NULL)]
+
+    gene_cn_split_genes_min = gene_cn_segments[get(gene_id_col) %in% split_genes, .SD[which.min(cn)], by = gene_id_col]
+    gene_cn_split_genes_min[, `:=`(min_normalized_cn = normalized_cn,
+                                   min_cn = cn,
+                                   cn = NULL,
+                                   normalized_cn = NULL)]
+
+
+    gene_cn_split_genes_max = gene_cn_segments[get(gene_id_col) %in% split_genes,
+                                           .SD[which.max(cn)], by = gene_id_col][, .(get(gene_id_col),
+                                                                max_normalized_cn = normalized_cn,
+                                                                max_cn = cn)]
+    setnames(gene_cn_split_genes_max, 'V1', gene_id_col)
+    
+    number_of_segments_per_split_gene = gene_cn_segments[get(gene_id_col) %in% split_genes, .(number_of_cn_segments = .N), by = gene_id_col]
+
+    gene_cn_split_genes = merge(gene_cn_split_genes_min, gene_cn_split_genes_max, by = gene_id_col)
+    gene_cn_split_genes = merge(gene_cn_split_genes, number_of_segments_per_split_gene, by = gene_id_col)
+
+    gene_cn_table = rbind(gene_cn_split_genes, gene_cn_non_split_genes)
+
+    if (output_type == 'data.table'){
+        return(gene_cn_table)
+    }
+    return(dt2gr(gene_cn_table, seqlengths = seqlengths(gene_ranges)))
+}
+
 
 #' @name alignment_metrics
 #' @title alignment_metrics
