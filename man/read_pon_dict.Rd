@@ -2,10 +2,9 @@
 % Please edit documentation in R/skitools.R
 \name{read_pon_dict}
 \alias{read_pon_dict}
-\alias{read_pon_dict_path}
 \title{read_pon_dict}
 \usage{
-read_pon_dict_path(pon_dict_path)
+read_pon_dict(pon_dict_path)
 }
 \arguments{
 \item{pon_dict_path}{path to the TAB delimited file.}

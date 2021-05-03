@@ -12,7 +12,8 @@ rel2abs(
   beta = NA,
   field = "ratio",
   field.ncn = "ncn",
-  data_mean = NA
+  data_mean = NA,
+  ncn.gr = NA
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ rel2abs(
 \item{field.ncn}{meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero}
 
 \item{data_mean}{optionally provide a mean value to use in the transformation. Usually a mean value is computed from the input data, but in unique cases, where the input data does not represent the full set of data, then this value could be provided. For example, this is usefull when transforming SNV read counts, you can provide the ALT read count as the input that you want transformed, and provide the average count of ALT + REF as the data_mean}
+
+\item{ncn.gr}{GRanges with the copy number values for normal samples (if the field.ncn is found in the input gr then the ncn.gr parameter is ignored). Notice the the input ncn.gr must contain the field specified by field.ncn}
 }
 \value{
 numeric vector of integer copy numbers
