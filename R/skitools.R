@@ -18295,10 +18295,11 @@ write_ggjs = function(gr, filename, field = 'score')
 #' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
 #' @param data_mean optionally provide a mean value to use in the transformation. Usually a mean value is computed from the input data, but in unique cases, where the input data does not represent the full set of data, then this value could be provided. For example, this is usefull when transforming SNV read counts, you can provide the ALT read count as the input that you want transformed, and provide the average count of ALT + REF as the data_mean
 #' @param ncn.gr GRanges with the copy number values for normal samples (if the field.ncn is found in the input gr then the ncn.gr parameter is ignored). Notice the the input ncn.gr must contain the field specified by field.ncn
+#' @param allele (logical) whether to return allelic CNs. If TRUE, assumes that the GRanges is "melted" and there are two identical ranges per SNP. Default FALSE.
 #' @return
 #' numeric vector of integer copy numbers
 #' @export
-rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA)
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA, allele = FALSE)
 {
   mu = values(gr)[, field]
   mu[is.infinite(mu)] = NA
@@ -18327,6 +18328,19 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
 
   ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+
+  if (allele) {
+      y.bar = ploidy_normal * data_mean
+      denom = purity * ploidy + ploidy_normal * (1 - purity)
+      if (is.na(beta)) {
+          beta = y.bar * purity / denom
+      }
+      if (is.na(gamma)) {
+          gamma = (y.bar * (1 - purity)) / denom
+      }
+      return ((mu - gamma) / beta)
+  }
+
 
   if (is.na(gamma))
     gamma = 2*(1-purity)/purity
