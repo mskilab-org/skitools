@@ -13,7 +13,8 @@ rel2abs(
   field = "ratio",
   field.ncn = "ncn",
   data_mean = NA,
-  ncn.gr = NA
+  ncn.gr = NA,
+  allele = FALSE
 )
 }
 \arguments{
@@ -34,6 +35,8 @@ rel2abs(
 \item{data_mean}{optionally provide a mean value to use in the transformation. Usually a mean value is computed from the input data, but in unique cases, where the input data does not represent the full set of data, then this value could be provided. For example, this is usefull when transforming SNV read counts, you can provide the ALT read count as the input that you want transformed, and provide the average count of ALT + REF as the data_mean}
 
 \item{ncn.gr}{GRanges with the copy number values for normal samples (if the field.ncn is found in the input gr then the ncn.gr parameter is ignored). Notice the the input ncn.gr must contain the field specified by field.ncn}
+
+\item{allele}{(logical) whether to return allelic CNs. If TRUE, assumes that the GRanges is "melted" and there are two identical ranges per SNP. Default FALSE.}
 }
 \value{
 numeric vector of integer copy numbers
