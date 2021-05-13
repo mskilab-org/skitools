@@ -10483,7 +10483,7 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
 #' @param gr optional granges to query
 #' @param bpath path to bcftools binary executable
 #' @export
-grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.1/bcftools", label = NA, filter = 'PASS', snv = FALSE, indel = FALSE, het = FALSE, hom = FALSE, keep.modifier = TRUE, long = FALSE, oneliner = FALSE, verbose = FALSE)
+grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.9/bin/bcftools", label = NA, filter = 'PASS', snv = FALSE, indel = FALSE, het = FALSE, hom = FALSE, keep.modifier = TRUE, long = FALSE, oneliner = FALSE, verbose = FALSE)
 {
   cmd = sprintf('%s view %s', bpath, bcf)
 
@@ -19240,7 +19240,9 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
       bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter)
       if (verbose)
         message(length(bcf), ' variants pass filter')
-      genome.size = sum(seqlengths(bcf))/1e6
+      genome.size = sum(seqlengths(bcf), na.rm = TRUE)/1e6
+      if (is.na(genome.size)) ## something went wrong with vcf
+        genome.size = sum(seqlengths(gG(jabba = dat[x, jabba_rds])), na.rm = TRUE)/1e6
       nmut = data.table(as.character(seqnames(bcf)), start(bcf), end(bcf), bcf$REF, bcf$ALT) %>% unique %>% nrow
       mut.density = data.table(id = x, value = c(nmut, nmut/genome.size), type = c('count', 'density'),  track = 'tmb', source = 'annotated_bcf')
       out = rbind(out, mut.density, fill = TRUE, use.names = TRUE)
@@ -19306,7 +19308,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
 #' @param sv.stack  logical flag whether to stack bar plot simple and complex SV event counts (FALSE)
 #' @param signatures logical flag whether to show signatures (if data is provided / available) (TRUE)
 #' @param svevents logical flag whether to show events (if data is provided / available) (TRUE)
-#' o=@param tmb logical flag whether to show TMB bar plot (TRUE)
+#' @param tmb logical flag whether to show TMB bar plot (TRUE)
 #' @param tmb.log  logical flag whether to log TMB + 1 (TRUE)
 #' @param pp logical flag whether to show purity / ploidy (if data is provided / available) (TRUE)
 #' @param ppdf whether to print to pdf via ppdf
