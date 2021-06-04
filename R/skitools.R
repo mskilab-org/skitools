@@ -19830,34 +19830,19 @@ process_gencode = function(gencode = NULL){
 #' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
 #' @return scna data.table with genes that have either amplification or deletion
 #' @author Alon Shaiber
-#' @export 
+#' @export
 get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
                                      del.thresh = 0.5, nseg = NULL){
-      scna = rbind(
-        ndt[normalized_cn >= amp.thresh, ][, type := 'amp'],
-        ndt[cn > 1 & normalized_cn < del.thresh, ][, type := 'del'],
-        ndt[cn == 1 & cn < ncn][, type := 'hetdel'],
-        ndt[cn == 0, ][, type := 'homdel']
-      )
+    gg = gG(jabba = jab)
+    gene_CN = get_gene_copy_numbers(gg, gene_ranges = pge, nseg = nseg)
+    gene_CN[, type := NA]
+    gene_CN[min_normalized_cn >= amp.thresh, ][, type := 'amp'],
+    gene_CN[min_cn > 1 & min_normalized_cn < del.thresh, ][, type := 'del'],
+    gene_CN[min_cn == 1 & min_cn < ncn][, type := 'hetdel'],
+    gene_CN[min_cn == 0, ][, type := 'homdel']
 
-      if (nrow(scna))
-      {
-        scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
-
-        # for genes that have amp - filter any gene that has portion covered lower than 100%
-        if (scna[type == 'amp', .N] > 0){
-              pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
-              pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
-              pge_amps_dt = gr2dt(pge_amps)
-              min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
-              # FIXME: we should instead check for the minimal CN of genes and report that CN in the oncotable as well as the appropriate CNV type. Currently we still end up with multiple entries for each gene
-              amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
-              scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
-        }
-        # take only the row with the minimal CN for each gene
-        scna = scna[, .SD[which.min(normalized_cn)], by = gene_name][, .(gene_name, type, normalized_cn, cn, ncn)]
-      }
-    return(scna)
+    # only return entries with a CNV
+    return(gene_CN[!is.na(type)])
 }
 
 check_GRanges_compatibility = function(gr1, gr2, name1 = 'first', name2 = 'second'){
