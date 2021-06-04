@@ -19836,9 +19836,9 @@ get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
     gg = gG(jabba = jab)
     gene_CN = get_gene_copy_numbers(gg, gene_ranges = pge, nseg = nseg)
     gene_CN[, type := NA]
-    gene_CN[min_normalized_cn >= amp.thresh, ][, type := 'amp'],
-    gene_CN[min_cn > 1 & min_normalized_cn < del.thresh, ][, type := 'del'],
-    gene_CN[min_cn == 1 & min_cn < ncn][, type := 'hetdel'],
+    gene_CN[min_normalized_cn >= amp.thresh, ][, type := 'amp']
+    gene_CN[min_cn > 1 & min_normalized_cn < del.thresh, ][, type := 'del']
+    gene_CN[min_cn == 1 & min_cn < ncn][, type := 'hetdel']
     gene_CN[min_cn == 0, ][, type := 'homdel']
 
     # only return entries with a CNV
