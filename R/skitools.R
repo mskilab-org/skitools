@@ -19168,18 +19168,23 @@ memu = function()
 #' applications know that data is missing for that sample. 
 #'
 #' @param tumors keyed data.table i.e. keyed by unique tumor id with specific columns corresponding to  paths to pipeline outputs(see description)
-#' @param gencode path to gencode .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping
+#' @param gencode path to gencode with just a single entry for each gene (so gencode entries for each gene are collapse to a single range). The input could be .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping. If nothing is provided then 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf' is used by default.
 #' @param amp.thresh SCNA amplification threshold to call an amp as a function of ploidy (4)
 #' @param del.thresh SCNA deletion threshold for (het) del as a function of ploidy (by default cn = 1 will be called del, but this allows additoinal regions in high ploidy tumors to be considered het dels)
 #' @param mc.cores number of cores for multithreading
 #' @param verbose logical flag 
 #' @author Marcin Imielinski
 #' @export
-oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
+oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf', verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
 {
   gencode = process_gencode(gencode)
 
-  pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
+  if ('type' %in% names(mcols(gencode))){
+      # This is a bit hacky. The hg38 object does not contain the "type" column so we check if it is there and only use it when it is present
+      pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
+  } else {
+      pge = gencode %Q% (gene_type == 'protein_coding')
+  }
 
   .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5, filter = 'PASS')
   {
@@ -19240,7 +19245,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, fil
         {
           scna[, track := 'variants'][, source := 'jabba_rds'][, vartype := 'scna']
           out = rbind(out,
-                      scna[, .(id = x, value = cn, type, track, gene = gene_name)],
+                      scna[, .(id = x, value = min_cn, type, track, gene = gene_name)],
                       fill = TRUE, use.names = TRUE)
         }
     } else {
@@ -19835,11 +19840,11 @@ get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
                                      del.thresh = 0.5, nseg = NULL){
     gg = gG(jabba = jab)
     gene_CN = get_gene_copy_numbers(gg, gene_ranges = pge, nseg = nseg)
-    gene_CN[, type := NA]
-    gene_CN[min_normalized_cn >= amp.thresh, ][, type := 'amp']
-    gene_CN[min_cn > 1 & min_normalized_cn < del.thresh, ][, type := 'del']
-    gene_CN[min_cn == 1 & min_cn < ncn][, type := 'hetdel']
-    gene_CN[min_cn == 0, ][, type := 'homdel']
+    gene_CN[, type := NA_character_]
+    gene_CN[min_normalized_cn >= amp.thresh, type := 'amp']
+    gene_CN[min_cn > 1 & min_normalized_cn < del.thresh, type := 'del']
+    gene_CN[min_cn == 1 & min_cn < ncn, type := 'hetdel']
+    gene_CN[min_cn == 0, type := 'homdel']
 
     # only return entries with a CNV
     return(gene_CN[!is.na(type)])
@@ -19912,7 +19917,7 @@ get_gene_copy_numbers = function(gg, gene_ranges, nseg = NULL, gene_id_col = 'ge
     normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
 
     # normalize the CN by ploidy and by local normal copy number
-    ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
+    ndt[, normalized_cn := cn * normal_ploidy / (gg$meta$ploidy * ncn)]
 
     # overlapping copy number segments with gene ranges
     gene_cn_segments = dt2gr(ndt, seqlengths = seqlengths(gg)) %*% gene_ranges %>% gr2dt
