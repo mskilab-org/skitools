@@ -20574,3 +20574,18 @@ preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
     }
     return(covv.new)
 }
+
+flow_slurm_status = function(jb, return_id = FALSE){
+    fns = paste0(outdir(jb), '/slurm.jobid')
+    idss = sapply(fns, function(fn){
+       id = NULL
+       if (file.ready(fn)){
+           id = readLines(fn)
+       }
+       return(id)
+    })
+    if (len(idss) > 0){
+        system(paste0('sacct -o jobid,jobname,state,maxrss,reqm --unit=G -j ', paste(idss, collapse = ',')))
+    }
+    if (return_id) return(idss)
+}
