@@ -9,6 +9,7 @@ vplot(
   group = "x",
   facet1 = NULL,
   facet2 = NULL,
+  col.sina = NULL,
   transpose = FALSE,
   flip = FALSE,
   mapping = NULL,
@@ -28,7 +29,7 @@ vplot(
   wes = "Royal1",
   col = NULL,
   method = "count",
-  sina = FALSE,
+  sina = !is.null(col.sina),
   sina.scale = FALSE,
   text = NULL,
   reorder = FALSE,
@@ -36,8 +37,9 @@ vplot(
   cex = 1,
   cex.axis = 1,
   cex.title = 1,
-  cex.scatter = cex,
+  cex.scatter = 2 * cex,
   col.scatter = alpha("black", 0.5),
+  col.background = "gray",
   alpha = 0.3,
   title = NULL,
   legend.ncol = NULL,
@@ -61,6 +63,8 @@ vplot(
 
 \item{facet2}{optional length(y) vector of column categories to facet on (=NULL)}
 
+\item{col.sina}{data vector to specify size in sina plot (NULL) will trigger sina =  TRUE if not null}
+
 \item{transpose}{logical vector whether flip row / column orientation of facets (=FALSE)}
 
 \item{mapping}{mapping of groups to colors (=NULL)}
@@ -78,6 +82,8 @@ vplot(
 \item{minsup}{minimum support to include in a group (=NA)}
 
 \item{scatter}{logical flag whether to include scatter of points (=FALSE)}
+
+\item{sina}{logical flag whether to sina}
 
 \item{reorder}{logical flag whether to reorder groups by order.fun (which by default is mean)}
 

@@ -6,7 +6,7 @@
 \usage{
 oncotable(
   tumors,
-  gencode = NULL,
+  gencode = "http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf",
   verbose = TRUE,
   amp.thresh = 4,
   filter = "PASS",
@@ -17,7 +17,7 @@ oncotable(
 \arguments{
 \item{tumors}{keyed data.table i.e. keyed by unique tumor id with specific columns corresponding to  paths to pipeline outputs(see description)}
 
-\item{gencode}{path to gencode .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping}
+\item{gencode}{path to gencode with just a single entry for each gene (so gencode entries for each gene are collapse to a single range). The input could be .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping. If nothing is provided then 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf' is used by default.}
 
 \item{verbose}{logical flag}
 

@@ -19219,18 +19219,23 @@ memu = function()
 #' applications know that data is missing for that sample. 
 #'
 #' @param tumors keyed data.table i.e. keyed by unique tumor id with specific columns corresponding to  paths to pipeline outputs(see description)
-#' @param gencode path to gencode .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping
-#' @param amp.thresh SCNA amplification threshold to call an amp as a multiple of ploidy (4)
+#' @param gencode path to gencode with just a single entry for each gene (so gencode entries for each gene are collapse to a single range). The input could be .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping. If nothing is provided then 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf' is used by default.
+#' @param amp.thresh SCNA amplification threshold to call an amp as a function of ploidy (4)
 #' @param del.thresh SCNA deletion threshold for (het) del as a function of ploidy (by default cn = 1 will be called del, but this allows additoinal regions in high ploidy tumors to be considered het dels)
 #' @param mc.cores number of cores for multithreading
 #' @param verbose logical flag 
 #' @author Marcin Imielinski
 #' @export
-oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 2, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
+oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf', verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
 {
   gencode = process_gencode(gencode)
 
-  pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
+  if ('type' %in% names(mcols(gencode))){
+      # This is a bit hacky. The hg38 object does not contain the "type" column so we check if it is there and only use it when it is present
+      pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
+  } else {
+      pge = gencode %Q% (gene_type == 'protein_coding')
+  }
 
   .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 2, del.thresh = 0.5, filter = 'PASS')
   {
@@ -19291,7 +19296,7 @@ oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 2, fil
         {
           scna[, track := 'variants'][, source := 'jabba_rds'][, vartype := 'scna']
           out = rbind(out,
-                      scna[, .(id = x, value = cn, type, track, gene = gene_name)],
+                      scna[, .(id = x, value = min_cn, type, track, gene = gene_name)],
                       fill = TRUE, use.names = TRUE)
         }
     } else {
@@ -19883,60 +19888,20 @@ process_gencode = function(gencode = NULL){
 #' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
 #' @return scna data.table with genes that have either amplification or deletion
 #' @author Alon Shaiber
-#' @export 
-get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 2,
-                                       del.thresh = 0.5, nseg = NULL){
 
-  if (is.character(jab)){
-        jab = readRDS(jab)
-      }
-  gg = gG(jab = jab)
+#' @export
+get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
+                                     del.thresh = 0.5, nseg = NULL){
+    gg = gG(jabba = jab)
+    gene_CN = get_gene_copy_numbers(gg, gene_ranges = pge, nseg = nseg)
+    gene_CN[, type := NA_character_]
+    gene_CN[min_normalized_cn >= amp.thresh, type := 'amp']
+    gene_CN[min_cn > 1 & min_normalized_cn < del.thresh, type := 'del']
+    gene_CN[min_cn == 1 & min_cn < ncn, type := 'hetdel']
+    gene_CN[min_cn == 0, type := 'homdel']
 
-  ngr = gg$nodes$gr
-  if (!is.null(nseg)){
-    ngr = ngr %$% nseg[, c('ncn')]
-  } else {
-                                        # if there is no nseg then assume ncn = 2
-    ngr$ncn = 2
-  }
-  ndt = gr2dt(ngr)
-
-                                        # we will use the normal ploidy to determine hetdels
-                                        # so instead of a cutoff of del.thresh * ploidy, we use:
-                                        # del.thresh * ploidy * ncn / normal_ploidy
-                                        # where ncn is the local normal copy number
-  seq_widths = as.numeric(width(ngr))
-                                        # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
-  normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
-
-        ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
-
-  scna = rbind(
-    ndt[normalized_cn >= amp.thresh, ][, type := 'amp'],
-    ndt[cn > 1 & normalized_cn < del.thresh, ][, type := 'del'],
-    ndt[cn == 1 & cn < ncn][, type := 'hetdel'],
-    ndt[cn == 0, ][, type := 'homdel']
-  )
-
-  scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
-
-      if (nrow(scna))
-      {
-
-        # for genes that have amp - filter any gene that has portion covered lower than 100%
-        if (scna[type == 'amp', .N] > 0){
-              pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
-              pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
-              pge_amps_dt = gr2dt(pge_amps)
-              min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
-              # FIXME: we should instead check for the minimal CN of genes and report that CN in the oncotable as well as the appropriate CNV type. Currently we still end up with multiple entries for each gene
-              amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
-              scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
-        }
-        # take only the row with the minimal CN for each gene
-        scna = scna[, .SD[which.min(normalized_cn)], by = gene_name][, .(gene_name, type, normalized_cn, cn, ncn)]
-      }
-    return(scna)
+    # only return entries with a CNV
+    return(gene_CN[!is.na(type)])
 }
 
 check_GRanges_compatibility = function(gr1, gr2, name1 = 'first', name2 = 'second'){
@@ -20006,7 +19971,7 @@ get_gene_copy_numbers = function(gg, gene_ranges, nseg = NULL, gene_id_col = 'ge
     normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
 
     # normalize the CN by ploidy and by local normal copy number
-    ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
+    ndt[, normalized_cn := cn * normal_ploidy / (gg$meta$ploidy * ncn)]
 
     # overlapping copy number segments with gene ranges
     gene_cn_segments = dt2gr(ndt, seqlengths = seqlengths(gg)) %*% gene_ranges %>% gr2dt
@@ -20662,4 +20627,19 @@ preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
         covv.new = gr.chr(covv.new)
     }
     return(covv.new)
+}
+
+flow_slurm_status = function(jb, return_id = FALSE){
+    fns = paste0(outdir(jb), '/slurm.jobid')
+    idss = sapply(fns, function(fn){
+       id = NULL
+       if (file.ready(fn)){
+           id = readLines(fn)
+       }
+       return(id)
+    })
+    if (len(idss) > 0){
+        system(paste0('sacct -o jobid,jobname,state,maxrss,reqm --unit=G -j ', paste(idss, collapse = ',')))
+    }
+    if (return_id) return(idss)
 }
