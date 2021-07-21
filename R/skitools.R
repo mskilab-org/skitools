@@ -5358,7 +5358,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, col.sina = NULL, 
     cex.scatter = 2*cex,
     col.scatter = alpha('black', 0.5),
     col.background = 'gray', 
-    alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1,
+    alpha = 1, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1,
     plotly = FALSE, print = TRUE,facet_scales = "fixed")
     {
         # require(ggplot2)
