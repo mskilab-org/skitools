@@ -5319,6 +5319,8 @@ bplot = function(y, by = NULL, facet = NULL, col = NA, ylim = NA, keep.base = NU
 #' @param group length(y) vector of categories
 #' @param facet1 optional length(y) vector of row categories to facet on (=NULL)
 #' @param facet2 optional length(y) vector of column categories to facet on (=NULL)
+#' @param col.sina data vector to color in sina plot (NULL) will trigger sina =  TRUE if not null
+#' @param col.sina data vector to specify size in sina plot (NULL) will trigger sina =  TRUE if not null
 #' @param transpose logical vector whether flip row / column orientation of facets (=FALSE)
 #' @param mapping mapping of groups to colors (=NULL)
 #' @param scale scale parameter to geom_vplot (=width), can also be "area" and "count"
@@ -5333,10 +5335,11 @@ bplot = function(y, by = NULL, facet = NULL, col = NA, ylim = NA, keep.base = NU
 #' @param alpha numeric vector between 0 and 1 to specify alpha transparency of points if scatter is TRUE (0.3)
 #' @param title character specifying plot title (=NULL)
 #' @param facet_scales character specifying scales arg in ggplot2::facet_grid()
+#' @param sina logical flag whether to sina
 #' @author Marcin Imielinski
 #' @import ggplot2
 #' @export
-vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, flip = FALSE,  mapping = NULL,
+vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, col.sina = NULL, transpose = FALSE, flip = FALSE,  mapping = NULL,
                  stat = "ydensity",
     position = "dodge",
     trim = TRUE, sample = NA, scale = "width", log = FALSE, log1p = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
@@ -5344,7 +5347,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
     wes = 'Royal1',
     col = NULL, 
     method = 'count',
-    sina = FALSE,
+    sina = !is.null(col.sina),
     sina.scale = FALSE,
     text = NULL,
     reorder = FALSE,
@@ -5352,14 +5355,26 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
     cex = 1,
     cex.axis = 1,
     cex.title = 1, 
-    cex.scatter = cex,
+    cex.scatter = 2*cex,
     col.scatter = alpha('black', 0.5),
-    alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE,facet_scales = "fixed")
+    col.background = 'gray', 
+    alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1,
+    plotly = FALSE, print = TRUE,facet_scales = "fixed")
     {
         # require(ggplot2)
       if (!is.factor(group))
           group = as.factor(group)
       dat = data.table(y = suppressWarnings(as.numeric(y)), group)
+
+      if (!is.null(col.sina))
+      {
+        if (is.logical(col.sina)) ## default red gray colorway for logical variables
+                                        #          col.sina = ifelse(col.sina, 'red', 'gray')
+          col.sina = sign(col.sina)
+
+        dat[, subgroup := col.sina]
+      }
+
 
       if (reorder)
       {
@@ -5412,7 +5427,12 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
       
       if (nrow(dat)==0)
         stop('No groups exist with >0 variance')
-      
+
+      if (!is.null(col) && is.null(names(col)))
+      {
+        col = data.table(group = levels(dat$group))[, col := col][, structure(col, names = group)]
+      }
+
       if (count)
       {
         tmp = table(dat$group)
@@ -5427,17 +5447,26 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
         mapping = aes(fill=group)
 
       dat = dat[vfilter!=0, ]
-      g = ggplot(dat, aes(y = y, x = group)) + theme_bw(base_size = 15*cex.axis) %+replace% theme(plot.title = element_text(size = 11*cex.axis*cex.title), panel.grid.major.x = element_blank(), panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank())
+      g = ggplot(dat, aes(y = y, x = group)) + theme_bw(base_size = 15*cex.axis) %+replace% theme(plot.title = element_text(size = 11*cex.axis*cex.title), panel.grid.major.x = element_blank(),  panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank())
 
-      if (vplot)
-        g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
       
       scatter = sina | scatter
       if (scatter)
       {
         if (sina)
         {
-          g = g + ggforce::geom_sina(scale = sina.scale, method = method, colour = col.scatter, size = 2*cex.scatter, alpha = alpha)
+          if (!is.null(col.sina))
+          { ## major hack 
+             g = g + ggforce::geom_sina(scale = sina.scale, method = method, size = cex.scatter, mapping = aes(colour = subgroup, alpha = subgroup))
+              if (all(col.sina == 0))
+                g = g  + scale_colour_gradient(low = col.background, high = col.background)
+            else if (all(col.sina == 1))
+                g = g  + scale_colour_gradient(low = col.scatter, high = col.scatter)           
+              else
+                g = g  + scale_colour_gradient(low = col.background, high = col.scatter)             
+          }
+          else            
+            g = g + ggforce::geom_sina(scale = sina.scale, method = method, size = cex.scatter, mapping = aes(colour = group), alpha = alpha)
         }
         else if (dot)
           {
@@ -5467,7 +5496,9 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 
         }
       
-      
+      if (vplot)
+        g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
+
 
         if (log)
             {
@@ -5514,22 +5545,41 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 
         if (!is.null(legend.nrow))
             g = g + guides(fill = guide_legend(nrow = legend.nrow, byrow = TRUE))
+      
 
 
       if (!is.null(col))
       {
-        g = g + scale_fill_manual(values = col)
-        g = g + scale_color_manual(values = col)
+        if (sina)
+          {
+            g = g + scale_fill_manual(values = alpha(col, 0))
+            if (is.null(col.sina))
+              g = g + scale_colour_manual(values = col)
+          }
+        else
+          g = g + scale_fill_manual(values = col)
       }
       else if (!is.null(wes))
       {
-        g = g + scale_fill_manual(values = skitools::brewer.master(length(unique(dat$group)), wes, wes = TRUE))
-#        g = g + scale_fill_manual(values = wesanderson::wes_palette(wes))
+        if (sina)
+          {
+            g = g + scale_fill_manual(values = skitools::brewer.master(length(unique(dat$group)), wes, wes = TRUE) %>% alpha(0))
+            if (is.null(col.sina))
+              g = g + scale_colour_manual(values = skitools::brewer.master(length(unique(dat$group)), wes, wes = TRUE))
+          }
+        else
+          g = g + scale_fill_manual(values = skitools::brewer.master(length(unique(dat$group)), wes, wes = TRUE))
       }
-     
+
 
       if (flip)
         g = g + coord_flip()
+
+      if (length(unique(col.sina))<3)
+      {
+        g = g + guides(color = FALSE)
+        g = g + guides(alpha = FALSE)
+      }
       
       if (!is.null(dat$facet1))
       {
@@ -5568,6 +5618,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
 #' @param expr R code to eval while suppressing all errors
 #' @author Marcin Imielinski
 #' @export
+
 clock = function(expr)
   {
     now = Sys.time()
@@ -18291,36 +18342,63 @@ write_ggjs = function(gr, filename, field = 'score')
 #' @param ploidy ploidy of sample
 #' @param gamma gamma fit of solution (over-rides purity and ploidy)
 #' @param beta beta fit of solution (over-rides purity and ploidy)
-#' @param field meta data field in "gr" variable from which to extract signal, default "mean"
+#' @param field meta data field in "gr" variable from which to extract signal, default "ratio"
 #' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
+#' @param data_mean optionally provide a mean value to use in the transformation. Usually a mean value is computed from the input data, but in unique cases, where the input data does not represent the full set of data, then this value could be provided. For example, this is usefull when transforming SNV read counts, you can provide the ALT read count as the input that you want transformed, and provide the average count of ALT + REF as the data_mean
+#' @param ncn.gr GRanges with the copy number values for normal samples (if the field.ncn is found in the input gr then the ncn.gr parameter is ignored). Notice the the input ncn.gr must contain the field specified by field.ncn
+#' @param allele (logical) whether to return allelic CNs. If TRUE, assumes that the GRanges is "melted" and there are two identical ranges per SNP. Default FALSE.
 #' @return
 #' numeric vector of integer copy numbers
 #' @export
-rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA, allele = FALSE)
 {
   mu = values(gr)[, field]
   mu[is.infinite(mu)] = NA
   w = as.numeric(width(gr))
   w[is.na(mu)] = NA
   sw = sum(w, na.rm = T)
-  mutl = sum(mu * w, na.rm = T)
+  if (is.na(data_mean)){
+      data_mean = sum(mu * w, na.rm = T) / sw
+  }
 
-  ncn = rep(2, length(mu))
+  ncn = NA
   if (!is.null(field.ncn))
     if (field.ncn %in% names(values(gr)))
       ncn = values(gr)[, field.ncn]
 
+  if (is.na(ncn)){
+      if (!is.na(ncn.gr)){
+          if (!inherits(ncn.gr, 'GRanges')){
+              stop('ncn.gr must be of class GRanges, but ', class(GRanges), ' was provided.')
+          }
+          ncn = values(gr %$% ncn.gr[, field.ncn])[, field.ncn]
+      } else {
+      ncn = rep(2, length(mu))
+      }
+  }
+
+
   ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+
+  if (allele) {
+      y.bar = ploidy_normal * data_mean
+      denom = purity * ploidy + ploidy_normal * (1 - purity)
+      if (is.na(beta)) {
+          beta = y.bar * purity / denom
+      }
+      if (is.na(gamma)) {
+          gamma = (y.bar * (1 - purity)) / denom
+      }
+      return ((mu - gamma) / beta)
+  }
+
 
   if (is.na(gamma))
     gamma = 2*(1-purity)/purity
 
   if (is.na(beta))
-    beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
-                                        #      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
+    beta = ((1-purity)*ploidy_normal + purity*ploidy) / (purity * data_mean)
 
-
-                                        # return(beta * mu - gamma)
   return(beta * mu - ncn * gamma / 2)
 }
 
@@ -19142,19 +19220,19 @@ memu = function()
 #'
 #' @param tumors keyed data.table i.e. keyed by unique tumor id with specific columns corresponding to  paths to pipeline outputs(see description)
 #' @param gencode path to gencode .gtf or .rds with GRanges object, or a GRanges object i.e. resulting from importing the (appropriate) GENCODE .gtf via rtracklayer, note: this input is only used in CNA to gene mapping
-#' @param amp.thresh SCNA amplification threshold to call an amp as a function of ploidy (4)
+#' @param amp.thresh SCNA amplification threshold to call an amp as a multiple of ploidy (4)
 #' @param del.thresh SCNA deletion threshold for (het) del as a function of ploidy (by default cn = 1 will be called del, but this allows additoinal regions in high ploidy tumors to be considered het dels)
 #' @param mc.cores number of cores for multithreading
 #' @param verbose logical flag 
 #' @author Marcin Imielinski
 #' @export
-oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
+oncotable = function(tumors, gencode = NULL, verbose = TRUE, amp.thresh = 2, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
 {
   gencode = process_gencode(gencode)
 
   pge = gencode %Q% (type  == 'gene' & gene_type == 'protein_coding')
 
-  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 4, del.thresh = 0.5, filter = 'PASS')
+  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 2, del.thresh = 0.5, filter = 'PASS')
   {
     out = data.table()
 
@@ -19576,7 +19654,7 @@ oncoprint = function(tumors = NULL,
     signature.keep = paste('Signature', signature.main, sep = '_') %>%
       union(sigd[frac>signature.thresh, type])
     sigd[, type := ifelse(type %in% signature.keep, as.character(gsub('Signature_', '', type)), 'other')]
-    sigdc = dcast.data.table(sigd, id ~ type, value.var = 'frac', fun.aggregate = sum)
+    sigdc = dcast.data.table(sigd, id ~ type, value.var = 'frac', fun.aggregate = sum, drop = FALSE)
     sigdm = as.matrix(sigdc[, -1])
     rownames(sigdm) = sigdc$id
     sigdm = sigdm[ids,, drop = FALSE]
@@ -19806,52 +19884,172 @@ process_gencode = function(gencode = NULL){
 #' @return scna data.table with genes that have either amplification or deletion
 #' @author Alon Shaiber
 #' @export 
-get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 4,
-                                     del.thresh = 0.5, nseg = NULL){
-    if (is.character(jab)){
-      jab = readRDS(jab)
-    }
-      gg = gG(jab = jab)
+get_gene_ampdels_from_jabba = function(jab, pge, amp.thresh = 2,
+                                       del.thresh = 0.5, nseg = NULL){
 
-      ngr = gg$nodes$gr
-      if (!is.null(nseg)){
-          ngr = ngr %$% nseg[, c('ncn')]
-      } else {
-          # if there is no nseg then assume ncn = 2
-          ngr$ncn = 2
+  if (is.character(jab)){
+        jab = readRDS(jab)
       }
-      ndt = gr2dt(ngr)
+  gg = gG(jab = jab)
 
-      # we will use the normal ploidy to determine hetdels 
-      # so instead of a cutoff of del.thresh * ploidy, we use:
-      # del.thresh * ploidy * ncn / normal_ploidy
-      # where ncn is the local normal copy number
-      seq_widths = as.numeric(width(ngr))
-      # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
-      normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
+  ngr = gg$nodes$gr
+  if (!is.null(nseg)){
+    ngr = ngr %$% nseg[, c('ncn')]
+  } else {
+                                        # if there is no nseg then assume ncn = 2
+    ngr$ncn = 2
+  }
+  ndt = gr2dt(ngr)
 
-      ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
-      scna = rbind(
-        ndt[normalized_cn >= amp.thresh, ][, type := 'amp'],
-        ndt[cn > 1 & normalized_cn < del.thresh, ][, type := 'del'],
-        ndt[cn == 1 & cn < ncn][, type := 'hetdel'],
-        ndt[cn == 0, ][, type := 'homdel']
-      )
+                                        # we will use the normal ploidy to determine hetdels
+                                        # so instead of a cutoff of del.thresh * ploidy, we use:
+                                        # del.thresh * ploidy * ncn / normal_ploidy
+                                        # where ncn is the local normal copy number
+  seq_widths = as.numeric(width(ngr))
+                                        # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
+  normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
+
+        ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
+
+  scna = rbind(
+    ndt[normalized_cn >= amp.thresh, ][, type := 'amp'],
+    ndt[cn > 1 & normalized_cn < del.thresh, ][, type := 'del'],
+    ndt[cn == 1 & cn < ncn][, type := 'hetdel'],
+    ndt[cn == 0, ][, type := 'homdel']
+  )
+
+  scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
 
       if (nrow(scna))
       {
-        scna = dt2gr(scna, seqlengths = seqlengths(gg)) %*% pge[, 'gene_name'] %>% gr2dt
 
         # for genes that have amp - filter any gene that has portion covered lower than 100%
-        pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
-        pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
-        pge_amps_dt = gr2dt(pge_amps)
-        min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
-        amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
-        scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+        if (scna[type == 'amp', .N] > 0){
+              pge_amps = pge[, 'gene_name'] %Q% (gene_name %in% scna[type == 'amp', gene_name])
+              pge_amps$portion_amplified = pge_amps %O% dt2gr(scna[type == 'amp'], seqlengths = seqlengths(gg))
+              pge_amps_dt = gr2dt(pge_amps)
+              min_portion_amplified_per_gene = pge_amps_dt[,.(min_portion_amplified = min(portion_amplified)), by = 'gene_name']
+              # FIXME: we should instead check for the minimal CN of genes and report that CN in the oncotable as well as the appropriate CNV type. Currently we still end up with multiple entries for each gene
+              amplified_genes = min_portion_amplified_per_gene[min_portion_amplified == 1, gene_name]
+              scna = scna[type != 'amp' | (type == 'amp' & gene_name %in% amplified_genes)] # for amps keep only the genes that have the full length amplified
+        }
+        # take only the row with the minimal CN for each gene
+        scna = scna[, .SD[which.min(normalized_cn)], by = gene_name][, .(gene_name, type, normalized_cn, cn, ncn)]
       }
     return(scna)
 }
+
+check_GRanges_compatibility = function(gr1, gr2, name1 = 'first', name2 = 'second'){
+      # check which seqnames overlap and which don't 
+      non_overlapping_seqnames1 = setdiff(seqlevels(gr1), seqlevels(gr2))
+      non_overlapping_seqnames2 = setdiff(seqlevels(gr2), seqlevels(gr1))
+      overlap = intersect(seqlevels(gr1), seqlevels(gr2))
+      message('The following seqnames are only in the ', name1, ' GRanges, but not in the ', name2, ' GRanges: ', paste(non_overlapping_seqnames1, collapse = ', '))
+      message('The following seqnames are only in the ', name2, ' GRanges, but not in the ', name1, ' GRanges: ', paste(non_overlapping_seqnames2, collapse = ', '))
+      message('The follosing seqnames are in both GRanges objects: ', paste(overlap, collapse = ', '))
+      if (length(non_overlapping_seqnames1) > 0 | length(non_overlapping_seqnames2) > 0){
+          return(FALSE)
+      }
+      return(TRUE)
+}
+
+
+#' @title get_gene_copy_numbers
+#' @description
+#'
+#' Takes a jabba_rds output and returns a GRanges with the genes that have either amplifications or deletions
+#'
+#' @param gg either path to rds of a gGraph or an object containing the gGraph with JaBbA output
+#' @param gene_ranges GRanges of genes (must contain field "gene_name"). Alternatively a path to a file that could be parsed by rtracklayer::import (such as gtf) is acceptable.
+#' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
+#' @param nseg GRanges with field "ncn" - the normal copy number (if not provided then ncn = 2 is used)
+#' @param gene_id_col the name of the column to be used in order to identify genes (must be unique for each gene, so usually "gene_name" is not the right choice).
+#' @param simplify_seqnames when set to TRUE, then gr.sub is ran on the seqnames of the gGraph segments and the genes GRanges
+#' @param mfields the metadata fields that the output should inherit from the genes GRanges
+#' @param output_type either GRanges or data.table
+#' @return GRanges or data.table with genes CN
+#' @author Alon Shaiber
+#' @export 
+get_gene_copy_numbers = function(gg, gene_ranges, nseg = NULL, gene_id_col = 'gene_id',
+                                      simplify_seqnames = FALSE,
+                                      mfields = c("gene_name", "source", "gene_id", "gene_type", "level", "hgnc_id", "havana_gene"),
+                                      output_type = 'data.table'){
+    if (is.character(gg)){
+      gg = readRDS(gg)
+    }
+    if (!inherits(gene_ranges, 'GRanges')){
+        # try to import with rtracklayer
+        gene_ranges = rtracklayer::import(gene_ranges)
+    }
+
+    if (!(output_type %in% c('GRanges', 'data.table'))){
+        stop('Invalid output_type: ', output_type, '. outputtype must be either "GRanges" or "data.table".')
+    }
+    ngr = gg$nodes$gr
+    if (simplify_seqnames){
+        ngr = gr.sub(ngr)
+        gene_ranges = gr.sub(gene_ranges)
+    }
+    GRanges_are_compatible = check_GRanges_compatibility(ngr, gene_ranges, 'gGraph segments', 'genes')
+
+    if (!is.null(nseg)){
+        ngr = ngr %$% nseg[, c('ncn')]
+    } else {
+        # if there is no nseg then assume ncn = 2
+        message('No normal copy number segmentation was provided so assuming CN = 2 for all seqnames.')
+        ngr$ncn = 2
+    }
+    ndt = gr2dt(ngr)
+
+    seq_widths = as.numeric(width(ngr))
+    # since we are comparing to CN data which is integer then we will also round the normal ploidy to the nearest integer.
+    normal_ploidy = round(sum(seq_widths * ngr$ncn, na.rm = T) / sum(seq_widths, na.rm = T))
+
+    # normalize the CN by ploidy and by local normal copy number
+    ndt[, normalized_cn := cn * normal_ploidy / (jab$ploidy * ncn)]
+
+    # overlapping copy number segments with gene ranges
+    gene_cn_segments = dt2gr(ndt, seqlengths = seqlengths(gg)) %*% gene_ranges %>% gr2dt
+    # let's find genes that overlap with multiple copy number segments 
+    # we would want to report the minimum and maximum CN for these genes as well as the number of CN segments overlapping the gene
+    # we could do the same computation for all genes, but it is much more efficient to do it separately since the split_genes are a minority
+    split_genes = gene_cn_segments[duplicated(get(gene_id_col)), get(gene_id_col)]
+
+    gene_cn_non_split_genes = gene_cn_segments[!(get(gene_id_col) %in% split_genes)]
+    gene_cn_non_split_genes[, `:=`(max_normalized_cn = normalized_cn,
+                                   min_normalized_cn = normalized_cn,
+                                   max_cn = cn,
+                                   min_cn = cn,
+                                   number_of_cn_segments = 1,
+                                   cn = NULL,
+                                   normalized_cn = NULL)]
+
+    gene_cn_split_genes_min = gene_cn_segments[get(gene_id_col) %in% split_genes, .SD[which.min(cn)], by = gene_id_col]
+    gene_cn_split_genes_min[, `:=`(min_normalized_cn = normalized_cn,
+                                   min_cn = cn,
+                                   cn = NULL,
+                                   normalized_cn = NULL)]
+
+
+    gene_cn_split_genes_max = gene_cn_segments[get(gene_id_col) %in% split_genes,
+                                           .SD[which.max(cn)], by = gene_id_col][, .(get(gene_id_col),
+                                                                max_normalized_cn = normalized_cn,
+                                                                max_cn = cn)]
+    setnames(gene_cn_split_genes_max, 'V1', gene_id_col)
+    
+    number_of_segments_per_split_gene = gene_cn_segments[get(gene_id_col) %in% split_genes, .(number_of_cn_segments = .N), by = gene_id_col]
+
+    gene_cn_split_genes = merge(gene_cn_split_genes_min, gene_cn_split_genes_max, by = gene_id_col)
+    gene_cn_split_genes = merge(gene_cn_split_genes, number_of_segments_per_split_gene, by = gene_id_col)
+
+    gene_cn_table = rbind(gene_cn_split_genes, gene_cn_non_split_genes)
+
+    if (output_type == 'data.table'){
+        return(gene_cn_table)
+    }
+    return(dt2gr(gene_cn_table, seqlengths = seqlengths(gene_ranges)))
+}
+
 
 #' @name alignment_metrics
 #' @title alignment_metrics
@@ -20309,4 +20507,159 @@ get.pileup.gtrack = function(sites){
     gt.het.n$legend = FALSE
 
     return(c(gt.het.t, gt.het.n))
+}
+
+#' @name read_pon_dict
+#' @title read_pon_dict
+#' @description
+#'
+#' Check the validity and read the TAB delimited dictionary for dryclean PONs
+#'
+#' @param pon_dict_path path to the TAB delimited file.
+#' @return pon_dict data.table object
+#' @export
+#' @author Alon Shaiber
+read_pon_dict = function(pon_dict_path){
+    if (!file.exists(pon_dict_path)){
+        stop('You must provide a valid path to a TAB-delimited PON dictionary.')
+    }
+    pdict = fread(pon_dict_path)
+    for (cname in c('pon_name', 'pon_path', 'template_GRanges', 'reference_genome_name')){
+        if (!(cname %in% names(pdict))){
+            stop('The dictionary that was provided ', pon_dict_path, ' does not have a column "', cname, '". ',
+                 'The PON dictionary must be a TAB-delimited file with at least four columns: "pon_name", "pon_path", "template_GRanges", "reference_genome_name".')
+        }
+    }
+    return(pdict)
+}
+
+
+#' @name get_dryclean_pon_path
+#' @title get_dryclean_pon_path
+#' @description
+#'
+#' return the path to the PON RDS (detergent) file corresponding to the provided pon_name
+#'
+#' @param pon_name name of the PON.
+#' @param pon_dict_path path to the TAB delimited file.
+#' @return detergent path to the PON RDS file.
+#' @export
+#' @author Alon Shaiber
+get_dryclean_pon_path = function(pon_name, pon_dict = '/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv'){
+    pdict = read_pon_dict(pon_dict)
+    if (!(pon_name %in% pdict$pon_name)){
+        stop('The PON name you provided "', pon_name, '" is not in the PON dictionary. ',
+             'Here is a list of the available PONs: ', paste(pdict$pon_name, collapse = ', '), '.')
+    }
+    pname = pon_name
+    pon_path = pdict[pon_name == pname, pon_path]
+    if (!file.ready(pon_path)){
+        stop('The PON path for ', pon_name, ' is not valid, please make sure that ',
+             'the following file exists and is not empty or fix the PON dictionary: ', pon_path)
+    }
+    return(pon_path)
+}
+
+
+#' @name get_dryclean_pon_template
+#' @title get_dryclean_pon_template
+#' @description
+#'
+#' return the template GRanges for the PON corresponding to the provided pon_name
+#'
+#' @param pon_name name of the PON.
+#' @param pon_dict_path path to the TAB delimited file.
+#' @return template GRanges object with the ranges that are compatible with the provided pon_name
+#' @export
+#' @author Alon Shaiber
+get_dryclean_pon_template = function(pon_name, pon_dict = '/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv'){
+    pdict = read_pon_dict(pon_dict)
+    if (!(pon_name %in% pdict$pon_name)){
+        stop('The PON name you provided "', pon_name, '" is not in the PON dictionary. ',
+             'Here is a list of the available PONs: ', paste(pdict$pon_name, collapse = ', '), '.')
+    }
+    pname = pon_name
+    template_path = pdict[pon_name == pname, template_GRanges]
+    if (!file.ready(template_path)){
+        stop('The provided template is not valid: ', template_path, '. Please provide a path to a file that exists and is not empty')
+    }
+    if (!grepl('.rds$', template_path)){
+        stop('The template file must have a ".rds" suffix')
+    }
+    template = readRDS(template_path)
+    if (!inherits(template, 'GRanges')){
+        stop('The template file must be of class GRanges, but the one provided: "', template_path, '" is of class: ', class(template), '.')
+    }
+    return(template)
+}
+
+#' @name preprocess_cov_for_dryclean
+#' @title preprocess_cov_for_dryclean
+#' @description
+#'
+#' preprocess coverage file by rebinning to match the ranges that are compatible with the PON and by normalizing the coverage by the mean
+#'
+#' @param cov GRanges with coverage data
+#' @param field field to use as input from the coverage GRanges
+#' @param template_rds path to a RDS file containing the template GRanges to use for re-binning
+#' @param seqnames.to.include which seqnames to include in the output
+#' @param output.field field name for the output normalized and rebinned data
+#' @param pon_name name of the PON.
+#' @param pon_dict path to the TAB delimited file PON dictionary (if no template_rds was provided then you must provide a pon_name)
+#' @param pon_name name of the PON. This is used to get the path to the template RDS from the pon_dict (if no template_rds was provided then you must provide a pon_name)
+#' @param nochr by default all chr prefix is removed, if you wish the output to have chr you must specify nochr=FALSE
+#' @return new.cov GRanges object with the normalized and rebinned coverage values
+#' @export
+#' @author Alon Shaiber
+preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
+                                       template_rds = '',
+                                       seqnames.to.include = c(as.character(1:22), "X"),
+                                       output.field = 'reads.corrected',
+                                       pon_dict = '/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv',
+                                       pon_name = NULL,
+                                       nochr = TRUE){
+    if (!inherits(cov, 'GRanges')){
+        stop('The input coverage object must be of class GRanges')
+    }
+    if (!file.exists(template_rds)){
+        if (!is.null(pon_name)){
+            template = get_dryclean_pon_template(pon_name) %>% gr.nochr
+        } else {
+            stop('Template RDS file was not found: ', template_rds)
+        }
+    } else {
+        if (!grepl('.rds$', template_rds)){
+            stop('The template file name must have a ".rds" suffix. The provided file was not valid: ', template_rds)
+        }
+        template = readRDS(template_rds) %>% gr.nochr
+        if (!inherits(template, 'GRanges')){
+            stop('The template must be of type GRanges.')
+        }
+    }
+    cov = gr.nochr(cov)
+    seqnames.to.include = gsub('chr', '', seqnames.to.include)
+    if (!(field %in% names(values(cov)))){
+        stop(sprintf('The provided field "%s" is not in the input coverage GRanges.
+                     Here are the fields that were found: "%s"', field, paste(names(values(cov)), collapse = '", "')))
+    }
+    if (length(intersect(seqnames.to.include, unique(seqnames(cov)))) == 0){
+        stop('The input coverage does not contain any of the specified seqnames: ', seqnames.to.include)
+    }
+    if (length(intersect(unique(seqnames(template)), unique(seqnames(cov)))) == 0){
+        stop('There is no overlap between the sequence names in your template and in the input coverage.')
+    }
+    if (length(intersect(seqnames.to.include, unique(seqnames(template)))) == 0){
+        stop('The template does not contain any of the specified seqnames: ', seqnames.to.include)
+    }
+    covv.new = template[, c()] %$% cov[, field]
+    covv.new = gr2dt(covv.new)
+    covv.new = covv.new[seqnames %in% seqnames.to.include]
+    covv.new[, mean.r := mean(get(field), na.rm = T)]
+    covv.new[, (output.field) := get(field)/mean.r]
+    covv.new = dt2gr(covv.new)
+    covv.new = covv.new[, output.field]
+    if (nochr == FALSE){
+        covv.new = gr.chr(covv.new)
+    }
+    return(covv.new)
 }
