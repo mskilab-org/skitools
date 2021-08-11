@@ -19076,6 +19076,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
   if (!inherits(reads, 'GRanges') || is.null(reads$qname) || is.null(reads$cigar) || is.null(reads$seq) || is.null(reads$flag))
     stop('read input must be GRanges with fields $qname, $cigar, $seq, $flag and optionally $AS')
 
+  sl = seqlengths(reads)
   if (bx)
     pad = max(pad, 1e5)
 
@@ -19112,7 +19113,6 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
     r1 = reads %Q% (R1 == TRUE) %>% as.data.table
     r2 = reads %Q% (R1 == FALSE) %>% as.data.table
     ov = merge(r1, r2, by = 'qname')
-    sl = seqlengths(reads)
     grl = grl.pivot(
       GRangesList(dt2gr(ov[, .(seqnames = seqnames.x, start = start.x, end =end.x, strand = strand.x)],
                         seqlengths = sl),
@@ -19120,7 +19120,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
                         seqlengths = sl)))
     values(grl)$qname = ov$qname
     ## make junctions out of reads and cross with "real" junctions
-    jn = merge(jJ(grl), junctions, cartesian = TRUE, pad = pad)
+    jn = merge.Junction(jJ(grl), junctions, cartesian = TRUE, pad = pad)
     if (!length(jn))
       return(reads[c()])
     out = merge(as.data.table(gr.flipstrand(reads)), unique(jn$dt[, .(qname, junction.id = subject.id)]), by = 'qname') %>% dt2gr(seqlengths = sl)
@@ -20629,7 +20629,7 @@ preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
     return(covv.new)
 }
 
-flow_slurm_status = function(jb, return_id = FALSE){
+flow_slurm_status = function(jb, return_id = FALSE, fields = c("jobid","jobname","state","maxrss","reqm", "elapsed")){
     fns = paste0(outdir(jb), '/slurm.jobid')
     idss = sapply(fns, function(fn){
        id = NULL
@@ -20639,7 +20639,8 @@ flow_slurm_status = function(jb, return_id = FALSE){
        return(id)
     })
     if (len(idss) > 0){
-        system(paste0('sacct -o jobid,jobname,state,maxrss,reqm --unit=G -j ', paste(idss, collapse = ',')))
+        f = paste(fields, collapse = ',')
+        system(paste0('sacct -o ', f, ' --unit=G -j ', paste(idss, collapse = ',')))
     }
     if (return_id) return(idss)
 }
