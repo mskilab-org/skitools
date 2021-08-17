@@ -19619,8 +19619,10 @@ oncoprint = function(tumors = NULL,
   {
     tmbd = oncotab[track == 'tmb' & type == 'density', structure(value, names = as.character(id))][ids]
     
-    top_data$TMB = tmbd
-    out.mat = rbind(TMB = tmbd, out.mat)
+    if (!all(tmbd == 0)){
+      top_data$TMB = tmbd
+      out.mat = rbind(TMB = tmbd, out.mat)
+    }
   }
 
   if (pp & any(oncotab$track == 'pp'))
@@ -20629,8 +20631,33 @@ preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
     return(covv.new)
 }
 
-flow_slurm_status = function(jb, return_id = FALSE, fields = c("jobid","jobname","state","maxrss","reqm", "elapsed")){
+#' @name flow_slurm_status
+#' @title flow_slurm_status
+#' @description
+#'
+#' wrapper for sacct (SLURM command line function)
+#'
+#' @param jb Flow Job object
+#' @param return_id return a list with the slurm job IDs for the Flow Job jobs
+#' @param fields which fields to print (see SLURM docs for details)
+#' @param return.str use system2 to return the stdout as a list of charachters
+#' @return vector
+#' @export
+#' @author Alon Shaiber
+flow_slurm_status = function(jb, return_id = FALSE,
+                             fields = c("jobid","jobname","state","maxrss","reqm", "elapsed"),
+                             return.str = FALSE){
     fns = paste0(outdir(jb), '/slurm.jobid')
+    fns = fns[which(file.ready(fns))]
+    if (length(fns) == 0){
+        warning('It does not look like any of your jobs were run with SLURM, please check.')
+        return(NULL)
+    }
+    if (length(fns) < length(jb)){
+        warning('Some jobs (', length(jb) - length(fns), ') are missing a slurm jobid (maybe those were not run yet, or ran, but not with slurm).')
+    }
+
+    st_out = NULL
     idss = sapply(fns, function(fn){
        id = NULL
        if (file.ready(fn)){
@@ -20640,7 +20667,41 @@ flow_slurm_status = function(jb, return_id = FALSE, fields = c("jobid","jobname"
     })
     if (len(idss) > 0){
         f = paste(fields, collapse = ',')
-        system(paste0('sacct -o ', f, ' --unit=G -j ', paste(idss, collapse = ',')))
+        if (return.str){
+            st_out = system2('sacct', paste0('-o ', f, ' --unit=G -j ', paste(idss, collapse = ',')),
+                             stdout=return.str, stderr=return.str)
+        } else {
+            system(paste0('sacct -o ', f, ' --unit=G -j ', paste(idss, collapse = ',')))
+        }
     }
     if (return_id) return(idss)
+    return(st_out)
+}
+
+#' @name slurm_dt
+#' @title slurm_dt
+#' @description
+#'
+#' wrapper for sacct that takes a Flow Job object and returns a data.table containing the time, memory, and state info for each job (SLURM command line function)
+#'
+#' @param jb Flow Job object
+#' @return data.table
+#' @export
+#' @author Alon Shaiber
+slurm_dt = function(jb){
+    slurmstr = flow_slurm_status(jb, return.str = TRUE)
+    if (is.null(slurmstr)){
+        return(NULL)
+    }
+    so = strsplit(slurmstr, ' ')
+    out = lapply(so, function(x){
+                   x = x[which(x!='')]
+                   if (x[2] == 'batch'){
+                       dt = data.table(jid = x[1], mem = as.numeric(gsub('G', '', x[4])), time = x[6], state = x[3], memory_allocated = x[5])
+                       dt[, seconds := period_to_seconds(hms(time))]
+                       return(dt)
+                   }
+                   return(NULL)
+    }) %>% rbindlist
+    return(out)
 }
