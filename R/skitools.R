@@ -20689,6 +20689,7 @@ flow_slurm_status = function(jb, return_id = FALSE,
 #' @export
 #' @author Alon Shaiber
 slurm_dt = function(jb){
+    library(lubridate)
     slurmstr = flow_slurm_status(jb, return.str = TRUE)
     if (is.null(slurmstr)){
         return(NULL)
