@@ -20665,7 +20665,7 @@ flow_slurm_status = function(jb, return_id = FALSE,
        }
        return(id)
     })
-    if (len(idss) > 0){
+    if (length(idss) > 0){
         f = paste(fields, collapse = ',')
         if (return.str){
             st_out = system2('sacct', paste0('-o ', f, ' --unit=G -j ', paste(idss, collapse = ',')),
