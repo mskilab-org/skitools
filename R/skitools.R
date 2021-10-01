@@ -19383,6 +19383,7 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
 #' @param oncotab output from oncotable function with field $id
 #' @param genes character vector of genes
 #' @param columns additional columns of tumors matrix to plot as horizontal tracks below the main track
+#' @param columns_cols vector of colors for the data in the additional columns
 #' @param split character of name of column in tumors table to split on (NULL)
 #' @param sort  logical flag whether to automatically sort rows i.e. genes and columns i.e. tumors in a "stair step" pattern or default to the provided (TRUE)
 #' @param noncoding logical flag whether to show non protein coding mutations
@@ -19414,6 +19415,7 @@ oncoprint = function(tumors = NULL,
                      split = NULL, 
                      sort = TRUE, sort.genes = sort, sort.tumors = sort,
                      columns = NULL,
+                     columns_cols = NULL,
                      noncoding = FALSE,
                      cna = TRUE, tmb = TRUE, pp = TRUE, signature = TRUE, svevents = TRUE, basic = FALSE, 
                      ppdf = TRUE,
@@ -19511,7 +19513,7 @@ oncoprint = function(tumors = NULL,
   missing = union(missing, vars[track == 'variants' & is.na(type), id])
 
   if (!noncoding)
-    vars = vars[!(type %in% c('promoter', 'noncoding', 'regulatory')), ]
+    vars = vars[!(type %in% c('promoter', 'noncoding', 'regulatory', 'proximity')), ]
 
   if (!cna)
     vars = vars[!(type %in% c('amp', 'del', 'hetdel', 'homdel')), ]  
@@ -19557,9 +19559,9 @@ oncoprint = function(tumors = NULL,
     }
     
   ## customize appeagrid appearance with mix of rectangles and circles
-  ord = c("amp", 'del', "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory')
+  ord = c("amp", 'del', "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'fusion', 'proximity', 'missense', 'promoter', 'regulatory')
   if (outframe.fusions == TRUE){
-      ord = c("amp", 'del', "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'outframe_fusion', 'fusion', 'missense', 'promoter', 'regulatory')
+      ord = c("amp", 'del', "hetdel", "homdel", 'trunc', 'splice', 'inframe_indel', 'outframe_fusion', 'fusion', 'proximity', 'missense', 'promoter', 'regulatory')
   }
   alter_fun = function(x, y, w, h, v) {
     CSIZE = 0.25
@@ -19573,7 +19575,7 @@ oncoprint = function(tumors = NULL,
         grid.rect(x,y,w,h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else if (grepl("missing", names(v)[i]))
         grid.rect(x, y, w, h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
-      else if (grepl("trunc", names(v)[i]))
+      else if (grepl("trunc|proximity", names(v)[i]))
         {
           grid.segments(x - w*0.5, y - h*0.5, x + w*0.5, y + h*0.5,
                         gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
@@ -19606,6 +19608,7 @@ oncoprint = function(tumors = NULL,
     promoter  = alpha('red', 0.5),
     regulatory  = alpha('red', 0.2),
     trunc = alpha("blue", 0.8),
+    proximity = alpha("purple", 0.8),
     mir = alpha('purple', 0.4),
     splice = "purple"
   )
@@ -19740,10 +19743,19 @@ oncoprint = function(tumors = NULL,
       ## discrete data simple plot ie heatmap
       if (is.character(custom[[x]]) | is.factor(custom[[x]]) | is.logical(custom[[x]]))
       {
-        if (is.logical(custom[[x]]))
-          cols = c("FALSE" = 'gray', "TRUE" = 'red')
-        else
-          cols = brewer.master(unique(custom[[x]]), wes = wes)
+          cols = NA
+        if (!is.null(columns_cols)){
+            if (all(unique(custom[[x]]) %in% names(columns_cols))){
+                cols = columns_cols[unique(custom[[x]])]
+            }
+        }
+        if (is.na(cols)){
+            if (is.logical(custom[[x]]))
+              cols = c("FALSE" = 'gray', "TRUE" = 'red')
+            else {
+              cols = brewer.master(unique(custom[[x]]), wes = wes)
+            }
+        }
         list(
           anno = anno_simple(
             as.character(custom[[x]]),
