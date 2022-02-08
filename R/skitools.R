@@ -2178,14 +2178,21 @@ vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 #' @param reads GRanges of reads with BX tag
 #' @param win  genomic window in which to score (default is just reduce(unlist(wks))))
 #' @param wins tiles to chop up genome further (beyond walk segments)
-#' @param raw  returns raw barcode by walk matrix of barcode scores
 #' @param use.discordant logical flag whether to process discordant
+#' @param rthresh
+#' @param thresh
+#' @param pad
+#' @param raw  returns raw barcode by walk matrix of barcode scores
+#' @param allpaths
+#' @param verbose
 #'
 #' @import gChain
-#' @return scores of walks or (if raw == tRUE) raw barcode to walk maps
+#' @return scores of walks or (if raw == TRUE) raw barcode to walk maps
 #' @export
 #' @author Marcin Imielinski
-score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, use.discordant = FALSE, rthresh= 4, thresh = 1e5, pad = 1e4, raw = FALSE, allpaths = TRUE, verbose = TRUE)
+score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL,
+                       use.discordant = FALSE, rthresh= 4, thresh = 1e5, pad = 1e4,
+                       raw = FALSE, allpaths = TRUE, verbose = TRUE)
 {
     shift = data.table::shift
     rowSums = Matrix::rowSums
@@ -2195,15 +2202,14 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
 
         tmp = unique(disjoin(gr.stripstrand(unlist(wks))))
         wins = sort(disjoin(c(gr.start(tmp, pad), gr.end(tmp, pad))))
-      strand(wins) = '+'
+        strand(wins) = '+'
     }
 
     ## add 1 unit of "padding" to any cyclic walks to adequately measure
-    cyc.ix = values(wks)$is.cyc
+    cyc.ix = values(wks)$circular
 
     if (any(cyc.ix))
       wks[cyc.ix] = do.call(GRangesList, lapply(which(cyc.ix), function(x) c(wks[[x]], wks[[x]])))
-
 
     THRESH = thresh
 
@@ -2220,7 +2226,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     if (!is.null(bam))
     {
       if (verbose)
-        message('Pulling out reads')
+        message('Pulling out reads from BAM')
 
       reads = dt2gr(read.bam(bam, streduce(wins), tag = 'BX', as.data.table = TRUE))
     }
@@ -2289,10 +2295,10 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
         message('Found ', final.disc, ' discordant pairs after removing ', init.disc - final.disc, ' small dup-like pairs')
       }
     }
-  if (verbose)
-    message("Identifying barcode strobe width")
+    if (verbose)
+        message("Identifying barcode strobe width")
 
-    setkeyv(reads.dt, c("seqnames", "start"))
+    setkeyv(reads.dt, c("seqnames", "start")) ## TODO: looks to me (Alon) like this is never used so we can delete it
     reads.dt[which(!discordant & R1 == TRUE), bx.diff := c((start-shift(end))[-1], NA), by = .(seqnames, BX)]
     reads.dt[which(!discordant & R1 == FALSE), bx.diff := c((start-shift(end))[-1], NA), by = .(seqnames, BX)]
     reads.dt[, bx.diffz := scale(log(pmax(0, bx.diff)+1))]
@@ -2307,7 +2313,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     readsd = dt2gr(reads.dt[which(discordant), ][R1==FALSE, strand := c('+'='-', '-'='+')[strand]])
 
     if (verbose)
-      message("Collapsing concordant linked reads by inferred strobe width ", bthresh)
+        message("Collapsing concordant linked reads by inferred strobe width ", bthresh)
     ## collapse / reduce concordant read pairs
 
 #### ALT approach for read cloud generation given thresh
@@ -2334,7 +2340,9 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     wov = grl.unlist(wks)[, 'grl.ix'] %*% wins[, c()]
 
     ## matrix of base pair width overlap between walks and wins
-    wovmat = sparseMatrix(as.integer(wov$grl.ix), wov$subject.id, x = as.numeric(width(wov)), dims = c(length(wks), length(wins)))
+    # Alon: I commented out this line since it donesn't look like this is ever used
+    # TODO: if things don't break then let's just delete this entirely
+    #wovmat = sparseMatrix(as.integer(wov$grl.ix), wov$subject.id, x = as.numeric(width(wov)), dims = c(length(wks), length(wins)))
 
     if (length(reads)==0)
       stop("No reads with non NA BX provided, please check input")
@@ -2342,17 +2350,21 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     ## for discordant pairs ...
     ## we want to directly assess intersection with walks
     ## in a strand specific way
-    wksu = grl.unlist(wks) ## these are unlisted
-    wksur = gr.flipstrand(wksu) ## these are strand flipped unlisted
+    # TODO: doesn't look like these variables are used anywhere so I (Alon) commented these out. If things work then let's delete this
+    #wksu = grl.unlist(wks) ## these are unlisted
+    #wksur = gr.flipstrand(wksu) ## these are strand flipped unlisted
 
-    qmap = as.data.table(readsd)[, .(qname, BX)][, BX[1], keyby = qname][, structure(V1, names = as.character(qname))]
-    qlev = names(qmap)
+    # TODO: doesn't look like these variables are used anywhere so I (Alon) commented these out. If things work then let's delete this
+    #qmap = as.data.table(readsd)[, .(qname, BX)][, BX[1], keyby = qname][, structure(V1, names = as.character(qname))]
+    #qlev = names(qmap)
 
     if (verbose)
       message("Lifting discordant reads onto walks")
 
     ## lift read onto walk coordinates using gChain
+    # TODO: doesn't look like this variable is used anywhere so I (Alon) commented these out. If things work then let's delete this
     wk.nm = names(wks)
+
     names(wks) = 1:length(wks)
     wks.chain = gChain::spChain(wks)
 
@@ -2380,7 +2392,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     bxstatsd = bxstatsd[score == max.score, ] ## only keep the max scoring BX, seqnames pairs
 
     ## we want to use these as votes for walk support, but then any other non matching discordant pairs as anti-matches
-    ## first building a mat rix of qnames x walks
+    ## first building a matrix of qnames x walks
     rovd.mat = sparseMatrix(as.integer(factor(bxstatsd$BX, bxlev)), as.numeric(as.character(bxstatsd$seqnames)), x = bxstatsd$score,
                             dims = c(length(bxlev), length(wks)), dimnames = list(bxlev, 1:length(wks)))
 
@@ -19571,20 +19583,41 @@ oncoprint = function(tumors = NULL,
     grid.rect(x, y, w, h, gp = gpar(fill = alpha("grey90", 0.4), col = NA))
     v = v[ord]
     for (i in which(v)) {
-      if (names(v)[i] %in% c('amp', 'del', "hetdel", "homdel", 'fusion', 'outframe_fusion'))
+      if (names(v)[i] %in% c('amp', 'del', "hetdel", "homdel"))
         grid.rect(x,y,w,h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
+      if (names(v)[i] %in% c('fusion'))
+          # making narrow rectangle for fusions so easier to tell apart when on top of a CNA
+          grid.rect(x,y,w*0.4,h*0.9, gp = gpar(fill = varcol[names(v)[i]], col = NA))
+      if (names(v)[i] %in% c('outframe_fusion'))
+          # make a smaller rectangle for out-of-frame fusions
+          grid.rect(x,y,w*0.5,h*0.5, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       else if (grepl("missing", names(v)[i]))
         grid.rect(x, y, w, h, gp = gpar(fill = varcol[names(v)[i]], col = NA))
-      else if (grepl("trunc|proximity", names(v)[i]))
+      else if (grepl("trunc", names(v)[i]))
         {
           grid.segments(x - w*0.5, y - h*0.5, x + w*0.5, y + h*0.5,
                         gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
           grid.segments(x - w*0.5, y + h*0.5, x + w*0.5, y - h*0.5,
                         gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
         }
-      else if (grepl("(missense)|(promoter)|(regulatory)", names(v)[i]))
+      else if (grepl("proximity", names(v)[i]))
+        {
+          grid.segments(x - w*0.5, y - h*0.5, x + w*0.5, y - h*0.5,
+                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
+          grid.segments(x - w*0.5, y + h*0.5, x + w*0.5, y + h*0.5,
+                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
+          grid.segments(x - w*0.5, y - h*0.5, x - w*0.5, y + h*0.5,
+                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
+          grid.segments(x + w*0.5, y + h*0.5, x + w*0.5, y - h*0.5,
+                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
+        }
+      else if (grepl("(missense)", names(v)[i]))
       {
-        grid.circle(x,y,l*CSIZE, gp = gpar(fill = varcol[names(v)[i]], col = NA))
+        grid.circle(x,y + h*0.25,l*CSIZE, gp = gpar(fill = varcol[names(v)[i]], col = NA))
+      }
+      else if (grepl("(promoter)|(regulatory)", names(v)[i]))
+      {
+        grid.circle(x,y - h*0.25,l*CSIZE, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       }
       else {
         if (grepl("indel", names(v)[i]))
@@ -19601,14 +19634,14 @@ oncoprint = function(tumors = NULL,
     missing = 'gray',            
     amp = "red",
     drop = FALSE,
-    homdel = "darkblue",
+    homdel = alpha("darkblue", 0.8),
     del = 'cyan',
-    missense = 'gray40',
+    missense = '#a6a6a6',
     inframe_indel = 'darkgreen',
     promoter  = alpha('red', 0.5),
     regulatory  = alpha('red', 0.2),
     trunc = alpha("blue", 0.8),
-    proximity = alpha("purple", 0.8),
+    proximity = "#f7d22d",
     mir = alpha('purple', 0.4),
     splice = "purple"
   )
