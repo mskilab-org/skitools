@@ -42,4 +42,4 @@ Suggests:
     BSgenome.Hsapiens.UCSC.hg19
 License: MIT
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
