@@ -13750,132 +13750,6 @@ hets = function(tum.bam, norm.bam = NULL, out.file, vcf.file, chunk.size1 = 1e3,
 }
 
 
-
-
-
-
-
-
-
-
-
-#' Merges rearrangements represented by \code{GRangesList} objects
-#'
-#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
-#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
-#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
-#' (or "seen.by.ra" and the argument number)
-#'
-#' @param ... GRangesList representing rearrangements to be merged
-#' @param pad non-negative integer specifying padding
-#' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
-#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
-#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
-#' @name ra.merge
-#' @export
-#' @examples
-#'
-#' # generate some junctions
-#' gr1 <- GRanges(1, IRanges(1:10, width = 1), strand = rep(c('+', '-'), 5))
-#' gr2 <- GRanges(1, IRanges(4 + 1:10, width = 1), strand = rep(c('+', '-'), 5))
-#' ra1 = split(gr1, rep(1:5, each = 2))
-#' ra2 = split(gr2, rep(1:5, each = 2))
-#'
-#' ram = ra.merge(ra1, ra2)
-#' values(ram) # shows the metadata with TRUE / FALSE flags
-#'
-#' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
-#' values(ram2)
-#'
-#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
-#' values(ram3)
-#' @export
-ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
-    ra = list(...)
-    ra = ra[which(!sapply(ra, is.null))]
-    nm = names(ra)
-    if (is.null(nm)){
-        nm = paste('ra', 1:length(ra), sep = '')
-    }
-    nm = paste('seen.by', nm, sep = '.')
-    if (length(nm)==0){
-        return(NULL)
-    }
-    out = ra[[1]]
-    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
-
-    if (!ind){
-        values(out)[, nm[1]] = TRUE
-    } else{
-        values(out)[, nm[1]] = 1:length(out)
-    }
-
-    if (length(ra)>1){
-        for (i in 2:length(ra)){
-            this.ra = ra[[i]]
-            if (length(this.ra)>0){
-                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
-                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
-
-                if (!ind){
-                    values(this.ra)[[nm[i]]] = TRUE
-                } else{
-                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
-                }
-
-                if (!ind){
-                    if (!all(is.na(ovix))){
-                        values(out)[, nm[i]][ovix[,1]] = TRUE
-                    }
-                } else{
-                    values(out)[, nm[i]] = NA
-                    if (!all(is.na(ovix))){
-                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
-                    }
-                }
-                ## which are new ranges not already present in out, we will add these
-                if (!all(is.na(ovix))){
-                    nix = setdiff(1:length(this.ra), ovix[,2])
-                } else{
-                    nix = 1:length(this.ra)
-                }
-
-                if (length(nix)>0){
-                    val1 = values(out)
-                    val2 = values(this.ra)
-                    if (ind){
-                        val2[, nm[1:(i-1)]] = NA
-                    }
-                    else{
-                        val2[, nm[1:(i-1)]] = FALSE
-                    }
-                    values(out) = NULL
-                    values(this.ra) = NULL
-                    out = grl.bind(out, this.ra[nix])
-                    values(out) = rrbind(val1, val2[nix, ])
-                } else if (length(setxor(1:length(this.ra), ovix[, 2])) == 0) { ## fix if there is perfect overlap... this case was previously not dealt with
-                    merge_cols = setdiff(colnames(values(this.ra)), nm)
-                    if (length(merge_cols) > 0) {
-                        tmp_field = "out_ix_50169346127375946273"
-                        val1 = values(out)
-                        val2 = values(this.ra)
-                        val1[[tmp_field]] = seq_along(out)
-                        val2[ovix[,2],tmp_field] = ovix[,1]
-                        new_val = merge(val1, val2[,c(tmp_field, merge_cols)], by = tmp_field, all.x = TRUE)
-                        new_val = new_val[order(new_val[[tmp_field]]),]
-                        new_val[[tmp_field]] = NULL
-                        values(out) = new_val
-                    }
-                }
-            }
-        }
-    }
-    return(out)
-}
-
-
-
-
 #' @name jabba.gwalk
 #' @export
 #' @rdname internal
@@ -19100,6 +18974,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
   if (!inherits(reads, 'GRanges') || is.null(reads$qname) || is.null(reads$cigar) || is.null(reads$seq) || is.null(reads$flag))
     stop('read input must be GRanges with fields $qname, $cigar, $seq, $flag and optionally $AS')
 
+  sl = seqlengths(reads)
   if (bx)
     pad = max(pad, 1e5)
 
@@ -19140,6 +19015,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
       return(reads[c()])
     
     sl = seqlengths(reads)
+
     grl = grl.pivot(
       GRangesList(dt2gr(ov[, .(seqnames = seqnames.x, start = start.x, end =end.x, strand = strand.x)],
                         seqlengths = sl),
@@ -19148,6 +19024,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
     values(grl)$qname = ov$qname
     ## make junctions out of reads and cross with "real" junctions
     jn = gGnome::merge(jJ(grl), junctions, cartesian = TRUE, pad = pad)
+    
     if (!length(jn))
       return(reads[c()])
     out = merge(as.data.table(gr.flipstrand(reads)), unique(jn$dt[, .(qname, junction.id = subject.id)]), by = 'qname') %>% dt2gr(seqlengths = sl)
@@ -19674,8 +19551,10 @@ oncoprint = function(tumors = NULL,
   {
     tmbd = oncotab[track == 'tmb' & type == 'density', structure(value, names = as.character(id))][ids]
     
-    top_data$TMB = tmbd
-    out.mat = rbind(TMB = tmbd, out.mat)
+    if (!all(tmbd == 0)){
+      top_data$TMB = tmbd
+      out.mat = rbind(TMB = tmbd, out.mat)
+    }
   }
 
   if (pp & any(oncotab$track == 'pp'))
@@ -20687,8 +20566,33 @@ preprocess_cov_for_dryclean = function(cov, field = 'reads.corrected',
     return(covv.new)
 }
 
-flow_slurm_status = function(jb, return_id = FALSE){
+#' @name flow_slurm_status
+#' @title flow_slurm_status
+#' @description
+#'
+#' wrapper for sacct (SLURM command line function)
+#'
+#' @param jb Flow Job object
+#' @param return_id return a list with the slurm job IDs for the Flow Job jobs
+#' @param fields which fields to print (see SLURM docs for details)
+#' @param return.str use system2 to return the stdout as a list of charachters
+#' @return vector
+#' @export
+#' @author Alon Shaiber
+flow_slurm_status = function(jb, return_id = FALSE,
+                             fields = c("jobid","jobname","state","maxrss","reqm", "elapsed"),
+                             return.str = FALSE){
     fns = paste0(outdir(jb), '/slurm.jobid')
+    fns = fns[which(file.ready(fns))]
+    if (length(fns) == 0){
+        warning('It does not look like any of your jobs were run with SLURM, please check.')
+        return(NULL)
+    }
+    if (length(fns) < length(jb)){
+        warning('Some jobs (', length(jb) - length(fns), ') are missing a slurm jobid (maybe those were not run yet, or ran, but not with slurm).')
+    }
+
+    st_out = NULL
     idss = sapply(fns, function(fn){
        id = NULL
        if (file.ready(fn)){
@@ -20696,8 +20600,44 @@ flow_slurm_status = function(jb, return_id = FALSE){
        }
        return(id)
     })
-    if (len(idss) > 0){
-        system(paste0('sacct -o jobid,jobname,state,maxrss,reqm --unit=G -j ', paste(idss, collapse = ',')))
+    if (length(idss) > 0){
+        f = paste(fields, collapse = ',')
+        if (return.str){
+            st_out = system2('sacct', paste0('-o ', f, ' --unit=G -j ', paste(idss, collapse = ',')),
+                             stdout=return.str, stderr=return.str)
+        } else {
+            system(paste0('sacct -o ', f, ' --unit=G -j ', paste(idss, collapse = ',')))
+        }
     }
     if (return_id) return(idss)
+    return(st_out)
+}
+
+#' @name slurm_dt
+#' @title slurm_dt
+#' @description
+#'
+#' wrapper for sacct that takes a Flow Job object and returns a data.table containing the time, memory, and state info for each job (SLURM command line function)
+#'
+#' @param jb Flow Job object
+#' @return data.table
+#' @export
+#' @author Alon Shaiber
+slurm_dt = function(jb){
+    library(lubridate)
+    slurmstr = flow_slurm_status(jb, return.str = TRUE)
+    if (is.null(slurmstr)){
+        return(NULL)
+    }
+    so = strsplit(slurmstr, ' ')
+    out = lapply(so, function(x){
+                   x = x[which(x!='')]
+                   if (x[2] == 'batch'){
+                       dt = data.table(jid = x[1], mem = as.numeric(gsub('G', '', x[4])), time = x[6], state = x[3], memory_allocated = x[5])
+                       dt[, seconds := period_to_seconds(hms(time))]
+                       return(dt)
+                   }
+                   return(NULL)
+    }) %>% rbindlist
+    return(out)
 }
