@@ -40,7 +40,7 @@ vplot(
   cex.scatter = 2 * cex,
   col.scatter = alpha("black", 0.5),
   col.background = "gray",
-  alpha = 0.3,
+  alpha = 1,
   title = NULL,
   legend.ncol = NULL,
   legend.nrow = NULL,

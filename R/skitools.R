@@ -2249,7 +2249,7 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     reads.dt[, str := strand == '+']
     reads.dt[, R1 := bamflag(flag)[, "isFirstMateRead"]==1]
 
-    if (use.discordant)
+    if (use.discordant | TRUE)
     {
       ## nullify isize for discordant pairs
       if (verbose)
@@ -5372,7 +5372,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, col.sina = NULL, 
                                         #          col.sina = ifelse(col.sina, 'red', 'gray')
           col.sina = sign(col.sina)
 
-        dat[, subgroup := col.sina]
+        dat[, col.sina := col.sina]
       }
 
 
@@ -5457,7 +5457,7 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, col.sina = NULL, 
         {
           if (!is.null(col.sina))
           { ## major hack 
-             g = g + ggforce::geom_sina(scale = sina.scale, method = method, size = cex.scatter, mapping = aes(colour = subgroup, alpha = subgroup))
+             g = g + ggforce::geom_sina(scale = sina.scale, method = method, size = cex.scatter, mapping = aes(colour = col.sina, alpha = col.sina))
               if (all(col.sina == 0))
                 g = g  + scale_colour_gradient(low = col.background, high = col.background)
             else if (all(col.sina == 1))
@@ -5575,10 +5575,11 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, col.sina = NULL, 
       if (flip)
         g = g + coord_flip()
 
+      g = g + guides(alpha = FALSE)
+
       if (length(unique(col.sina))<3)
       {
         g = g + guides(color = FALSE)
-        g = g + guides(alpha = FALSE)
       }
       
       if (!is.null(dat$facet1))
@@ -5780,7 +5781,7 @@ setMethod("%~%", signature(df = "data.table"), function(df, x = NULL) {
     if (all(is.na(x)))
         x = sample(1:nrow(df), min(nrow(df), 5))
     if (is.character(x))
-        x = grep(x, df[[gplots::key(df)]], ignore.case = TRUE)
+        x = grep(x, df[[data.table::key(df)]], ignore.case = TRUE)
     return(df[x, ])
 })
 setMethod("%~%", signature(df = "data.frame"), function(df, x = NULL) {
@@ -9958,7 +9959,7 @@ parsesnpeff = function(vcf, id = NULL)
             ##            out$ALT = sapply(out$ALT, as.character)
             out$ALT = as.character(unstrsplit(vcf$ALT))
             out$REF = sapply(out$REF, as.character)
-            out$vartype = ifelseong(nchar(out$REF) == nchar(out$ALT), 'SNV',
+            out$vartype = ifelse(nchar(out$REF) == nchar(out$ALT), 'SNV',
                 ifelse(nchar(out$REF) < nchar(out$ALT), 'INS', 'DEL'))
             tmp = lapply(out$ANN, function(y) do.call(rbind, strsplit(y, '\\|'))[, 1:15, drop = FALSE])
             tmpix = rep(1:length(out), sapply(tmp, nrow))
@@ -10252,7 +10253,7 @@ d3igraph = function(g)
     wc <- cluster_walktrap(g)
     members <- membership(wc)
     karate_d3 <- networkD3::igraph_to_networkD3(g, group = members)
-    forceNetwork(Links = karate_d3$links, Nodes = karate_d3$nodes,
+    networkD3::forceNetwork(Links = karate_d3$links, Nodes = karate_d3$nodes,
                  Source = 'source', Target = 'target',
                               NodeID = 'name', Group = 'group')
 }
@@ -10907,7 +10908,6 @@ multicoco = function(cov,
                             cat('Defining marginal coverage for', base^k, 'fold collapsed ranges\n')
                         ix = parentmap[[k]][grs[[k]]$lab, parent]
                         grs[[k]]$reads = grs[[k]]$reads / grs[[k+1]][ix, reads]
-                        print('fucken bitch yeah yeah')
 
                         for (f in fields)
                             grs[[k]][, eval(parse(text = sprintf("%s := grs[[k]]$%s / grs[[k+1]][ix, %s]",f, f, f)))]
@@ -18571,6 +18571,7 @@ llplot = function(variants,
 
   pvariants = as.data.table(variants)[, .(score = .N),  by = .(seqnames, tag, start = protein_pos, end = protein_pos, label, color = legend[type])][!is.na(start) & !is.na(end), ] %>% dt2gr
   names(pvariants) = pvariants$label
+  pvariants = gr.sub(pvariants, 'chr', '')
 
 
   library(httr) # load library to get data from REST API
@@ -18588,18 +18589,27 @@ llplot = function(variants,
   if (!is.null(domain_types))
     dtypes = paste0("&types=", paste(domain_types, collapse = '%2C'))
   featureURL = paste0(apiurl,
-                       "features?offset=0&size=-1&reviewed=true",
-                       dtypes, 
-                       "&taxid=", taxid,
+                       "features?offset=0&size=-1",
+                      dtypes, 
                        "&accession=", paste(accession, collapse = ",")
-                       )
+                      )
+
+  if (!is.null(taxid))
+    featureURL = paste0(featureURL, "&taxid=", taxid)
+
   response = GET(featureURL)
   stop_for_status(response)
   content = content(response)
 
   if (verbose)
     message('Processing protein domain data ', eid)
+
+  if (!length(content))
+    stop('Empty record produced, check taxid and orgdb compatibility or try running with taxid = NULL')
+
   content = content[[1]]
+
+    
   acc = content$accession
   sequence = content$sequence
   domains = rbindlist(lapply(content$features, '[', c('type', 'category', 'description' ,'begin', 'end')))[, seqnames := chr][, start := begin %>% as.integer][, end := end  %>% as.integer] %>% dt2gr
@@ -18607,7 +18617,7 @@ llplot = function(variants,
   names(domains) = domains$description
   domains$height = 0.04
 
-  trackViewer::lolliplot(pvariants, domains, ranges = GRanges(chr, IRanges(1, nchar(sequence))), ylab = gene, legend = legend, yaxis = yaxis, main = gene, ...)
+  trackViewer::lolliplot(pvariants, domains, ranges = GRanges(chr, IRanges(1, nchar(sequence))), ylab = gene, legend = split(legend, 'legend'), yaxis = yaxis, main = gene, ...)
 }
 
 
@@ -18856,6 +18866,8 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
   if (is.null(reads$R1))
     reads$R1 = bamflag(reads$flag)[,'isFirstMateRead']>0
   reads$read.id = 1:length(reads)
+  reads = reads[!is.na(reads$seq)]
+  
   if (is.null(reads$AS))
   {
     warning('AS not provided in reads, may want to consider using tag = "AS" argument to read.bam or provide a ref sequence to provide additional specificity to the contig support')
@@ -18871,7 +18883,15 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
   {
     if (verbose)
       message('Realigning reads against reference DNAStringSet')
-    bwa.ref = RSeqLib::BWA(seq = ref)
+
+    if (is.character(ref))
+      bwa.ref = RSeqLib::BWA(ref)
+    else if (inherits(ref, 'BWA'))
+      bwa.ref = ref
+    else if (inherits(ref, 'DNAStringSet'))    
+      bwa.ref = RSeqLib::BWA(seq = ref)
+    else
+      stop('ref not recognized, should either be a path to a bwa indexed fasta, a DNAStringSet, or BWA object')
     tmp = bwa.ref[reads$seq] %>% gr2dt
     tmp$ix = as.numeric(as.character(tmp$qname))
     tmp$R1 = reads$R1[tmp$ix]
@@ -18903,8 +18923,6 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
   readsc$R1 = reads$R1[readsc$ix]
   readsc$read.id = reads$read.id[readsc$ix]
 
-
-
   ## these are splits on the contig, not reference --> shouldn't be any for good alignment
   readsc[, nsplit := .N, by = .(qname, R1)] 
   readsc[, aligned := countCigar(cigar)[, 'M']]
@@ -18913,7 +18931,7 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
   readsc[, aligned.frac := aligned/qwidth[1], by = .(qname, R1)]
   readsc$AS.og = reads$AS[readsc$ix]
   readsc$isize = abs(reads$isize[readsc$ix])
-
+  readsc$qname = reads$qname[readsc$ix]
 
   readsc$seqnames.og = seqnames(reads)[readsc$ix] %>% as.character
   readsc$strand.og = strand(reads)[readsc$ix] %>% as.character
@@ -18926,9 +18944,7 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
 
   readsc$ref.aligned.frac = reads$ref.aligned.frac[readsc$ix]
   readsc$AS.og[is.na(readsc$AS.og)] = 0
-  readsc$qname = reads$qname[readsc$ix]
-
-
+  
   ## new scoring method based on cgChain of reads to contigs
   if (new)
     {
@@ -18947,7 +18963,7 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
       ## ie this is the lowest coordinate on the query
       ## (note that cgChain will split indels into separate ranges hence giving one to many mapping of al.id
       ## to records in links)
-      setkeyv(alchunks, c('qname', 'start', 'end'))
+      setkeyv(alchunks, c('qname', 'contig.start', 'contig.end'))
       ## alchunks[, is.min := start == min(start), by = al.id]
       ## alchunks = alchunks[is.min == TRUE, ]
 
@@ -18964,11 +18980,19 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
       alchunks[, contig.sign := ifelse(contig.strand == '+', 1, -1)]
       alchunks[, concordant.sign := all(contig.sign == contig.sign[1]), by = qname]
 
+      #' mimielinski Saturday, Feb 12, 2022 01:14:28 AM
+      #' WTF?
+      
       ## check if we never go from R1 == FALSE to R1 == TRUE
-      alchunks[, concordant.R1R2 := all(diff(!R1)>=0), by = qname]
+#      alchunks[, concordant.R1R2 := all(diff(!R1)>=0), by = qname]
 
       ## check to see that our contig.start always increasing or decreasing
-      alchunks[, concordant.start := all(diff(contig.sign[1]*contig.start)>0), by = qname]
+      ## alchunks[, concordant.start := all(diff(contig.sign[1]*contig.start)>0), by = qname]
+      alchunks[, both := any(R1) & any(!R1), by = qname]
+
+      ## if only R1 or R2 are present then R1R2 are concordant
+      alchunks[, concordant.R1R2 := ifelse(both,(contig.sign*sign((contig.start[R1][1]<contig.start[!R1][1]) - 0.5))>0, TRUE), by = qname]
+      alchunks[, concordant.start := all((contig.sign[1]*diff(start))>0), by = .(qname, R1)]
 
       alchunks[, contig.isize := diff(range(contig.start, contig.end)), by = qname]
       alchunks[, bases := sum(width), by = qname]
@@ -18981,8 +19005,9 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
                        bases > min.bases & aligned.frac > min.aligned.frac & aligned.frac >= ref.aligned.frac & 
                       (AS.better>0 | contig.isize<ref.isize) & AS.worse == 0, ]
 
+      browser()
       
-      keepq = keepq[, .(qname, contig, contig.isize, contig.strand, bases, contig.sign, AS.better, AS.worse, AS.equal)] %>% unique(by = 'qname')
+      keepq = keepq[, .(qname, contig, contig.id = as.character(contig), contig.isize, contig.strand, bases, contig.sign, AS.better, AS.worse, AS.equal)] %>% unique(by = 'qname')
     }
   else ## old scoring method
   {
@@ -18993,7 +19018,6 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
       readsc = readsc %Q% (rev(order(AS)))
       readsc = readsc[!duplicated(gr.match(readsc, readsc, by = 'qname')), ] %>% gr2dt
     }
-
 
     if (verbose)
       message('Computing overlap stats')
@@ -19070,7 +19094,7 @@ contig.support = function(reads, contig, ref = NULL, chimeric = TRUE, strict = T
 #' @return reads re-aligned to the reference through the contigs with additional metadata describing features of the alignment
 #' @export
 #' @author Marcin Imielinski
-junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad = 500, bx = FALSE, pad.ref = pad*20, realign = TRUE, walks = NULL, verbose = TRUE, ...)
+junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad = 500, bx = FALSE, pad.ref = pad*20, both = TRUE, realign = TRUE, walks = NULL, verbose = TRUE, ...)
 {
 
   if (!inherits(reads, 'GRanges') || is.null(reads$qname) || is.null(reads$cigar) || is.null(reads$seq) || is.null(reads$flag))
@@ -19112,6 +19136,9 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
     r1 = reads %Q% (R1 == TRUE) %>% as.data.table
     r2 = reads %Q% (R1 == FALSE) %>% as.data.table
     ov = merge(r1, r2, by = 'qname')
+    if (!nrow(ov))
+      return(reads[c()])
+    
     sl = seqlengths(reads)
     grl = grl.pivot(
       GRangesList(dt2gr(ov[, .(seqnames = seqnames.x, start = start.x, end =end.x, strand = strand.x)],
@@ -19120,12 +19147,21 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
                         seqlengths = sl)))
     values(grl)$qname = ov$qname
     ## make junctions out of reads and cross with "real" junctions
-    jn = merge(jJ(grl), junctions, cartesian = TRUE, pad = pad)
+    jn = gGnome::merge(jJ(grl), junctions, cartesian = TRUE, pad = pad)
     if (!length(jn))
       return(reads[c()])
     out = merge(as.data.table(gr.flipstrand(reads)), unique(jn$dt[, .(qname, junction.id = subject.id)]), by = 'qname') %>% dt2gr(seqlengths = sl)
     return(out)
   }
+
+  if (is.null(bwa) & is.null(ref))
+    stop('BWA object or reference must be provided if realign = TRUE')
+
+  if (is.null(bwa) && !is.null(ref) && is.character(ref))
+    bwa = BWA(ref)
+
+  if (is.null(bwa))
+    stop('BWA object or reference must be provided if realign = TRUE')
   
   if (inherits(bwa, 'character') && file.exists(bwa))
   {
@@ -19142,7 +19178,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
     ref = rtracklayer::import(bwa@reference)
   }
 
-  ## only use the fasta header before the first space as the seqnames of ref 
+  ## only >use the fasta header before the first space as the seqnames of ref 
   names(ref) = strsplit(names(ref), '\\s+') %>% sapply('[', 1)
 
   if (length(setdiff(seqnames(walks$nodes$gr), seqlevels(ref))))
@@ -19168,8 +19204,22 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
   if (verbose)
     message('Running contig support')
 
-  reads = contig.support(reads, contig, ref = contigref, cg.contig = cg.contig, ...)
-  reads$junction.id = reads$contig.id
+  reads = contig.support(reads, contig, ref = bwa, cg.contig = cg.contig, ...)
+  ##  reads = contig.support(reads, contig, ref = contigref, cg.contig = cg.contig, ...)
+  reads$junction.id = as.integer(as.character(reads$contig.id))
+
+  if (both)
+  {
+    if (length(reads))
+      reads$source = 'realignment'
+    
+    reads2 = junction.support(reads, junctions, bwa = bwa, ref = ref, pad = pad, realign = FALSE, both = FALSE, pad.ref = pad.ref, walks = walks, verbose = verbose, ...)
+
+    if (length(reads2))
+      reads2$source = 'original_alignment'
+
+    reads = grbind(reads, reads2)
+  }
   return(reads)  
 }
 
@@ -19336,7 +19386,7 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
       vars = NULL
       if (length(bcf))
       {
-        bcf$variant.g = paste0(seqnames(bcf), ':', start(bcf), '-', end(bcf), ' ', bcf$ALT, '>', bcf$REF)
+        bcf$variant.g = paste0(seqnames(bcf), ':', start(bcf), '-', end(bcf), ' ', bcf$REF, '>', bcf$ALT)
         vars = gr2dt(bcf)[, .(id = x, gene, vartype, variant.g, variant.p, distance, annotation, type = short, track = 'variants', source = 'annotated_bcf')] %>% unique
       }
       out = rbind(out, vars, fill = TRUE, use.names = TRUE)
@@ -19563,6 +19613,7 @@ oncoprint = function(tumors = NULL,
   }
   alter_fun = function(x, y, w, h, v) {
     CSIZE = 0.25
+
     w = convertWidth(w, "cm")*0.7
     h = convertHeight(h, "cm")*0.7
     l = min(unit.c(w, h))
@@ -19576,13 +19627,17 @@ oncoprint = function(tumors = NULL,
       else if (grepl("trunc", names(v)[i]))
         {
           grid.segments(x - w*0.5, y - h*0.5, x + w*0.5, y + h*0.5,
-                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
+                        gp = gpar(lwd = 3, col = varcol[names(v)[i]]))
           grid.segments(x - w*0.5, y + h*0.5, x + w*0.5, y - h*0.5,
-                        gp = gpar(lwd = 2, col = varcol[names(v)[i]]))
+                        gp = gpar(lwd = 3, col = varcol[names(v)[i]]))
         }
       else if (grepl("(missense)|(promoter)|(regulatory)", names(v)[i]))
       {
         grid.circle(x,y,l*CSIZE, gp = gpar(fill = varcol[names(v)[i]], col = NA))
+      }
+      else if (grepl("(splice)", names(v)[i]))
+      {
+        grid.circle(x,y,l*CSIZE*1.2, gp = gpar(fill = varcol[names(v)[i]], col = NA))
       }
       else {
         if (grepl("indel", names(v)[i]))
@@ -19815,6 +19870,9 @@ oncoprint = function(tumors = NULL,
   if (!length(bottomtracks))
     bottomtracks = NULL
 
+
+  ## Marcin: messy workaround issue that alter_fun will drop names if there is only one variant type
+  varm[1,1] = ifelse(nchar(varm[1,1]), paste(varm[1,1], 'dummy', sep = ','), varm[1,1])
   op = ComplexHeatmap::oncoPrint(varm,
                       get_type = function(x) unlist(strsplit(x, ",")), ##get type = separating each cell in matrix into vector
                       alter_fun = alter_fun,
