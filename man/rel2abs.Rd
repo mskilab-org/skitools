@@ -14,7 +14,8 @@ rel2abs(
   field.ncn = "ncn",
   data_mean = NA,
   ncn.gr = NA,
-  allele = FALSE
+  allele = FALSE,
+  return.params = FALSE
 )
 }
 \arguments{

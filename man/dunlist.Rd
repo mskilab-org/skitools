@@ -4,7 +4,7 @@
 \alias{dunlist}
 \title{dunlist}
 \usage{
-dunlist(x)
+dunlist(x, iid = FALSE)
 }
 \arguments{
 \item{x}{list of vectors, matrices, or data frames}

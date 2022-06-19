@@ -12,6 +12,7 @@ junction.support(
   pad = 500,
   bx = FALSE,
   pad.ref = pad * 20,
+  both = TRUE,
   realign = TRUE,
   walks = NULL,
   verbose = TRUE,

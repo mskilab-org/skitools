@@ -62,4 +62,6 @@ The outputted reads include additional metadata including number of bases aligni
 }
 \author{
 Marcin Imielinski
+mimielinski Saturday, Feb 12, 2022 01:14:28 AM
+WTF?
 }

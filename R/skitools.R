@@ -1,4 +1,4 @@
-## Marcin Imielinski
+# Marcin Imielinski
 ## The Broad Institute of MIT and Harvard / Cancer program.
 ## marcin@broadinstitute.org
 ##
@@ -2311,22 +2311,8 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
     ## collapse / reduce concordant read pairs
 
 #### ALT approach for read cloud generation given thresh
-    .reads2clouds = function(reads, thresh = bthresh)
-    {
-      reads = gr2dt(reads)
-      setkeyv(reads, c("seqnames", "start"))
-#      if (is.null(reads$bx.diff))
-      reads[, bx.diff := c((start-data.table::shift(end))[-1], NA), by = .(seqnames, BX)]
-      reads[, rl := label.runs(bx.diff<thresh | is.na(bx.diff)), by = .(seqnames, BX)]
-      reads[, rl.last := data.table::shift(rl), by = .(seqnames, BX)]
-      reads[is.na(rl), rl := ifelse(is.na(rl.last), -(1:.N), rl.last)] ## label remaining loners
-      reads[, rll := paste(seqnames, BX, rl, sep = '_')]
-      reads = dt2gr(reads[, .(start = start[1], end = end[.N]), by = .(seqnames, BX, rll)])
-      return(reads)
-    }
 
-
-    readsc = .reads2clouds(readsc, thresh = bthresh)
+    readsc = reads2clouds(readsc, thresh = bthresh)
 
     readsc$BX = factor(readsc$BX, bxlev)
     readsd$BX = factor(readsd$BX, bxlev)
@@ -2425,8 +2411,8 @@ score.walks = function(wks, bam = NULL, reads = NULL, win = NULL, wins = NULL, u
 
     ## reduce the footprint of each BX on each walk + bthresh pad
     ## rovcl.fp = as.data.table(grl.reduce(split(rovcl + bthresh, rovcl$BX)))[, BX := group_name]
-    ##  rovcl.fp = as.data.table(.reads2clouds(rovcl, bthresh))[width>bthresh ,]
-    rovcl.mfp = as.data.table(.reads2clouds(rovcl, bthresh))[, .(width.max.lifted = max(width)), by = .(seqnames, BX)]
+    ##  rovcl.fp = as.data.table(reads2clouds(rovcl, bthresh))[width>bthresh ,]
+    rovcl.mfp = as.data.table(reads2clouds(rovcl, bthresh))[, .(width.max.lifted = max(width)), by = .(seqnames, BX)]
     
 #    setkeyv(rovcl.fp, c("seqnames", "BX"))
 #    rovcl.fp[, gaps := start-shift(end),  by = .(seqnames, BX)]
@@ -4393,20 +4379,25 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 #' @author Marcin Imielinski9
 #' @export
 #############################################################
-dunlist = function (x) 
+dunlist = function (x, iid = FALSE) 
 {
-    listid = rep(1:length(x), elementNROWS(x))
-    if (!is.null(names(x))) 
-        listid = names(x)[listid]
+  listid = rep(1:length(x), elementNROWS(x))
+  if (iid)
+    listiid = unlist(lapply(elementNROWS(x), function(x) 1:x))
+  if (!is.null(names(x))) 
+    listid = names(x)[listid]
     xu = unlist(x, use.names = FALSE)
-    if (is.null(xu)) {
-        return(as.data.table(list(listid = c(), V1 = c())))
-    }
-    if (!(inherits(xu, "data.frame")) | inherits(xu, "data.table")) 
-        xu = data.table(V1 = xu)
+  if (is.null(xu)) {
+    return(as.data.table(list(listid = c(), V1 = c())))
+  }
+  if (!(inherits(xu, "data.frame")) | inherits(xu, "data.table")) 
+    xu = data.table(V1 = xu)
+  if (iid)
+    out = cbind(data.table(listid = listid, listiid = listiid), xu)
+  else
     out = cbind(data.table(listid = listid), xu)
-    setkey(out, listid)
-    return(out)
+  setkey(out, listid)
+  return(out)
 }
 
 
@@ -8807,6 +8798,22 @@ read_hg = function(hg19 = T, fft = F)
     }
 }
 
+reads2clouds = function(reads, thresh = bthresh)
+{
+  reads = gr2dt(reads)
+  setkeyv(reads, c("seqnames", "start"))
+                                        #      if (is.null(reads$bx.diff))
+  reads[, bx.diff := c((start-data.table::shift(end))[-1], NA), by = .(seqnames, BX)]
+  reads[, rl := label.runs(bx.diff<thresh | is.na(bx.diff)), by = .(seqnames, BX)]
+  reads[, rl.last := data.table::shift(rl), by = .(seqnames, BX)]
+  reads[is.na(rl), rl := ifelse(is.na(rl.last), -(1:.N), rl.last)] ## label remaining loners
+  reads[, rll := paste(seqnames, BX, rl, sep = '_')]
+  reads = dt2gr(reads[, .(start = start[1], end = end[.N]), by = .(seqnames, BX, rll)])
+  return(reads)
+}
+
+
+
 #' Filter reads by average PHRED score
 #' Defines a cutoff score for the mean PHRED quality of a read
 #' in a GRanges.
@@ -10501,13 +10508,13 @@ grok_vcf = function(x, label = NA, keep.modifier = TRUE, long = FALSE, oneliner 
         values(out2) = cbind(values(out2), meta)
         names(out2) = NULL
         out2$ANN = NULL
-        precedence = c('trunc', 'cnadel', 'cnadup', 'complexsv', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory', 'noncoding', 'inv', 'synonymous', '')
+        precedence = c('trunc', 'cnadel', 'cnadup', 'complexsv', 'splice', 'inframe_indel', 'fusion', 'missense', 'promoter', 'regulatory', 'noncoding', 'inv', 'synonymous', '') 
         eff = readRDS(system.file('extdata', 'snpeff_ontology.rds', package = 'skitools'))[, short := factor(short, precedence)][!is.na(short), ]
 
         .short = function(vcf)
         {
           tmp = strsplit(as.character(vcf$annotation), '\\&')
-          dtl = data.table(eff = unlist(tmp), id = rep(1:length(tmp), lengths(tmp)))  %>% merge(eff, by = 'eff', allow.cartesian = TRUE) %>% unique(by = 'id')
+          dtl = data.table(eff = unlist(tmp), id = rep(1:length(tmp), lengths(tmp)))  %>% merge(eff, by = 'eff', allow.cartesian = TRUE)  %>% setkey(short) %>% unique(by = 'id')
           setkey(dtl, id)
           vcf$short = dtl[.(1:length(vcf)), short]
           return(vcf)
@@ -10596,8 +10603,8 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.9/bin/b
   is.header = grepl('^\\#', lines)
   header = lines[is.header]
   contigs = strsplit(gsub('^\\#\\#', '', grep('contig', header, value = TRUE)), ',')
-  sl = structure(names = gsub('.*ID=\\<', '', sapply(contigs, '[', 1)),
-                 as.numeric(gsub('>$', '', gsub('.*length=\\<', '', sapply(contigs, '[', 2)))))
+  sl = suppressWarnings(structure(names = gsub('.*ID=\\<', '', sapply(contigs, '[', 1)),
+                 as.numeric(gsub('>$', '', gsub('.*length=\\<', '', sapply(contigs, '[', 2))))))
   
   other = lines[!is.header]
   if (length(other))
@@ -10612,22 +10619,31 @@ grok_bcf = function(bcf, gr = NULL, bpath = "/nfs/sw/bcftools/bcftools-1.9/bin/b
       out[, listid := 1:.N] ## set listid to keep track of lists
       ## unpack bcf "format" + sample fields
 
-      fdat = .dunlist(strsplit(out$FORMAT, ':'))
-      setnames(fdat,2,'field')
-    #  out$FORMAT = NULL ### keep in for now for sanity checks 
-      for (sfield in sfields) ## can be more than one sample field
-      {
-        fdatm = fdat %>% merge(.dunlist(strsplit(out[[sfield]], ':')), by = c('listid', 'listiid')) ## merge on both listid and listiid 
-        fdatc = dcast.data.table(copy(fdatm)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'V1')
-        out = merge(out, fdatc, by = 'listid', all.x = TRUE) ## order of out should be maintained here since keyed by listid which (now) is an integer
-      }      
-      ## unpack "info" field
-      idat = .dunlist(strsplit(out$INFO, ';'))
-      idat = cbind(idat, colsplit(idat$V1, pattern = "=", names = c("field","value")))
-      idatc = dcast.data.table(idat, listid ~ field, value.var = 'value')
-      out$INFO = NULL
-      mcols = setdiff(names(idatc), c('REF', 'ALT'))
-      out = merge(out, idatc[, mcols, with = FALSE], by = 'listid', all.x = TRUE) ## 
+
+      if (!is.null(out$FORMAT))
+        {
+          fdat = .dunlist(strsplit(out$FORMAT, ':'))
+          setnames(fdat,2,'field')
+                                        #  out$FORMAT = NULL ### keep in for now for sanity checks 
+          for (sfield in sfields) ## can be more than one sample field
+          {
+            fdatm = fdat %>% merge(.dunlist(strsplit(out[[sfield]], ':')), by = c('listid', 'listiid')) ## merge on both listid and listiid 
+            fdatc = dcast.data.table(copy(fdatm)[, field := paste(sfield, field, sep = '_')], listid ~ field, value.var = 'V1')
+            out = merge(out, fdatc, by = 'listid', all.x = TRUE) ## order of out should be maintained here since keyed by listid which (now) is an integer
+          }
+        }
+
+      if (!is.null(out$INFO))
+        {
+          ## unpack "info" field
+          idat = .dunlist(strsplit(out$INFO, ';'))
+          idat = cbind(idat, colsplit(idat$V1, pattern = "=", names = c("field","value")))
+          idatc = dcast.data.table(idat, listid ~ field, value.var = 'value')
+          out$INFO = NULL
+          mcols = setdiff(names(idatc), c('REF', 'ALT'))
+          out = merge(out, idatc[, mcols, with = FALSE], by = 'listid', all.x = TRUE) ##
+        }
+      
       out = dt2gr(out, seqlengths = sl)
       out = grok_vcf(out, keep.modifier = keep.modifier, long = long, oneliner = oneliner, verbose = verbose, label = label)
     }
@@ -18224,7 +18240,7 @@ write_ggjs = function(gr, filename, field = 'score')
 #' @return
 #' numeric vector of integer copy numbers
 #' @export
-rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA, allele = FALSE)
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA, allele = FALSE, return.params = FALSE)
 {
   mu = values(gr)[, field]
   mu[is.infinite(mu)] = NA
@@ -18263,6 +18279,13 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
       if (is.na(gamma)) {
           gamma = (y.bar * (1 - purity)) / denom
       }
+
+      if (return.params) {
+          out = c(slope = 1/beta,
+                  intercept = -gamma/beta)
+          return(out)
+      }
+      
       return ((mu - gamma) / beta)
   }
 
@@ -18273,8 +18296,66 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
   if (is.na(beta))
     beta = ((1-purity)*ploidy_normal + purity*ploidy) / (purity * data_mean)
 
+  if (return.params) {
+      out = c(slope = ((1-purity)*2 + purity * ploidy) / (purity * data_mean),
+              intercept = -gamma)
+      return (out)
+  }
+
   return(beta * mu - ncn * gamma / 2)
 }
+
+## rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn', data_mean = NA, ncn.gr = NA, allele = FALSE)
+## {
+##   mu = values(gr)[, field]
+##   mu[is.infinite(mu)] = NA
+##   w = as.numeric(width(gr))
+##   w[is.na(mu)] = NA
+##   sw = sum(w, na.rm = T)
+##   if (is.na(data_mean)){
+##       data_mean = sum(mu * w, na.rm = T) / sw
+##   }
+
+##   ncn = NA
+##   if (!is.null(field.ncn))
+##     if (field.ncn %in% names(values(gr)))
+##       ncn = values(gr)[, field.ncn]
+
+##   if (is.na(ncn)){
+##       if (!is.na(ncn.gr)){
+##           if (!inherits(ncn.gr, 'GRanges')){
+##               stop('ncn.gr must be of class GRanges, but ', class(GRanges), ' was provided.')
+##           }
+##           ncn = values(gr %$% ncn.gr[, field.ncn])[, field.ncn]
+##       } else {
+##       ncn = rep(2, length(mu))
+##       }
+##   }
+
+
+##   ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+
+##   if (allele) {
+##       y.bar = ploidy_normal * data_mean
+##       denom = purity * ploidy + ploidy_normal * (1 - purity)
+##       if (is.na(beta)) {
+##           beta = y.bar * purity / denom
+##       }
+##       if (is.na(gamma)) {
+##           gamma = (y.bar * (1 - purity)) / denom
+##       }
+##       return ((mu - gamma) / beta)
+##   }
+
+
+##   if (is.na(gamma))
+##     gamma = 2*(1-purity)/purity
+
+##   if (is.na(beta))
+##     beta = ((1-purity)*ploidy_normal + purity*ploidy) / (purity * data_mean)
+
+##   return(beta * mu - ncn * gamma / 2)
+## }
 
 
 #' @name abs2rel
@@ -19051,7 +19132,7 @@ junction.support = function(reads, junctions = NULL, bwa = NULL, ref = NULL, pad
   {
     if (verbose)
       message('Loading genome reference as DNAStringSet')
-
+cn
     ref = rtracklayer::import(bwa@reference)
   }
 
@@ -20045,6 +20126,12 @@ edge2tip = function(tree, matrix = TRUE)
 circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field = 'ratio', cytoband = NULL, y.field = field, ylim = NA, cytoband.path = '~/DB/UCSC/hg19.cytoband.txt', cex.points = 1, ideogram.outer = TRUE, scatter = TRUE, bar = FALSE, line = FALSE, gap.after = 1, labels.cex = 1, y.quantile = 0.9999, chr.sub = TRUE, max.ranges = 1e4, axis.frac = 0.02, palette = 'BrBg', ...)
 {
 
+  if (!inherits(junctions, 'Junction'))
+    {
+      warnings('attemptintg to convert junction input to Junction object ')
+      jj = jJ(grl = junctions)
+    }
+  
   if (!file.exists(cytoband.path))
     stop('cytoband not file, must be UCSC style tsv')
 
@@ -20065,7 +20152,7 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
     if (inherits(win, 'data.frame'))
       win = dt2gr(win)
 
-    cytoband  = as.data.table(dt2gr(cytoband) %*% win)[, .(seqnames, start, end, band, stain)]
+    cytoband  = as.data.table(win %*% dt2gr(cytoband, seqlengths = seqlengths(win)))[, .(seqnames, start, end, band, stain)]
   }
 
   total.width = cytoband[, sum(as.numeric(end-start))]
@@ -20074,7 +20161,7 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
      axis.width = ceiling(axis.frac*total.width)
      cytoband = rbind(cytoband, data.table(seqnames = 'axis', start = 0, end = axis.width, band = '', stain = ''), fill = TRUE)
   }
-
+  
   if (chr.sub)
   {
     ix = ((junctions$left %>% gr.sub('chr', ''))  %^% dt2gr(cytoband)) &
@@ -20101,7 +20188,7 @@ circos = function(junctions = jJ(), cov = NULL, segs = NULL, win = NULL, field =
   circlize::circos.par(start.degree = 90, gap.after = gap.after*1)
   circlize::circos.genomicInitialize(cytoband, sector.names = unique(cytoband$seqnames), plotType = NULL, 
                                           track.height = bands.height,
-                                          labels.cex = labels.cex)
+                                     labels.cex = labels.cex)
 
   circlize::circos.genomicTrackPlotRegion(cytoband, stack = TRUE,
                                 panel.fun = function(region, value, ...) {
@@ -20640,4 +20727,244 @@ slurm_dt = function(jb){
                    return(NULL)
     }) %>% rbindlist
     return(out)
+}
+
+#' @name complete
+#' @title complete
+#' @description
+#'
+#' outputs columns that are "complete" for all rows
+#' or (if rows = TRUE) rows that are complete for columns
+#' @author Marcin Imielinski
+#' @export
+complete = function(d, rows = FALSE)
+{
+  if (rows)
+    d[rowSums(is.na(d))==0, ]
+  else
+    d[, lapply(.SD, function(x) {if(anyNA(x)) {NULL} else {x}} )]
+}
+
+#' @name pp_plot
+#' @title pp_plot
+#'
+#' @details
+#'
+#' create histogram of estimated copy number given purity and ploidy
+#'
+#' @param jabba_rds (character) JaBbA output
+#' @param cov.fname (character) path to coverage GRanges (supply if allele = FALSE)
+#' @param hets.fname (character) path to sites.txt (supply if allele = TRUE)
+#' @param allele (logical) allelic CN? default FALSE
+#' @param field (character) default ratio if allele is FALSE and count if allele is TRUE
+#' @param plot.min (numeric) minimum CN default -2
+#' @param plot.max (numeric) max CN (factor times ploidy) default 2
+#' @param bins (numeric) number of histogram bins default 500
+#' @param scatter (logical) default FALSE
+#' @param height (numeric) plot height
+#' @param width (numeric) plot width
+#' @param output.fname (character) path of output directory
+#' @param verbose (logical)
+#'
+#' @return output.fname
+#' @author Zi-Ning Choo
+pp_plot = function(jabba_rds = NULL,
+                   cov.fname = NULL,
+                   hets.fname = NULL,
+                   allele = FALSE,
+                   field = NULL,
+                   plot.min = -2,
+                   plot.max = 2,
+                   scatter = FALSE,
+                   bins = 500,
+                   height = 800,
+                   width = 800,
+                   output.fname = "./plot.png",
+                   verbose = FALSE) {
+  
+  if (is.null(jabba_rds) || !file.exists(jabba_rds)) {
+    stop("jabba_rds does not exist")
+  }
+
+  grab.hets = function(agt.fname = NULL,
+                       min.frac = 0.2,
+                       max.frac = 0.8)
+  {
+    if (is.null(agt.fname) || !file.exists(agt.fname)) {
+      stop("agt.fname does not exist")
+    }
+
+    ## prepare and filter
+    agt.dt = fread(agt.fname)[alt.frac.n > min.frac & alt.frac.n < max.frac,]
+    ## add major and minor
+    agt.dt[, which.major := ifelse(alt.count.t > ref.count.t, "alt", "ref")]
+    agt.dt[, major.count := ifelse(which.major == "alt", alt.count.t, ref.count.t)]
+    agt.dt[, minor.count := ifelse(which.major == "alt", ref.count.t, alt.count.t)]
+
+    ## melt the data frame
+    agt.melted = rbind(agt.dt[, .(seqnames, start, end, count = major.count, allele = "major")],
+                       agt.dt[, .(seqnames, start, end, count = minor.count, allele = "minor")]
+                       )
+
+    ## make GRanges
+    agt.gr = dt2gr(agt.melted[, .(seqnames, start, end, count, allele)])
+
+    return (agt.gr)
+  }
+  
+  jab = readRDS(jabba_rds)
+  if (!allele) {
+    if (is.null(cov.fname) || !file.exists(cov.fname)) {
+      stop("cov.fname not supplied and allele = TRUE")
+    }
+    if (!grepl(pattern = "rds", x = cov.fname)) {
+      stop("cov.fname must be .rds file containing GRanges object")
+    }
+    cov = readRDS(cov.fname)
+    if (!inherits(cov, "GRanges")) {
+      stop("cov is not GRanges")
+    }
+    if (length(cov) == 0) {
+      stop("empty GRanges")
+    }
+    if (is.null(field)) {
+      field = "ratio"
+    }
+    if (!(field %in% names(values(cov)))) {
+      stop("cov missing required field")
+    }
+    if (verbose) {
+      message("Grabbing coverage and converting rel2abs")
+    }
+    cov$cn = rel2abs(cov, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = FALSE)
+    ## get mean CN over JaBbA segments
+    if (verbose) {
+      message("computing mean over jabba segments")
+    }
+    segs = gr.stripstrand(jab$segstats %Q% (strand(jab$segstats)=="+"))[, c()]
+    segs = gr.val(segs, cov[, "cn"], val = "cn", mean = TRUE, na.rm = TRUE)
+    if (verbose) {
+      message("tiling")
+    }
+    tiles = gr.tile(gr = segs, width = 1e4)
+    tiles = gr.val(tiles, segs[, "cn"], val = "cn", mean = TRUE, na.rm = TRUE)
+    if (verbose) {
+      message("Grabbing transformation slope and intercept")
+    }
+    eqn = rel2abs(cov, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = FALSE, return.params = TRUE)
+    dt = as.data.table(tiles)
+  } else {
+    if (is.null(hets.fname) || !file.exists(hets.fname)) {
+      stop("hets.fname not supplied")
+    }
+    hets = grab.hets(hets.fname)
+    if (is.null(field)) {
+      field = "count"
+    }
+    if (!field %in% names(values(hets))) {
+      stop("hets missing required field")
+    }
+    if (verbose) {
+      message("Grabbing hets and converting rel2abs")
+    }
+    hets$cn = rel2abs(hets, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = TRUE)
+    eqn = rel2abs(hets, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = TRUE, return.params = TRUE)
+    if (verbose) {
+      message("computing mean over jabba segments")
+    }
+    segs = gr.stripstrand(jab$segstats %Q% (strand(jab$segstats)=="+"))[, c()]
+    major.segs = gr.val(segs, hets %Q% (allele == "major"), val = "cn", mean = TRUE, na.rm = TRUE)
+    minor.segs = gr.val(segs, hets %Q% (allele == "minor"), val = "cn", mean = TRUE, na.rm = TRUE)
+    if (verbose) {
+      message("Tiling")
+    }
+    tiles = gr.tile(gr = segs, width = 1e4)
+    major.tiles = gr.val(tiles, major.segs, val = "cn", mean = TRUE, na.rm = TRUE)
+    minor.tiles = gr.val(tiles, minor.segs, val = "cn", mean = TRUE, na.rm = TRUE)
+    dt = rbind(as.data.table(major.tiles)[, .(seqnames, start, end, allele = "major", cn)],
+               as.data.table(minor.tiles)[, .(seqnames, start, end, allele = "minor", cn)])
+  }
+
+  maxval = plot.max * jab$ploidy # max dosage
+  minval = plot.min ## min dosage
+
+  ## remove things with weird ploidy
+  dt = dt[cn < maxval & cn > minval & grepl("[0-9]", seqnames)==TRUE]
+
+  if (verbose) {
+    message("Making plot for ", nrow(dt), " points")
+  }
+  
+  if (!allele) {
+
+    pt = ggplot(dt, aes(x = cn)) +
+      geom_histogram(fill = "gray", bins = bins, alpha = 0.8) +
+      scale_x_continuous(breaks = 0:floor(maxval),
+                         labels = 0:floor(maxval) %>% as.character,
+                         sec.axis = sec_axis(trans = ~(. - eqn["intercept"])/eqn["slope"],
+                                             name = field)) +
+      geom_vline(xintercept = 0:floor(maxval), color = "red", linetype = "longdash") +
+      labs(x = "Estimated CN", y = "count") +
+      theme_bw() +
+      theme(legend.position = "none",
+            axis.title = element_text(size = 20, family = "sans"),
+            axis.text.x = element_text(size = 20, family = "sans"),
+            axis.text.y = element_text(size = 14, family = "sans"))
+
+  } else {
+
+    if (scatter) {
+
+      dt = cbind(as.data.table(major.tiles)[, .(seqnames, start, end, major.cn = cn)],
+                 as.data.table(minor.tiles)[, .(minor.cn = cn)])
+      dt = dt[major.cn < maxval & minor.cn < maxval &
+              major.cn > minval & minor.cn > minval &
+              grepl("[0-9]", seqnames)==TRUE,]
+
+      pt = ggplot(dt, aes(x = major.cn, y = minor.cn)) +
+        geom_point(size = 2, alpha = 0.1, color = "gray") +
+        scale_x_continuous(breaks = 0:floor(maxval),
+                           labels = 0:floor(maxval) %>% as.character,
+                           sec.axis = sec_axis(trans = ~(. - eqn["intercept"])/eqn["slope"],
+                                               name = paste("Major", field))) +
+        scale_y_continuous(breaks = 0:floor(maxval),
+                           labels = 0:floor(maxval) %>% as.character,
+                           sec.axis = sec_axis(trans = ~(. - eqn["intercept"])/eqn["slope"],
+                                               name = paste("Minor", field))) +
+        labs(x = "Major CN", y = "Minor CN") +
+        theme_bw() +
+        theme(legend.position = "none",
+              axis.title = element_text(size = 20, family = "sans"),
+              axis.text.x = element_text(size = 20, family = "sans"),
+              axis.text.y = element_text(size = 14, family = "sans"))
+
+      pt = ggExtra::ggMarginal(pt, type = "histogram",
+                      xparams = list(bins = bins),
+                      yparams = list(bins = bins))
+      
+    } else {
+
+      pt = ggplot(dt, aes(x = cn)) +
+        geom_histogram(fill = "gray", bins = bins, alpha = 0.8) +
+        scale_x_continuous(breaks = 0:floor(maxval),
+                           labels = 0:floor(maxval) %>% as.character,
+                           sec.axis = sec_axis(trans = ~(. - eqn["intercept"])/eqn["slope"],
+                                               name = field)) +
+        geom_vline(xintercept = 0:floor(maxval), color = "red", linetype = "longdash") +
+        labs(x = "Estimated CN", y = "count") +
+        facet_grid(row = vars(allele)) +
+        theme_bw() +
+        theme(legend.position = "none",
+              axis.title = element_text(size = 20, family = "sans"),
+              axis.text.x = element_text(size = 20, family = "sans"),
+              axis.text.y = element_text(size = 14, family = "sans"),
+              strip.text.y = element_text(size = 20, family = "sans"))
+    }
+
+  }
+
+  if (verbose) {
+    message("Saving results to: ", normalizePath(output.fname))
+  }
+  return(pt) ##ppng(print(pt), filename = normalizePath(output.fname), height = height, width = width)
 }
