@@ -19231,10 +19231,11 @@ memu = function()
 #' @param amp.thresh SCNA amplification threshold to call an amp as a function of ploidy (4)
 #' @param del.thresh SCNA deletion threshold for (het) del as a function of ploidy (by default cn = 1 will be called del, but this allows additoinal regions in high ploidy tumors to be considered het dels)
 #' @param mc.cores number of cores for multithreading
+#' @param bpath path to bcftools binary
 #' @param verbose logical flag 
 #' @author Marcin Imielinski
 #' @export
-oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf', verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1)
+oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode.v19.genes.gtf', verbose = TRUE, amp.thresh = 4, filter = 'PASS', del.thresh = 0.5, mc.cores = 1, bpath = "/nfs/sw/bcftools/bcftools-1.9/bin/bcftools")
 {
   gencode = process_gencode(gencode)
 
@@ -19245,7 +19246,7 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
       pge = gencode %Q% (gene_type == 'protein_coding')
   }
 
-  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 2, del.thresh = 0.5, filter = 'PASS')
+  .oncotable = function(dat, x = dat[[key(dat)]][1], pge, verbose = TRUE, amp.thresh = 2, del.thresh = 0.5, filter = 'PASS', bpath = "/nfs/sw/bcftools/bcftools-1.9/bin/bcftools")
   {
     out = data.table()
 
@@ -19328,7 +19329,7 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
     {
       if (verbose)
         message('pulling $annotated_bcf for ', x, ' using FILTER=', filter)
-      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter)
+      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter, bpath = bpath)
       if (verbose)
         message(length(bcf), ' variants pass filter')
       genome.size = sum(seqlengths(bcf), na.rm = TRUE)/1e6
@@ -19367,7 +19368,7 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
   }
 
   out = mclapply(tumors[[key(tumors)]], .oncotable,
-                 dat = tumors, pge = pge, amp.thresh = amp.thresh, filter = filter, del.thresh = del.thresh, verbose = verbose, mc.cores = mc.cores)
+                 dat = tumors, pge = pge, amp.thresh = amp.thresh, filter = filter, del.thresh = del.thresh, bpath = bpath, verbose = verbose, mc.cores = mc.cores)
   out = rbindlist(out, fill = TRUE, use.names = TRUE)
 
   setnames(out, 'id', key(tumors))
