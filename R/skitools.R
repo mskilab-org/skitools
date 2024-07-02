@@ -19328,7 +19328,10 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
     {
       if (verbose)
         message('pulling $annotated_bcf for ', x, ' using FILTER=', filter)
-      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter)
+      local_bcftools_path <- Sys.which("bcftools")
+      local_bcftools_path <- ifelse(local_bcftools_path == "", stop("bcftools not found in the system PATH. Please install or moudule load bcftools."), local_bcftools_path)
+      message("bcftools found at: ", local_bcftools_path)
+      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter, bpath=local_bcftools_path)
       if (verbose)
         message(length(bcf), ' variants pass filter')
       genome.size = sum(seqlengths(bcf), na.rm = TRUE)/1e6
