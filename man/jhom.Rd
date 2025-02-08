@@ -40,7 +40,7 @@ jhom(
 list of gMatrix objects (if stats = FALSE) and data.table of homeology stats (if stats = TRUE)
 }
 \description{
-
+wrapper around GxG homeology for junctions
 }
 \author{
 Marcin Imielinski

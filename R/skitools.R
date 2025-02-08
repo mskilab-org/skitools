@@ -1579,7 +1579,6 @@ gr.peaks = function(gr, field = 'score',
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
 #' @name ra_breaks
-#' @import VariantAnnotation
 #' @export
 ############################################
 ra_breaks = function(rafile,
@@ -2181,7 +2180,6 @@ vgr2ra = function(vgr, force.bnd = FALSE, get.loose = FALSE)
 #' @param raw  returns raw barcode by walk matrix of barcode scores
 #' @param use.discordant logical flag whether to process discordant
 #'
-#' @import gChain
 #' @return scores of walks or (if raw == tRUE) raw barcode to walk maps
 #' @export
 #' @author Marcin Imielinski
@@ -5091,7 +5089,6 @@ splot = function(x, y, cex = 0.4, poutlier = 0.01, col = alpha('black', 0.3),
 #' Quick plotlyhistogram
 #'
 #' @author Marcin Imielinski
-#' @import plotly
 #' @export
 phist = function(expr, data = data.frame(), ...)
     {
@@ -5757,7 +5754,6 @@ setMethod("%!%", signature(df = "DataFrame"), function(df, ...) {
 #' @exportMethod %~%
 #' @export
 #' @author Marcin Imielinski
-#' @importFrom data.table setkey := key
 setGeneric('%~%', function(df, ...) standardGeneric('%~%'))
 setMethod("%~%", signature(df = "GRanges"), function(df, x = NULL) {
     if (is.null(x))

@@ -10,8 +10,8 @@ preprocess_cov_for_dryclean(
   template_rds = "",
   seqnames.to.include = c(as.character(1:22), "X"),
   output.field = "reads.corrected",
- 
-    pon_dict = "/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv",
+  pon_dict =
+    "/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv",
   pon_name = NULL,
   nochr = TRUE
 )

@@ -10,8 +10,10 @@ Imports:
     gplots,
     hwriter,
     S4Vectors,
+    BiocGenerics,
     RColorBrewer,
-    methods,		
+    methods,
+    gUtils,		
     reshape2,		
     IRanges,		
     tools,		
@@ -25,7 +27,6 @@ Depends:
     VariantAnnotation,
     htmlwidgets,
     devtools,
-    gUtils,
     stringr,
     plotly,
     ggplot2,	
@@ -42,4 +43,5 @@ Suggests:
     BSgenome.Hsapiens.UCSC.hg19
 License: MIT
 LazyData: true
-RoxygenNote: 7.1.2
+RoxygenNote: 7.3.2
+Encoding: UTF-8

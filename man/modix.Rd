@@ -29,6 +29,4 @@ ie modix(1, 5) -> 1, modix(5, 5) -> 5, modix(6, 5) -> 1
 }
 \author{
 Marcin Imielinski
-
-Marcin Imielinski
 }

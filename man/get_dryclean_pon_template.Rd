@@ -6,8 +6,8 @@
 \usage{
 get_dryclean_pon_template(
   pon_name,
- 
-    pon_dict = "/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv"
+  pon_dict =
+    "/gpfs/commons/groups/imielinski_lab/DB/modules/dryclean/dryclean_pon_dictionary.tsv"
 )
 }
 \arguments{

@@ -67,6 +67,4 @@ Quick utility function for circos plot with read depth, junctions, and segments
 }
 \author{
 Marcin Imielinski
-
-Marcin Imielinski
 }

@@ -14,7 +14,7 @@ write_ggjs(gr, filename, field = "score")
 \item{field}{field name to dump as (numeric) data ["score"]}
 }
 \description{
-
+dumps ggjs formatted csv file from GRanges
 }
 \author{
 Marcin Imielinski

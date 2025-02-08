@@ -88,6 +88,4 @@ Marcin Imielinski
 ++ = RL
 +- = RR
 -+ = LL
-
-Marcin Imielinski
 }
