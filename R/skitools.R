@@ -292,7 +292,7 @@ nona = function(dt, thresh = 0.1)
 #' @param plotly toggles between creating a pdf (FALSE) or an interactive html widget (TRUE)
 #' @param annotations named list of vectors containing information to present as hover text (html widget), must be in same order as obs input
 #' @param gradient named list that contains one vector that color codes points based on value, must bein same order as obs input
-#' @param titleText title for plotly (html) graph only
+#' @param titleText title for plotly (html) grcaph only
 #' @author Marcin Imielinski, Eran Hodis, Zoran Gajic
 #' @export
 qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = NULL, col.bg='black', pch=18, cex=1, conf.lines=FALSE, max=NULL, max.x = NULL, max.y = NULL, qvalues=NULL, label = NULL, repel = FALSE, plotly = FALSE, annotations = list(), gradient = list(), titleText = "", subsample = NA, ...)
@@ -419,7 +419,7 @@ qq_pval = function(obs, highlight = c(), exp = NULL, lwd = 1, bestfit=T, col = N
     else
     {
       subsample = pmin(pmax(0, subsample[1]), 1)
-      dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
+      dat[ifelse(x<=2, ifelse(runif(length(x))<subsample, TRUE, FALSE), TRUE), plot(x, y, xlab = expression(Expected -log[10](italic(P))), ylab = expression(Observed -log[10](italic(P))), xlim = c(0, max.x), col = colors, ylim = c(0, max.y), pch=pch, cex=cex, bg=col.bg, ...)]
     }
     
     if (!is.null(dat$label) && any(nchar(dat$label)>0, na.rm = TRUE))
@@ -9447,7 +9447,7 @@ qstat = function(full = FALSE, numslots = TRUE, resources = full)
 #' @author Zoran Gajic
 #' @export
 sstat = function(full = FALSE, numslots = TRUE, resources = T){
-    asp = "username,groupname,state,name,jobid,associd"
+    asp = "username,groupname,state,name,jobid,partition,associd"
     if(resources){
         asp = c(asp, "timelimit,timeused,submittime,starttime,endtime,eligibletime,minmemory,numcpus,numnodes,priority,nice,reason,reboot")
     }
@@ -19324,7 +19324,10 @@ oncotable = function(tumors, gencode = 'http://mskilab.com/fishHook/hg19/gencode
     {
       if (verbose)
         message('pulling $annotated_bcf for ', x, ' using FILTER=', filter)
-      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter)
+      local_bcftools_path <- Sys.which("bcftools")
+      local_bcftools_path <- ifelse(local_bcftools_path == "", stop("bcftools not found in the system PATH. Please install or moudule load bcftools."), local_bcftools_path)
+      message("bcftools found at: ", local_bcftools_path)
+      bcf = grok_bcf(dat[x, annotated_bcf], label = x, long = TRUE, filter = filter, bpath=local_bcftools_path)
       if (verbose)
         message(length(bcf), ' variants pass filter')
       genome.size = sum(seqlengths(bcf), na.rm = TRUE)/1e6
@@ -20762,6 +20765,7 @@ complete = function(d, rows = FALSE)
 #' @param output.fname (character) path of output directory
 #' @param verbose (logical)
 #'
+#' @export
 #' @return output.fname
 #' @author Zi-Ning Choo
 pp_plot = function(jabba_rds = NULL,
@@ -20894,7 +20898,7 @@ pp_plot = function(jabba_rds = NULL,
   if (!allele) {
 
     pt = ggplot(dt, aes(x = cn)) +
-      geom_histogram(fill = "gray", bins = bins, alpha = 0.8) +
+      geom_histogram(fill = "black", bins = bins, alpha = 0.8) +
       scale_x_continuous(breaks = 0:floor(maxval),
                          labels = 0:floor(maxval) %>% as.character,
                          sec.axis = sec_axis(trans = ~(. - eqn["intercept"])/eqn["slope"],
