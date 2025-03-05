@@ -54,7 +54,7 @@ qq_pval(
 
 \item{gradient}{named list that contains one vector that color codes points based on value, must bein same order as obs input}
 
-\item{titleText}{title for plotly (html) graph only}
+\item{titleText}{title for plotly (html) grcaph only}
 
 \item{samp}{integer, optional specifying how many samples to draw from input data (default NULL)}
 }

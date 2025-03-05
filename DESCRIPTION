@@ -36,7 +36,14 @@ Depends:
 Remotes: 
   github::mskilab/gUtils,
   github::mskilab/gChain, 
-  github::mskilab/gTrack
+  github::mskilab/gTrack,
+  bioc::BiocGenerics,
+  bioc::S4Vectors,
+  bioc::GenomeInfoDb,
+  bioc::GenomicRanges,
+  bioc::VariantAnnotation,
+  bioc::IRanges,
+  bioc::BSgenome
 Suggests:
     testthat,
     parallel,
