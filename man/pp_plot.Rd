@@ -17,6 +17,7 @@ pp_plot(
   height = 800,
   width = 800,
   output.fname = "./plot.png",
+  save = TRUE,
   verbose = FALSE
 )
 }
