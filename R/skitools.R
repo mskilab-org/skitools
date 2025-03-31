@@ -20779,6 +20779,7 @@ pp_plot = function(jabba_rds = NULL,
                    bins = 500,
                    height = 800,
                    width = 800,
+                   units = "px",
                    output.fname = "./plot.png",
                    save = TRUE,
                    verbose = FALSE) {
@@ -20796,7 +20797,14 @@ pp_plot = function(jabba_rds = NULL,
     }
 
     ## prepare and filter
-    agt.dt = fread(agt.fname)[alt.frac.n > min.frac & alt.frac.n < max.frac,]
+    agt.dt = fread(agt.fname)
+    #only filter on normal fraction if the columns are present within the data table
+    if ("alt.frac.n" %in% colnames(agt.dt)) {
+      agt.dt = agt.dt[alt.frac.n > min.frac & alt.frac.n < max.frac,]
+    } else {
+      agt.dt = agt.dt[alt.frac.t > min.frac & alt.frac.t < max.frac,]
+    }
+
     ## add major and minor
     agt.dt[, which.major := ifelse(alt.count.t > ref.count.t, "alt", "ref")]
     agt.dt[, major.count := ifelse(which.major == "alt", alt.count.t, ref.count.t)]
@@ -20968,12 +20976,15 @@ pp_plot = function(jabba_rds = NULL,
 
   }
 
-  if (verbose) {
-    message("Saving results to: ", normalizePath(output.fname))
-  }
-
   if(save) {
-    ppng(print(pt), filename = normalizePath(output.fname), height = height, width = width)
+    if(verbose) {
+      message("Saving results to: ", normalizePath(output.fname))
+    }
+    ppng(print(pt), 
+         filename = normalizePath(output.fname), 
+         height = height, 
+         width = width,
+         units = units)
   }
   return(pt) 
 }
