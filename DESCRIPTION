@@ -39,9 +39,11 @@ Remotes:
   github::mskilab/gTrack,
   bioc::BiocGenerics,
   bioc::S4Vectors,
+  bioc::Biostrings,
   bioc::GenomeInfoDb,
   bioc::GenomicRanges,
   bioc::VariantAnnotation,
+  bioc::ComplexHeatmap,
   bioc::IRanges,
   bioc::BSgenome
 Suggests:
