@@ -20779,7 +20779,9 @@ pp_plot = function(jabba_rds = NULL,
                    bins = 500,
                    height = 800,
                    width = 800,
+                   units = "px",
                    output.fname = "./plot.png",
+                   save = TRUE,
                    verbose = FALSE) {
   
   if (is.null(jabba_rds) || !file.exists(jabba_rds)) {
@@ -20795,7 +20797,14 @@ pp_plot = function(jabba_rds = NULL,
     }
 
     ## prepare and filter
-    agt.dt = fread(agt.fname)[alt.frac.n > min.frac & alt.frac.n < max.frac,]
+    agt.dt = fread(agt.fname)
+    #only filter on normal fraction if the columns are present within the data table
+    if ("alt.frac.n" %in% colnames(agt.dt)) {
+      agt.dt = agt.dt[alt.frac.n > min.frac & alt.frac.n < max.frac,]
+    } else {
+      agt.dt = agt.dt[alt.frac.t > min.frac & alt.frac.t < max.frac,]
+    }
+
     ## add major and minor
     agt.dt[, which.major := ifelse(alt.count.t > ref.count.t, "alt", "ref")]
     agt.dt[, major.count := ifelse(which.major == "alt", alt.count.t, ref.count.t)]
@@ -20813,6 +20822,10 @@ pp_plot = function(jabba_rds = NULL,
   }
   
   jab = readRDS(jabba_rds)
+  purity <- if (!is.null(jab$purity)) jab$purity else jab$meta$purity
+  ploidy <- if (!is.null(jab$ploidy)) jab$ploidy else jab$meta$ploidy
+  segstats <- if(!is.null(jab$segstats)) jab$segstats else jab$gr
+  
   if (!allele) {
     if (is.null(cov.fname) || !file.exists(cov.fname)) {
       stop("cov.fname not supplied and allele = TRUE")
@@ -20836,12 +20849,12 @@ pp_plot = function(jabba_rds = NULL,
     if (verbose) {
       message("Grabbing coverage and converting rel2abs")
     }
-    cov$cn = rel2abs(cov, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = FALSE)
+    cov$cn = rel2abs(cov, field = field, purity = purity, ploidy = ploidy, allele = FALSE)
     ## get mean CN over JaBbA segments
     if (verbose) {
       message("computing mean over jabba segments")
     }
-    segs = gr.stripstrand(jab$segstats %Q% (strand(jab$segstats)=="+"))[, c()]
+    segs = gr.stripstrand(segstats %Q% (strand(segstats)=="+"))[, c()]
     segs = gr.val(segs, cov[, "cn"], val = "cn", mean = TRUE, na.rm = TRUE)
     if (verbose) {
       message("tiling")
@@ -20851,7 +20864,7 @@ pp_plot = function(jabba_rds = NULL,
     if (verbose) {
       message("Grabbing transformation slope and intercept")
     }
-    eqn = rel2abs(cov, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = FALSE, return.params = TRUE)
+    eqn = rel2abs(cov, field = field, purity = purity, ploidy = ploidy, allele = FALSE, return.params = TRUE)
     dt = as.data.table(tiles)
   } else {
     if (is.null(hets.fname) || !file.exists(hets.fname)) {
@@ -20867,12 +20880,12 @@ pp_plot = function(jabba_rds = NULL,
     if (verbose) {
       message("Grabbing hets and converting rel2abs")
     }
-    hets$cn = rel2abs(hets, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = TRUE)
-    eqn = rel2abs(hets, field = field, purity = jab$purity, ploidy = jab$ploidy, allele = TRUE, return.params = TRUE)
+    hets$cn = rel2abs(hets, field = field, purity = purity, ploidy = ploidy, allele = TRUE)
+    eqn = rel2abs(hets, field = field, purity = purity, ploidy = ploidy, allele = TRUE, return.params = TRUE)
     if (verbose) {
       message("computing mean over jabba segments")
     }
-    segs = gr.stripstrand(jab$segstats %Q% (strand(jab$segstats)=="+"))[, c()]
+    segs = gr.stripstrand(segstats %Q% (strand(segstats)=="+"))[, c()]
     major.segs = gr.val(segs, hets %Q% (allele == "major"), val = "cn", mean = TRUE, na.rm = TRUE)
     minor.segs = gr.val(segs, hets %Q% (allele == "minor"), val = "cn", mean = TRUE, na.rm = TRUE)
     if (verbose) {
@@ -20885,7 +20898,7 @@ pp_plot = function(jabba_rds = NULL,
                as.data.table(minor.tiles)[, .(seqnames, start, end, allele = "minor", cn)])
   }
 
-  maxval = plot.max * jab$ploidy # max dosage
+  maxval = plot.max * ploidy # max dosage
   minval = plot.min ## min dosage
 
   ## remove things with weird ploidy
@@ -20963,8 +20976,15 @@ pp_plot = function(jabba_rds = NULL,
 
   }
 
-  if (verbose) {
-    message("Saving results to: ", normalizePath(output.fname))
+  if(save) {
+    if(verbose) {
+      message("Saving results to: ", normalizePath(output.fname))
+    }
+    ppng(print(pt), 
+         filename = normalizePath(output.fname), 
+         height = height, 
+         width = width,
+         units = units)
   }
-  return(pt) ##ppng(print(pt), filename = normalizePath(output.fname), height = height, width = width)
+  return(pt) 
 }
