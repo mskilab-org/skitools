@@ -10139,7 +10139,7 @@ staveRDS = function(object, file, note = NULL, ..., verbose = FALSE)
   if (verbose)
     message('Symlinking ', file, ' to ', stamped.file)
 
-  system(paste('ln -sfn', normalizePath(stamped.file), file))
+  system(paste('ln -sfnr', normalizePath(stamped.file), file))
 
   if (!is.null(note))
   {
