@@ -51,57 +51,10 @@ test_that("test charToDec()", {
     
 })
 
-
-
-
-
-test_that('test ra.merge', {
-
-    ## beginning with fake rearrangment data grl1 and grl2
-    expect_equal(length(ra.merge(grl1, grl2)), 500)
-    expect_true(unique(values(ra.merge(grl1, grl2))[, 1][1:250]))
-    expect_false(unique(values(ra.merge(grl1, grl2))[, 1][251:500]))
-    expect_false(unique(values(ra.merge(grl1, grl2))[, 2][1:249]))
-    expect_true(unique(values(ra.merge(grl1, grl2))[, 2][250:500]))
-    ## ignore.strand == TRUE makes no difference...
-    expect_equal(ra.merge(grl1, grl2, ignore.strand=TRUE), ra.merge(grl1, grl2))
-    ## example in function 'ra.merge()'
-    gr1 = GRanges(1, IRanges(1:10, width = 1), strand = rep(c('+', '-'), 5))
-    gr2 = GRanges(1, IRanges(4 + 1:10, width = 1), strand = rep(c('+', '-'), 5))
-    expect_error(ra.merge(gr1, gr2)) ##   Error: All inputs must be a GRangesList
-    ## create GRangesLists
-    ra1 = split(gr1, rep(1:5, each = 2))
-    ra2 = split(gr2, rep(1:5, each = 2))
-    ram = ra.merge(ra1, ra2)
-    expect_warning(ra.merge(ra1, ra2))  ## warning: GRanges object contains 10 out-of-bound ranges located on sequence 1.
-    expect_equal(length(ram), 7)
-    ## 'values(ram)' shows the metadata with TRUE / FALSE flags
-    expect_equal(values(ram)[, 1], c(TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE)) 
-    expect_equal(values(ram)[, 2], c(FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE)) 
-    ## ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
-    ram2 = ra.merge(ra1, ra2, pad = 500) ## more inexact matching results in more merging
-    ##values(ram2)
-    expect_equal(length(ram2), 5)    
-    expect_equal(values(ram2)[, 1], c(TRUE, TRUE, TRUE, TRUE, TRUE)) 
-    expect_equal(values(ram2)[, 2], c(TRUE, TRUE, TRUE, TRUE, TRUE)) 
-    expect_error(ra.merge(ra1, ra2, pad =-1)) ## adjustment would result in ranges with negative widths
-    ## ram3
-    ram3 = ra.merge(ra1, ra2, ind = TRUE) ## indices instead of flags
-    ##values(ram3)
-    expect_equal(length(ram3), 7)
-    expect_equal(values(ram3)[, 1], c(1, 2, 3, 4, 5, NA, NA)) 
-    expect_equal(values(ram3)[, 2], c(NA, NA, 3, 4, 5, 4, 5)) 
-    ## test both 'pad', 'ind'
-    ram4 = ra.merge(ra1, ra2, pad = 500, ind = TRUE) 
-    expect_equal(values(ram4)[, 1], c(1, 2, 3, 4, 5))
-    expect_equal(values(ram4)[, 2], c(1, 2, 3, 4, 5))
-    ## ignore.strand == TRUE
-    expect_error(ra.merge(ra1, ra2, ignore.stand = TRUE)) ##  unable to find an inherited method for function ‘values’ for signature ‘"logical"’
-    ### all args
-    expect_error(ra.merge(ra1, ra2, pad = 500, ind = TRUE, ignore.stand = TRUE)) ## unable to find an inherited method for function ‘values’ for signature ‘"logical"’
- 
-})
-
-
-
-
+## NOTE: the old "test ra.merge" block that lived here was dropped (mskilab-org/skitools#11).
+## ra.merge was moved out of skitools into gGnome in commit 1d04255 ("removed ra.merge
+## (duplicated with gGnome::ra.merge)"), so this package no longer defines it, and the block
+## could not pass. It was stale in a second way too: it referenced grl1 / grl2, which are
+## never defined in this file, and its expectations index values(ram)[, 1:2], which under
+## gGnome::ra.merge are tmp.ix / merged.ix, not the seen.by.ra* flags. Any test of ra.merge
+## belongs in gGnome, which now owns the function.
